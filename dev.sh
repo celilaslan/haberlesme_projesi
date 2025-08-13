@@ -23,6 +23,13 @@ set -euo pipefail
 #   demo                    - Run a quick, self-contained test of the system.
 #   logs [-f]               - Show the tail of the service log file (-f to follow).
 #
+# Service Commands (require sudo):
+#   service-start           - Start the systemd service.
+#   service-stop            - Stop the systemd service.
+#   service-restart         - Restart the systemd service.
+#   service-status          - Check the status of the systemd service.
+#   service-logs [-f]       - View the systemd service logs with journalctl.
+#
 # Defaults:
 #   build_dir = build
 #
@@ -328,6 +335,18 @@ case "$cmd" in
     if [[ -f "$LOG" ]]; then echo "--- LOG TAIL ---"; tail -n 12 "$LOG"; else echo "LOG_NOT_FOUND"; fi
   # Final cleanup of any leftover UIs/sims
   kill_existing_procs || true
+    ;;
+  service-start) sudo systemctl start telemetry_service.service ;;
+  service-stop) sudo systemctl stop telemetry_service.service ;;
+  service-restart) sudo systemctl restart telemetry_service.service ;;
+  service-status) sudo systemctl status telemetry_service.service ;;
+  service-logs)
+    shift || true
+    if [[ "${1:-}" == "-f" ]]; then
+      sudo journalctl -u telemetry_service.service -f
+    else
+      sudo journalctl -u telemetry_service.service -n 100 --no-pager
+    fi
     ;;
   test)      echo "No tests configured yet." ;;
   ""|-h|--help|help) usage ;;

@@ -6,7 +6,7 @@ set -euo pipefail
 
 # --- Configuration ---
 # Source directory of the project
-REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Destination for the executable
 INSTALL_BIN_DIR="/usr/local/bin"
@@ -21,7 +21,7 @@ SOURCE_CONFIG="${REPO_ROOT}/${CONFIG_NAME}"
 # Destination for the systemd service file
 SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_FILE="telemetry_service.service"
-SOURCE_SERVICE_FILE="${REPO_ROOT}/scripts/${SERVICE_FILE}"
+SOURCE_SERVICE_FILE="${REPO_ROOT}/telemetry_service/${SERVICE_FILE}"
 
 # --- Script Logic ---
 

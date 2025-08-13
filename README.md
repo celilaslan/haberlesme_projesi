@@ -95,7 +95,7 @@ Note: With ZeroMQ PUB/SUB, subscribers (UIs) may miss messages sent before they 
 - The service uses a poll-based receiver loop for ZMQ and an asynchronous listener for UDP to avoid busy waiting.
 
 ## Orchestration helpers
-- Linux/macOS: `./dev.sh` supports configure/build/clean/run/demo/up/down/status/logs.
+- Linux/macOS: `./dev.sh` supports configure/build/clean/run/demo/up/down/status/logs and service management.
 - Windows (PowerShell): `./dev.ps1` provides the same commands, plus multi-terminal launches via Windows Terminal or PowerShell.
 
 ## Common workflows
@@ -156,23 +156,28 @@ The `telemetry_service` can be installed and run as a `systemd` background servi
 
 1.  **Run the installer with sudo:**
     ```bash
-    sudo ./scripts/install_linux_service.sh
+    sudo ./install_linux_service.sh
     ```
     This script will build the project, copy the executable and configuration to system directories (`/usr/local/bin` and `/etc/telemetry_service`), and set up the `systemd` service.
 
-2.  **Manage the service:**
-    ```bash
-    # Start the service
-    sudo systemctl start telemetry_service
+2.  **Manage the service**:
+    You can now manage the service using the convenient `dev.sh` commands, which wrap `systemctl` and `journalctl`. These commands require `sudo`.
 
-    # Stop the service
-    sudo systemctl stop telemetry_service
-
-    # Check the status
-    sudo systemctl status telemetry_service
-
-    # View live logs
-    sudo journalctl -u telemetry_service -f
-    ```
+    -   **Start the service**:
+        ```bash
+        ./dev.sh service-start
+        ```
+    -   **Check its status**:
+        ```bash
+        ./dev.sh service-status
+        ```
+    -   **View live logs**:
+        ```bash
+        ./dev.sh service-logs -f
+        ```
+    -   **Stop the service**:
+        ```bash
+        ./dev.sh service-stop
+        ```
 
 The service is automatically enabled to start on boot. The service's log file is located at `/var/log/telemetry_service/telemetry_log.txt`, and its configuration is managed at `/etc/telemetry_service/service_config.json`.

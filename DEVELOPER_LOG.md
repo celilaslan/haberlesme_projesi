@@ -87,3 +87,17 @@ Next:
     - Resolved a `boost::system::system_error` ("Invalid argument") in the `uav_sim` by using a `udp::resolver` to correctly handle hostnames (like "localhost") from the config file.
     - Improved the `dev.sh` script's `clean` command to remove old executables, preventing stale builds from being run.
 - **Result**: The system now supports both ZMQ and UDP for telemetry ingestion, making it more flexible. The service acts as a bridge, normalizing data from different protocols before publishing it to clients.
+
+### Tooling and Refactoring (2025-08-13)
+
+- **Goal**: Improve developer experience by centralizing service management and reorganizing project files.
+- **File Structure**:
+    - Moved `install_linux_service.sh` to the project root.
+    - Moved `telemetry_service.service` into the `telemetry_service` directory.
+    - Removed the now-empty `scripts` directory.
+- **`dev.sh` Enhancements**:
+    - Integrated `systemd` management commands directly into the script.
+    - New commands: `service-start`, `service-stop`, `service-restart`, `service-status`, and `service-logs [-f]`.
+    - These commands wrap `systemctl` and `journalctl` for convenient access.
+- **Documentation**:
+    - Updated `README.md` to reflect the new installation script path and the new `dev.sh` service management commands.
