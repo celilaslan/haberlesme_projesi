@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 
     // Komut satırı argümanları kontrolü
     if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <UAV_NAME> [--protocol udp|zmq]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <UAV_NAME> [--protocol <tcp|udp>]" << std::endl;
         std::cout << "Example: " << argv[0] << " UAV_1 --protocol udp" << std::endl;
         std::cout << std::endl;
 
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string uav_name = argv[1];
-    std::string protocol = "zmq"; // default
+    std::string protocol = "tcp"; // default
     if (argc > 3 && std::string(argv[2]) == "--protocol") {
         protocol = argv[3];
     }
