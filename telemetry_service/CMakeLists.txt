@@ -1,0 +1,6 @@
+# telemetry_service
+add_executable(telemetry_service
+  ${CMAKE_CURRENT_LIST_DIR}/telemetry_service.cpp
+)
+link_with_zmq(telemetry_service)
+set_target_to_source_dir(telemetry_service)

@@ -1,0 +1,8 @@
+[2025-08-13 10:44:59] === SERVICE STARTED - Multi-UAV Telemetry Service ===
+[2025-08-13 10:44:59] Configured UAVs: 3
+[2025-08-13 10:44:59] UAV UAV_1 - Telemetry: tcp://*:5555, Commands: tcp://*:5559
+[2025-08-13 10:44:59] UAV UAV_2 - Telemetry: tcp://*:5565, Commands: tcp://*:5569
+[2025-08-13 10:44:59] UAV UAV_3 - Telemetry: tcp://*:5575, Commands: tcp://*:5579
+[2025-08-13 10:45:48] === RECEIVER THREAD STOPPED ===
+[2025-08-13 10:45:48] === FORWARDER THREAD STOPPED ===
+[2025-08-13 10:45:48] === SERVICE SHUTDOWN COMPLETED ===

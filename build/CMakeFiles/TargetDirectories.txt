@@ -1,0 +1,14 @@
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/CMakeFiles/edit_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/CMakeFiles/rebuild_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/telemetry_service/CMakeFiles/telemetry_service.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/telemetry_service/CMakeFiles/edit_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/telemetry_service/CMakeFiles/rebuild_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/uav_sim/CMakeFiles/uav_sim.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/uav_sim/CMakeFiles/edit_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/uav_sim/CMakeFiles/rebuild_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/camera_ui/CMakeFiles/camera_ui.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/camera_ui/CMakeFiles/edit_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/camera_ui/CMakeFiles/rebuild_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/mapping_ui/CMakeFiles/mapping_ui.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/mapping_ui/CMakeFiles/edit_cache.dir
+/home/vboxuser/Desktop/repo/haberlesme_projesi/build/mapping_ui/CMakeFiles/rebuild_cache.dir

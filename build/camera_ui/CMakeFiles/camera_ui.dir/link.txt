@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/camera_ui.dir/camera_ui.cpp.o -o /home/vboxuser/Desktop/repo/haberlesme_projesi/camera_ui/camera_ui  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so 

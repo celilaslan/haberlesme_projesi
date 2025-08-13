@@ -1,0 +1,27 @@
+{
+  "uavs": [
+    {
+      "name": "UAV_1",
+      "ip": "localhost",
+      "telemetry_port": 5555,
+      "command_port": 5559
+    },
+    {
+      "name": "UAV_2",
+      "ip": "localhost",
+      "telemetry_port": 5565,
+      "command_port": 5569
+    },
+    {
+      "name": "UAV_3",
+      "ip": "localhost",
+      "telemetry_port": 5575,
+      "command_port": 5579
+    }
+  ],
+  "ui_ports": {
+    "command_port": 5558,
+    "publish_port": 5557
+  },
+  "log_file": "telemetry_log.txt"
+}

@@ -1,0 +1,2 @@
+[2025-07-22 08:40:50] === SERVICE STARTED - Background UAV Telemetry Service ===
+[2025-07-22 08:40:50] === SERVICE RUNNING IN BACKGROUND ===
