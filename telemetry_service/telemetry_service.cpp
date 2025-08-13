@@ -44,16 +44,22 @@ struct ServiceConfig {
 };
 
 std::string GetTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    struct tm time_info;
-    #if defined(_WIN32)
-    localtime_s(&time_info, &time_t_now);
-    #else
-    localtime_r(&time_t_now, &time_info);
-    #endif
+    const auto now = std::chrono::system_clock::now();
+    const auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    const auto duration = now.time_since_epoch();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
+
     std::ostringstream oss;
+    struct tm time_info;
+#if defined(_WIN32)
+    localtime_s(&time_info, &time_t_now);
+#else
+    localtime_r(&time_t_now, &time_info);
+#endif
+
     oss << std::put_time(&time_info, "%Y-%m-%d %H:%M:%S");
+    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
     return oss.str();
 }
 

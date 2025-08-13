@@ -136,3 +136,30 @@ ZeroMQ version note:
 
 - Windows script execution policy:
 	- If PowerShell blocks scripts, run in the current session: `Set-ExecutionPolicy -Scope Process Bypass`.
+
+## Deployment (Linux Service)
+
+The `telemetry_service` can be installed and run as a `systemd` background service on modern Linux distributions.
+
+1.  **Run the installer with sudo:**
+    ```bash
+    sudo ./scripts/install_linux_service.sh
+    ```
+    This script will build the project, copy the executable and configuration to system directories (`/usr/local/bin` and `/etc/telemetry_service`), and set up the `systemd` service.
+
+2.  **Manage the service:**
+    ```bash
+    # Start the service
+    sudo systemctl start telemetry_service
+
+    # Stop the service
+    sudo systemctl stop telemetry_service
+
+    # Check the status
+    sudo systemctl status telemetry_service
+
+    # View live logs
+    sudo journalctl -u telemetry_service -f
+    ```
+
+The service is automatically enabled to start on boot. The service's log file is located at `/var/log/telemetry_service/telemetry_log.txt`, and its configuration is managed at `/etc/telemetry_service/service_config.json`.

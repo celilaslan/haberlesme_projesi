@@ -52,3 +52,19 @@ Next:
 - Optional CMakeLists.txt to standardize builds (Windows + Linux).
 - Add a simple `--log <path>` flag for service to override log file path at runtime.
 - Turn service into background daemon/service (systemd on Linux, Windows Service) when ready.
+
+### Service Deployment (2025-08-13)
+
+- Added `scripts/telemetry_service.service`, a `systemd` unit file for running the telemetry service as a background daemon on Linux.
+- Added `scripts/install_linux_service.sh` to automate the installation process (build, copy binaries/config, and enable the service).
+- Updated `README.md` with instructions for installing and managing the `systemd` service.
+- Enhanced `GetTimestamp` function in all C++ files to include millisecond precision for more detailed logging.
+
+### Service Deployment Fix (2025-08-13)
+
+- **Problem**: The `systemd` service was not writing to its log file because of incorrect file paths and permissions.
+- **Solution**:
+    - The `install_linux_service.sh` script was updated to create a dedicated log directory at `/var/log/telemetry_service`.
+    - The script now modifies the installed `service_config.json` to use the absolute log path `/var/log/telemetry_service/telemetry_log.txt`.
+    - The `telemetry_service.service` file was updated with `ReadWritePaths` to grant the service explicit permission to write to the new log directory.
+- **Result**: The background service now logs correctly to a standard system location.

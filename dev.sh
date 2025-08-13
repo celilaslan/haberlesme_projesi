@@ -70,7 +70,8 @@ kill_existing_procs() {
   done
   # Collect by listening ports (common project ports)
   local port_pids
-  port_pids=$(ss -ltnp 2>/dev/null | awk '/:(5555|5557|5558|5559|5565|5569|5575|5579)\b/ {match($0, /pid=([0-9]+)/, m); if(m[1]) print m[1]}' | sort -u | tr '\n' ' ')
+    port_pids=$(ss -ltnp 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u | tr '
+' ' ')
   if [[ -n "$port_pids" ]]; then pids_set+=" $port_pids"; fi
   # De-duplicate PIDs
   local all_pids
