@@ -4,6 +4,11 @@ project(haberlesme_projesi CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Use the module-based find for Boost.
+# We look for the 'system' component, as 'asio' is often header-only.
+set(Boost_NO_BOOST_CMAKE ON)
+find_package(Boost 1.83.0 REQUIRED COMPONENTS system)
+
 find_package(Threads REQUIRED)
 
 # Try to find ZeroMQ (imported target varies across platforms)
@@ -28,6 +33,13 @@ function(link_with_zmq target)
   else()
     message(FATAL_ERROR "No ZeroMQ target/library available for target ${target}")
   endif()
+endfunction()
+
+# Helper to link with Boost libraries
+function(link_with_boost target)
+    # Link against the found Boost libraries and include directories
+    target_include_directories(${target} PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(${target} PRIVATE ${Boost_LIBRARIES})
 endfunction()
 
 # Helper to place runtime next to the source directory (as requested)

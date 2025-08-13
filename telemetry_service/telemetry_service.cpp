@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <cstring>
+#include <boost/asio.hpp>
 #if defined(_WIN32)
 #  include <windows.h>
 #else
@@ -23,6 +24,7 @@
 #endif
 
 using json = nlohmann::json;
+using boost::asio::ip::udp;
 
 std::atomic<bool> g_running(true);
 
@@ -39,6 +41,7 @@ struct ServiceConfig {
         int ui_command_port = 5558;    // UI'lardan komut alma
         int ui_publish_port = 5557;    // UI'lara telemetri yayınlama
     } ui_ports;
+    int udp_telemetry_port = 5556; // UDP telemetri portu
 
     std::string log_file = "telemetry_log.txt";
 };
@@ -111,6 +114,7 @@ void SaveConfig(const std::string& filename, const ServiceConfig& config) {
     j["ui_ports"]["command_port"] = config.ui_ports.ui_command_port;
     j["ui_ports"]["publish_port"] = config.ui_ports.ui_publish_port;
 
+    j["udp_telemetry_port"] = config.udp_telemetry_port;
     j["log_file"] = config.log_file;
 
     std::ofstream file(filename);
@@ -152,6 +156,10 @@ ServiceConfig LoadConfig(const std::string& filename) {
         config.ui_ports.ui_publish_port = j["ui_ports"]["publish_port"];
     }
 
+    if (j.contains("udp_telemetry_port")) {
+        config.udp_telemetry_port = j["udp_telemetry_port"];
+    }
+
     if (j.contains("log_file")) {
         config.log_file = j["log_file"];
     }
@@ -188,6 +196,88 @@ std::string ExtractUISource(const std::string& message) {
     return "unknown";
 }
 
+// Function to process any telemetry message (from ZMQ or UDP)
+void ProcessAndPublishTelemetry(const std::string& data, const std::string& source_description, zmq::socket_t& pub_socket, std::ofstream& logfile) {
+    Log("Received from " + source_description + ": " + data);
+    LogToFile(logfile, "RECEIVED from " + source_description + ": " + data);
+
+    // Topic belirleme
+    std::string topic = "unknown";
+    std::string uav_name = "unknown_uav";
+
+    // UDP messages are expected to have "UAV_NAME:data" format
+    size_t colon_pos = data.find(':');
+    std::string actual_data = data;
+    if (colon_pos != std::string::npos) {
+        uav_name = data.substr(0, colon_pos);
+        actual_data = data.substr(colon_pos + 1);
+    } else {
+        // Fallback for ZMQ messages which don't have the prefix
+        // We can infer UAV name from the source description for ZMQ
+        size_t uav_pos = source_description.find("UAV_");
+        if (uav_pos != std::string::npos) {
+            uav_name = source_description;
+        }
+    }
+    
+    try {
+        size_t last_space = actual_data.find_last_of(" \t");
+        std::string numeric_part = (last_space != std::string::npos) ? actual_data.substr(last_space + 1) : actual_data;
+        int code = std::stoi(numeric_part);
+        if (code >= 1000 && code < 2000) topic = "mapping";
+        else if (code >= 2000 && code < 3000) topic = "camera";
+        else if (actual_data.find("Debug") != std::string::npos || actual_data.find("_ACK") != std::string::npos) topic = "system";
+    } catch (const std::invalid_argument&) {
+        if (actual_data.find("Debug") != std::string::npos || actual_data.find("_ACK") != std::string::npos) topic = "system";
+        else Log("Warning: Could not parse message to determine topic: " + actual_data);
+    }
+
+    // UAV adını da topic'e ekle
+    std::string full_topic = topic + "_" + uav_name;
+
+    // UI'lara yayınla
+    pub_socket.send(zmq::buffer(full_topic), zmq::send_flags::sndmore);
+    pub_socket.send(zmq::buffer(actual_data), zmq::send_flags::none);
+
+    Log("Published to [" + full_topic + "]: " + actual_data);
+    LogToFile(logfile, "PUBLISHED: " + full_topic + " -> " + actual_data);
+}
+
+
+class UdpServer {
+public:
+    UdpServer(boost::asio::io_context& io_context, short port, zmq::socket_t& pub_socket, std::ofstream& logfile)
+        : socket_(io_context, udp::endpoint(udp::v4(), port)),
+          pub_socket_(pub_socket),
+          logfile_(logfile) {
+        do_receive();
+    }
+
+private:
+    void do_receive() {
+        socket_.async_receive_from(
+            boost::asio::buffer(data_, max_length), remote_endpoint_,
+            [this](boost::system::error_code ec, std::size_t bytes_recvd) {
+                if (!ec && bytes_recvd > 0) {
+                    std::string received_data(data_, bytes_recvd);
+                    std::string source_desc = "UDP:" + remote_endpoint_.address().to_string();
+                    ProcessAndPublishTelemetry(received_data, source_desc, pub_socket_, logfile_);
+                }
+                if (g_running) {
+                    do_receive();
+                }
+            });
+    }
+
+    udp::socket socket_;
+    udp::endpoint remote_endpoint_;
+    enum { max_length = 1024 };
+    char data_[max_length];
+    zmq::socket_t& pub_socket_;
+    std::ofstream& logfile_;
+};
+
+
 void TelemetryWorker() {
     // Konfigürasyonu yükle
     std::string cfgPath;
@@ -215,9 +305,11 @@ void TelemetryWorker() {
     else {
         LogToFile(logfile, "=== SERVICE STARTED - Multi-UAV Telemetry Service ===");
         LogToFile(logfile, "Configured UAVs: " + std::to_string(config.uavs.size()));
+        LogToFile(logfile, "UDP Telemetry Port: " + std::to_string(config.udp_telemetry_port));
     }
    
     zmq::context_t context(1);
+    boost::asio::io_context io_context;
 
     // UI ile iletişim socketleri
     zmq::socket_t pub_to_ui(context, zmq::socket_type::pub);
@@ -230,136 +322,132 @@ void TelemetryWorker() {
     pull_from_ui.bind(ui_cmd_addr);
     Log("UI Command receiver bound to: " + ui_cmd_addr);
 
-    // Her UAV için telemetri alma socketleri
-    std::vector<std::unique_ptr<zmq::socket_t>> uav_telemetry_sockets;
-    std::vector<std::unique_ptr<zmq::socket_t>> uav_command_sockets;
-
-    for (const auto& uav : config.uavs) {
-        // Telemetri alma socketi
-        auto pull_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
-        std::string telemetry_addr = "tcp://*:" + std::to_string(uav.telemetry_port);
-        pull_socket->bind(telemetry_addr);
-        uav_telemetry_sockets.push_back(std::move(pull_socket));
-
-        // Komut gönderme socketi
-        auto push_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
-        std::string command_addr = "tcp://*:" + std::to_string(uav.command_port);
-        push_socket->bind(command_addr);
-        uav_command_sockets.push_back(std::move(push_socket));
-
-        Log("UAV " + uav.name + " - Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
-        LogToFile(logfile, "UAV " + uav.name + " - Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
-    }
-
-    Log("All sockets bound. Service running with " + std::to_string(config.uavs.size()) + " UAVs");
-
-    // Telemetri alıcı thread - tüm UAV'lardan dinle (poll-based)
-    std::thread receiver([&]() {
-        // Build pollitems once
-        std::vector<zmq::pollitem_t> pollitems;
-        pollitems.reserve(uav_telemetry_sockets.size());
-        for (auto &sockPtr : uav_telemetry_sockets) {
-            pollitems.push_back(zmq::pollitem_t{ static_cast<void*>(*sockPtr), 0, ZMQ_POLLIN, 0 });
-        }
-        while (g_running) {
-            if (!pollitems.empty()) {
-                zmq::poll(pollitems.data(), pollitems.size(), std::chrono::milliseconds(10));
-            } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            for (size_t i = 0; i < pollitems.size(); ++i) {
-                if (pollitems[i].revents & ZMQ_POLLIN) {
-                    zmq::message_t message;
-                    if (!uav_telemetry_sockets[i]->recv(message, zmq::recv_flags::none)) continue;
-                    std::string data(static_cast<char*>(message.data()), message.size());
-                    std::string uav_name = config.uavs[i].name;
-
-                    Log("Received from " + uav_name + ": " + data);
-                    LogToFile(logfile, "RECEIVED from " + uav_name + ": " + data);
-
-                    // Topic belirleme
-                    std::string topic = "unknown";
-                    try {
-                        size_t last_space = data.find_last_of(" \t");
-                        std::string numeric_part = (last_space != std::string::npos) ? data.substr(last_space + 1) : data;
-                        int code = std::stoi(numeric_part);
-                        if (code >= 1000 && code < 2000) topic = "mapping";
-                        else if (code >= 2000 && code < 3000) topic = "camera";
-                        else if (data.find("Debug") != std::string::npos || data.find("_ACK") != std::string::npos) topic = "system";
-                    } catch (const std::invalid_argument&) {
-                        if (data.find("Debug") != std::string::npos || data.find("_ACK") != std::string::npos) topic = "system";
-                        else Log("Warning: Could not parse message to determine topic: " + data);
-                    }
-
-                    // UAV adını da topic'e ekle
-                    std::string full_topic = topic + "_" + uav_name;
-
-                    // UI'lara yayınla
-                    pub_to_ui.send(zmq::buffer(full_topic), zmq::send_flags::sndmore);
-                    pub_to_ui.send(zmq::buffer(data), zmq::send_flags::none);
-
-                    Log("Published to [" + full_topic + "]: " + data);
-                    LogToFile(logfile, "PUBLISHED: " + full_topic + " -> " + data);
+    // UDP Telemetry Server
+    try {
+        UdpServer udp_server(io_context, config.udp_telemetry_port, pub_to_ui, logfile);
+        std::thread udp_thread([&io_context]() { 
+            while(g_running) {
+                try {
+                    io_context.run();
+                    break; // run() exited normally
+                } catch (const std::exception& e) {
+                    Log("UDP server error: " + std::string(e.what()));
                 }
             }
+        });
+        Log("UDP Telemetry listener running on port: " + std::to_string(config.udp_telemetry_port));
+
+        // Her UAV için telemetri alma socketleri
+        std::vector<std::unique_ptr<zmq::socket_t>> uav_telemetry_sockets;
+        std::vector<std::unique_ptr<zmq::socket_t>> uav_command_sockets;
+
+        for (const auto& uav : config.uavs) {
+            // Telemetri alma socketi
+            auto pull_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
+            std::string telemetry_addr = "tcp://*:" + std::to_string(uav.telemetry_port);
+            pull_socket->bind(telemetry_addr);
+            uav_telemetry_sockets.push_back(std::move(pull_socket));
+
+            // Komut gönderme socketi
+            auto push_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
+            std::string command_addr = "tcp://*:" + std::to_string(uav.command_port);
+            push_socket->bind(command_addr);
+            uav_command_sockets.push_back(std::move(push_socket));
+
+            Log("UAV " + uav.name + " (ZMQ) - Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
+            LogToFile(logfile, "UAV " + uav.name + " (ZMQ) - Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
         }
-        Log("Receiver thread stopped.");
-        LogToFile(logfile, "=== RECEIVER THREAD STOPPED ===");
-    });
 
-    // UI komut yönlendirici thread
-    std::thread forwarder([&]() {
-        zmq::pollitem_t ui_poll{ static_cast<void*>(pull_from_ui), 0, ZMQ_POLLIN, 0 };
-        while (g_running) {
-            zmq::poll(&ui_poll, 1, std::chrono::milliseconds(10));
-            if (ui_poll.revents & ZMQ_POLLIN) {
-                zmq::message_t ui_msg;
-                if (!pull_from_ui.recv(ui_msg, zmq::recv_flags::none)) continue;
-                std::string msg(static_cast<char*>(ui_msg.data()), ui_msg.size());
+        Log("All sockets bound. Service running with " + std::to_string(config.uavs.size()) + " UAVs");
 
-                std::string ui_source = ExtractUISource(msg);
-                Log("RECEIVED FROM UI [" + ui_source + "]: " + msg);
-                LogToFile(logfile, "RECEIVED FROM UI [" + ui_source + "]: " + msg);
-
-                // Hedef UAV'ı ve komutu parse et
-                std::string target_uav = "UAV_1";  // default
-                std::string actual_cmd = msg;
-
-                size_t colon_pos = msg.find(':');
-                if (colon_pos != std::string::npos) {
-                    target_uav = msg.substr(0, colon_pos);
-                    actual_cmd = msg.substr(colon_pos + 1);
+        // Telemetri alıcı thread - tüm UAV'lardan dinle (poll-based)
+        std::thread receiver([&]() {
+            // Build pollitems once
+            std::vector<zmq::pollitem_t> pollitems;
+            pollitems.reserve(uav_telemetry_sockets.size());
+            for (auto &sockPtr : uav_telemetry_sockets) {
+                pollitems.push_back(zmq::pollitem_t{ static_cast<void*>(*sockPtr), 0, ZMQ_POLLIN, 0 });
+            }
+            while (g_running) {
+                if (!pollitems.empty()) {
+                    zmq::poll(pollitems.data(), pollitems.size(), std::chrono::milliseconds(10));
+                } else {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
-
-                // Hedef UAV'ı bul ve komut gönder
-                for (size_t i = 0; i < config.uavs.size(); ++i) {
-                    if (config.uavs[i].name == target_uav) {
-                        Log("SENDING TO " + target_uav + ": " + actual_cmd);
-                        LogToFile(logfile, "FORWARDING TO " + target_uav + ": " + actual_cmd);
-
-                        uav_command_sockets[i]->send(zmq::buffer(actual_cmd), zmq::send_flags::none);
-
-                        Log("MESSAGE SENT TO " + target_uav + " VIA PUSH!");
-                        LogToFile(logfile, "MESSAGE SENT TO " + target_uav + " VIA PUSH: " + actual_cmd);
-                        break;
+                for (size_t i = 0; i < pollitems.size(); ++i) {
+                    if (pollitems[i].revents & ZMQ_POLLIN) {
+                        zmq::message_t message;
+                        if (!uav_telemetry_sockets[i]->recv(message, zmq::recv_flags::none)) continue;
+                        std::string data(static_cast<char*>(message.data()), message.size());
+                        std::string uav_name = config.uavs[i].name;
+                        ProcessAndPublishTelemetry(data, uav_name, pub_to_ui, logfile);
                     }
                 }
             }
-        }
-        Log("Forwarder thread stopped.");
-        LogToFile(logfile, "=== FORWARDER THREAD STOPPED ===");
+            Log("Receiver thread stopped.");
+            LogToFile(logfile, "=== RECEIVER THREAD STOPPED ===");
         });
 
-    while (g_running) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        // UI komut yönlendirici thread
+        std::thread forwarder([&]() {
+            zmq::pollitem_t ui_poll{ static_cast<void*>(pull_from_ui), 0, ZMQ_POLLIN, 0 };
+            while (g_running) {
+                zmq::poll(&ui_poll, 1, std::chrono::milliseconds(10));
+                if (ui_poll.revents & ZMQ_POLLIN) {
+                    zmq::message_t ui_msg;
+                    if (!pull_from_ui.recv(ui_msg, zmq::recv_flags::none)) continue;
+                    std::string msg(static_cast<char*>(ui_msg.data()), ui_msg.size());
+
+                    std::string ui_source = ExtractUISource(msg);
+                    Log("RECEIVED FROM UI [" + ui_source + "]: " + msg);
+                    LogToFile(logfile, "RECEIVED FROM UI [" + ui_source + "]: " + msg);
+
+                    // Hedef UAV'ı ve komutu parse et
+                    std::string target_uav = "UAV_1";  // default
+                    std::string actual_cmd = msg;
+
+                    size_t colon_pos = msg.find(':');
+                    if (colon_pos != std::string::npos) {
+                        target_uav = msg.substr(0, colon_pos);
+                        actual_cmd = msg.substr(colon_pos + 1);
+                    }
+
+                    // Hedef UAV'ı bul ve komut gönder
+                    for (size_t i = 0; i < config.uavs.size(); ++i) {
+                        if (config.uavs[i].name == target_uav) {
+                            Log("SENDING TO " + target_uav + ": " + actual_cmd);
+                            LogToFile(logfile, "FORWARDING TO " + target_uav + ": " + actual_cmd);
+
+                            uav_command_sockets[i]->send(zmq::buffer(actual_cmd), zmq::send_flags::none);
+
+                            Log("MESSAGE SENT TO " + target_uav + " VIA PUSH!");
+                            LogToFile(logfile, "MESSAGE SENT TO " + target_uav + " VIA PUSH: " + actual_cmd);
+                            break;
+                        }
+                    }
+                }
+            }
+            Log("Forwarder thread stopped.");
+            LogToFile(logfile, "=== FORWARDER THREAD STOPPED ===");
+            });
+
+        while (g_running) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        io_context.stop();
+        udp_thread.join();
+        receiver.join();
+        forwarder.join();
+
+        LogToFile(logfile, "=== SERVICE SHUTDOWN COMPLETED ===");
+        logfile.close();
+        Log("Multi-UAV Telemetry service fully stopped.");
+
+    } catch (const std::exception& e) {
+        Log("Fatal error in TelemetryWorker: " + std::string(e.what()));
+        LogToFile(logfile, "Fatal error: " + std::string(e.what()));
     }
-
-    receiver.join();
-    forwarder.join();
-
-    LogToFile(logfile, "=== SERVICE SHUTDOWN COMPLETED ===");
-    logfile.close();
-    Log("Multi-UAV Telemetry service fully stopped.");
 }
 
 int main() {

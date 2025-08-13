@@ -93,6 +93,7 @@ uav_sim_EXTERNAL_OBJECTS =
 /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim: uav_sim/CMakeFiles/uav_sim.dir/uav_sim.cpp.o
 /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim: uav_sim/CMakeFiles/uav_sim.dir/build.make
 /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim: /usr/local/lib/libzmq.so
+/home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim: /usr/lib/x86_64-linux-gnu/libboost_system.so
 /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim: uav_sim/CMakeFiles/uav_sim.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/vboxuser/Desktop/repo/haberlesme_projesi/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim"
 	cd /home/vboxuser/Desktop/repo/haberlesme_projesi/build/uav_sim && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/uav_sim.dir/link.txt --verbose=$(VERBOSE)

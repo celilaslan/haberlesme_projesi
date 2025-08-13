@@ -23,5 +23,6 @@
     "command_port": 5558,
     "publish_port": 5557
   },
+  "udp_telemetry_port": 5556,
   "log_file": "telemetry_log.txt"
 }

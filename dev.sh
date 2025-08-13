@@ -3,34 +3,36 @@ set -euo pipefail
 
 # Fast dev helper for this repo
 # Usage:
-#   ./dev.sh configure [build_dir]
-#   ./dev.sh build [build_dir] [--clean]
-#   ./dev.sh run <target> [--] [args...]
-#   ./dev.sh demo            # run service → UIs → UAV_1 briefly and show log tail
-#   ./dev.sh up              # launch service, UIs, and UAV_1 in separate terminals
-#   ./dev.sh down            # stop service/UIs/sims
-#   ./dev.sh status          # show running PIDs and port listeners
-#   ./dev.sh logs [-f]       # tail or follow telemetry_service log
-#   ./dev.sh build-targets [build_dir] <t1> [t2 ...]  # build specific CMake targets
-#   ./dev.sh clean [build_dir]  # remove build dir and component executables
-#   ./dev.sh rebuild [build_dir]
-#   ./dev.sh test            # reserved, if tests exist later
+#   ./dev.sh <command> [options]
+#
+# Commands:
+#   configure [build_dir]   - Run CMake to configure the project.
+#   build [build_dir]       - Build all targets. Can use --clean.
+#   rebuild [build_dir]     - Clean, configure, and build the project.
+#   clean [build_dir]       - Clean the build directory and executables.
+#
+#   run <target> [args...]  - Run a specific executable with arguments.
+#     <target>: telemetry_service, uav_sim, camera_ui, mapping_ui
+#
+#   up [UAVs...] [args...]  - Launch service, UIs, and specified UAVs in new terminals.
+#                             Any extra arguments are passed to all UAV simulators.
+#                             Defaults to launching UAV_1 if no UAVs are specified.
+#   down                    - Stop all running components.
+#   status                  - Show running processes and listening ports.
+#
+#   demo                    - Run a quick, self-contained test of the system.
+#   logs [-f]               - Show the tail of the service log file (-f to follow).
 #
 # Defaults:
 #   build_dir = build
 #
-# Targets (executables):
-#   telemetry_service/telemetry_service
-#   uav_sim/uav_sim
-#   camera_ui/camera_ui
-#   mapping_ui/mapping_ui
-#
 # Examples:
-#   ./dev.sh configure
 #   ./dev.sh build
 #   ./dev.sh run telemetry_service
-#   ./dev.sh run uav_sim
-#   ./dev.sh clean
+#   ./dev.sh run uav_sim UAV_1 --protocol udp
+#   ./dev.sh up UAV_1 UAV_2 --protocol udp
+#   ./dev.sh down
+#   ./dev.sh logs -f
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DEFAULT_BUILD_DIR="${ROOT_DIR}/build"
@@ -92,7 +94,7 @@ kill_existing_procs() {
 }
 
 list_ports() {
-  ss -ltnp | awk 'NR==1 || $4 ~ /:(5555|5557|5558|5559|5565|5569|5575|5579)$/' || true
+  ss -ltnp | awk 'NR==1 || $4 ~ /:(5555|5556|5557|5558|5559|5565|5569|5575|5579)$/' || true
 }
 
 list_procs() {
@@ -166,19 +168,20 @@ build_targets() {
 
 clean() {
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
-  # Stop running processes to avoid busy binaries
-  kill_existing_procs || true
-  if [[ -d "$build_dir" ]]; then
-    echo "Cleaning build directory: $build_dir"
-    rm -rf "$build_dir"
+  echo "Cleaning build directory: ${build_dir}"
+  # Stop running processes first
+  kill_existing_procs
+  # Remove the build directory contents
+  if [ -d "$build_dir" ]; then
+      rm -rf "${build_dir:?}"/*
   fi
-  # Remove component executables placed in source directories
-  for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
-    if [[ -f "$ROOT_DIR/$exe" ]]; then
-      echo "Removing $exe"
-      rm -f "$ROOT_DIR/$exe"
-    fi
-  done
+  # Also remove the executables from their source directories
+  echo "Removing old executables from source directories..."
+  find "${ROOT_DIR}/telemetry_service" -maxdepth 1 -type f -name "telemetry_service" -executable -delete
+  find "${ROOT_DIR}/uav_sim" -maxdepth 1 -type f -name "uav_sim" -executable -delete
+  find "${ROOT_DIR}/camera_ui" -maxdepth 1 -type f -name "camera_ui" -executable -delete
+  find "${ROOT_DIR}/mapping_ui" -maxdepth 1 -type f -name "mapping_ui" -executable -delete
+  echo "Clean complete."
 }
 
 rebuild() {
@@ -208,7 +211,7 @@ run() {
   # Allow passing args after --
   if [[ "${1:-}" == "--" ]]; then shift; fi
   echo "Running: $exe $*"
-  exec "$exe" "$@"
+  "$exe" "$@"
 }
 
 cmd="${1:-}"
@@ -247,10 +250,32 @@ case "$cmd" in
     sleep 0.2
     open_term "camera_ui" "$ROOT_DIR/camera_ui/camera_ui"
     open_term "mapping_ui" "$ROOT_DIR/mapping_ui/mapping_ui"
-    # Start provided UAV sims (defaults to UAV_1 if none)
-    if [[ $# -eq 0 ]]; then set -- UAV_1; fi
-    for uav in "$@"; do
-      open_term "uav_sim $uav" "SERVICE_CONFIG=\"$ROOT_DIR/service_config.json\" $ROOT_DIR/uav_sim/uav_sim $uav"
+    
+    # Separate UAV names from other arguments
+    local uav_names=()
+    local uav_args=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        UAV_*)
+          uav_names+=("$1")
+          shift
+          ;;
+        *)
+          uav_args+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    # If no UAV names provided, default to UAV_1
+    if [[ ${#uav_names[@]} -eq 0 ]]; then
+      uav_names=("UAV_1")
+    fi
+
+    # Start provided UAV sims with any extra arguments
+    for uav in "${uav_names[@]}"; do
+      # Note: uav_args are intentionally unquoted to allow shell parsing of multiple args
+      open_term "uav_sim $uav" "SERVICE_CONFIG=\"$ROOT_DIR/service_config.json\" $ROOT_DIR/uav_sim/uav_sim $uav ${uav_args[*]}"
     done
     ;;
   down)
@@ -259,7 +284,7 @@ case "$cmd" in
     kill_existing_procs || true
     # wait briefly for ports to close
     for i in {1..10}; do
-      if ss -ltn | awk '$4 ~ /:(5555|5557|5558|5559|5565|5569|5575|5579)$/ {found=1; exit} END{exit !found}'; then
+      if ss -ltn | awk '$4 ~ /:(5555|5556|5557|5558|5559|5565|5569|5575|5579)$/ {found=1; exit} END{exit !found}'; then
         sleep 0.2
       else
         break

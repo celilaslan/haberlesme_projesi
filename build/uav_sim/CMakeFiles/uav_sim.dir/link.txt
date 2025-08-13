@@ -1,1 +1,1 @@
-/usr/bin/c++ CMakeFiles/uav_sim.dir/uav_sim.cpp.o -o /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so 
+/usr/bin/c++ CMakeFiles/uav_sim.dir/uav_sim.cpp.o -o /home/vboxuser/Desktop/repo/haberlesme_projesi/uav_sim/uav_sim  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so /usr/lib/x86_64-linux-gnu/libboost_system.so 

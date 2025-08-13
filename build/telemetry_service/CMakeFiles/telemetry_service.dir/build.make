@@ -93,6 +93,7 @@ telemetry_service_EXTERNAL_OBJECTS =
 /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service: telemetry_service/CMakeFiles/telemetry_service.dir/telemetry_service.cpp.o
 /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service: telemetry_service/CMakeFiles/telemetry_service.dir/build.make
 /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service: /usr/local/lib/libzmq.so
+/home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service: /usr/lib/x86_64-linux-gnu/libboost_system.so
 /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service: telemetry_service/CMakeFiles/telemetry_service.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/vboxuser/Desktop/repo/haberlesme_projesi/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service"
 	cd /home/vboxuser/Desktop/repo/haberlesme_projesi/build/telemetry_service && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/telemetry_service.dir/link.txt --verbose=$(VERBOSE)

@@ -68,3 +68,22 @@ Next:
     - The script now modifies the installed `service_config.json` to use the absolute log path `/var/log/telemetry_service/telemetry_log.txt`.
     - The `telemetry_service.service` file was updated with `ReadWritePaths` to grant the service explicit permission to write to the new log directory.
 - **Result**: The background service now logs correctly to a standard system location.
+
+### UDP Telemetry Support (2025-08-13)
+
+- **Goal**: Added a parallel telemetry channel using UDP (Boost.Asio) alongside the existing ZeroMQ (TCP) channel.
+- **Configuration**:
+    - Added `udp_telemetry_port` to `service_config.json`.
+    - Updated `CMakeLists.txt` to find and link the Boost.Asio and Boost.System libraries.
+- **Telemetry Service**:
+    - Refactored to launch a `UdpServer` in a separate thread.
+    - The `UdpServer` uses a `boost::asio::async_receive_from` loop to listen for UDP packets without blocking.
+    - A new `ProcessAndPublishTelemetry` function was created to handle message processing from both ZMQ and UDP sources, ensuring all telemetry is published via the single ZMQ PUB socket to the UIs.
+- **UAV Simulator**:
+    - Added a `--protocol udp` command-line flag.
+    - When specified, the simulator sends telemetry via a UDP socket to the port defined in the config.
+    - The UDP message payload is prefixed with the UAV's name (e.g., `"UAV_1:..."`) so the service can identify the sender.
+- **Bug Fixes**:
+    - Resolved a `boost::system::system_error` ("Invalid argument") in the `uav_sim` by using a `udp::resolver` to correctly handle hostnames (like "localhost") from the config file.
+    - Improved the `dev.sh` script's `clean` command to remove old executables, preventing stale builds from being run.
+- **Result**: The system now supports both ZMQ and UDP for telemetry ingestion, making it more flexible. The service acts as a bridge, normalizing data from different protocols before publishing it to clients.
