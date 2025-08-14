@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/mapping_ui.dir/mapping_ui.cpp.o -o /home/vboxuser/Desktop/repo/haberlesme_projesi/mapping_ui/mapping_ui  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so 

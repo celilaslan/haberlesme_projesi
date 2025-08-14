@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/telemetry_service.dir/telemetry_service.cpp.o -o /home/vboxuser/Desktop/repo/haberlesme_projesi/telemetry_service/telemetry_service  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so /usr/lib/x86_64-linux-gnu/libboost_system.so 
