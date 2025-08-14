@@ -132,3 +132,67 @@ node_modules/
 #    and enabling the optional ignore block above.
 # 4. Adjust service_config.local.json pattern for per-machine overrides.
 # ==============================
+
+# ---- Project local Linux executables (extensionless copies) ----
+# These appear in source subdirectories after build/install and should not be tracked
+camera_ui/camera_ui
+mapping_ui/mapping_ui
+telemetry_service/telemetry_service
+uav_sim/uav_sim
+
+
+# ---- Coverage & profiling ----
+*.gcno
+*.gcda
+*.gcov
+*.profraw
+*.profdata
+lcov.info
+coverage/
+perf.data*
+callgrind.out.*
+massif.out.*
+
+# ---- Sanitizer outputs ----
+asan.*
+lsan.*
+tsan.*
+ubsan.*
+
+# ---- Tool / build caches ----
+.clangd/
+.cache/
+ccache/
+.clang-tidy-cache/
+
+# ---- Alternate build dirs (prevent accidental in-source clutter) ----
+/bin/
+/dist/
+/out/
+/debug/
+/release/
+
+# ---- IDEs (other) ----
+.idea/
+*.iml
+.eclipse/
+.settings/
+.project
+.cproject
+
+# ---- Python virtual env (future scripting) ----
+.venv/
+venv/
+
+# ---- Environment / secrets (defensive) ----
+.env
+.env.*
+*.env
+secrets/
+*.secret
+
+# ---- Test output artifacts ----
+test-output/
+*.testlog
+.junit/
+
