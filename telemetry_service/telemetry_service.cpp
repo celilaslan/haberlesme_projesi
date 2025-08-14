@@ -279,13 +279,24 @@ private:
 
 
 void TelemetryWorker() {
-    // Konfigürasyonu yükle
-    std::string cfgPath;
-    if (const char* env = std::getenv("SERVICE_CONFIG")) {
-        cfgPath = env;
-    } else {
-        cfgPath = "service_config.json"; // fallback to repo root default
-    }
+    // Konfigürasyon dosyasını çöz (ortam değişkeni, çalışma dizini veya executable dizini)
+    auto resolveConfigPath = []() -> std::string {
+        if (const char* env = std::getenv("SERVICE_CONFIG")) {
+            if (std::filesystem::exists(env)) return std::string(env);
+        }
+        // Candidates
+        std::vector<std::filesystem::path> candidates;
+        candidates.emplace_back("service_config.json"); // current working dir
+        std::filesystem::path exeDir = GetExecutableDir();
+        candidates.push_back(exeDir / "service_config.json");
+        candidates.push_back(exeDir.parent_path() / "service_config.json");
+        for (auto &p : candidates) {
+            std::error_code ec; if (std::filesystem::exists(p, ec)) return p.string();
+        }
+        // fallback to CWD name; it will be created later if missing
+        return std::string("service_config.json");
+    };
+    std::string cfgPath = resolveConfigPath();
     ServiceConfig config = LoadConfig(cfgPath);
 
     // Resolve log path to executable directory when relative

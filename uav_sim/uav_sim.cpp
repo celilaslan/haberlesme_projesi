@@ -137,8 +137,36 @@ int main(int argc, char* argv[]) {
         protocol = argv[3];
     }
 
-    const char* cfgEnv = std::getenv("SERVICE_CONFIG");
-    std::string config_path = cfgEnv ? std::string(cfgEnv) : std::string("service_config.json");
+    auto getExecutableDir = []() -> std::string {
+#if defined(_WIN32)
+        char path[MAX_PATH];
+        DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+        if (len == 0 || len == MAX_PATH) return std::filesystem::current_path().string();
+        return std::filesystem::path(path).parent_path().string();
+#else
+        char buf[4096];
+        ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (len == -1) return std::filesystem::current_path().string();
+        buf[len] = '\0';
+        return std::filesystem::path(buf).parent_path().string();
+#endif
+    };
+
+    auto resolveConfigPath = [&]() -> std::string {
+        if (const char* env = std::getenv("SERVICE_CONFIG")) {
+            if (std::filesystem::exists(env)) return std::string(env);
+        }
+        std::vector<std::filesystem::path> candidates;
+        candidates.emplace_back("service_config.json");
+        std::filesystem::path exeDir = getExecutableDir();
+        candidates.push_back(exeDir / "service_config.json");
+        candidates.push_back(exeDir.parent_path() / "service_config.json");
+        for (auto &p : candidates) {
+            std::error_code ec; if (std::filesystem::exists(p, ec)) return p.string();
+        }
+        return std::string("service_config.json");
+    };
+    std::string config_path = resolveConfigPath();
 
     // UAV konfigürasyonunu yükle
     UAVConfig config;

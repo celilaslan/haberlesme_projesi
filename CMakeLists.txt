@@ -1,8 +1,21 @@
 cmake_minimum_required(VERSION 3.12)
 project(haberlesme_projesi CXX)
 
+# Export compilation database for IntelliSense (VS Code)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (WIN32)
+  # Target Windows 10 (0x0A00) APIs and silence MSVC deprecation warnings for getenv usage
+  add_compile_definitions(_WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS)
+endif()
+
+if (MSVC)
+  # Ensure source files interpreted as UTF-8 (fixes warning C4566 for emoji/unicode literals)
+  add_compile_options(/utf-8)
+endif()
 
 # Use the module-based find for Boost.
 # We look for the 'system' component, as 'asio' is often header-only.
@@ -10,6 +23,9 @@ set(Boost_NO_BOOST_CMAKE ON)
 find_package(Boost 1.83.0 REQUIRED COMPONENTS system)
 
 find_package(Threads REQUIRED)
+
+# Header-only JSON library (installed via vcpkg as nlohmann-json)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # Try to find ZeroMQ (imported target varies across platforms)
 find_package(ZeroMQ QUIET)
@@ -40,6 +56,13 @@ function(link_with_boost target)
     # Link against the found Boost libraries and include directories
     target_include_directories(${target} PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(${target} PRIVATE ${Boost_LIBRARIES})
+endfunction()
+
+# Helper to link with nlohmann_json (header-only, but provides an interface target for consumers)
+function(link_with_json target)
+  if (TARGET nlohmann_json::nlohmann_json)
+    target_link_libraries(${target} PRIVATE nlohmann_json::nlohmann_json)
+  endif()
 endfunction()
 
 # Helper to place runtime next to the source directory (as requested)

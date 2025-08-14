@@ -1,0 +1,134 @@
+# ==============================
+# Project .gitignore for haberlesme_projesi
+# Generated to keep source & config clean while excluding build artifacts,
+# local environment files, large vcpkg build outputs, and transient logs.
+# ==============================
+
+# ---- Core build / CMake ----
+/build/
+/build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+Testing/
+CTestTestfile.cmake
+
+# If you generate compile commands in source dir
+compile_commands.json
+
+# ---- Generated binaries (MSVC / GCC / Clang) ----
+*.exe
+*.exe.manifest
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.la
+*.obj
+*.o
+*.lo
+*.ilc
+*.ilk
+*.idb
+*.pdb
+*.exp
+*.rsp
+*.pch
+*.ipdb
+*.iobj
+
+# Keep required committed tools / runtime DLLs
+!vcpkg/vcpkg.exe
+!**/libzmq-*.dll
+
+# ---- Intermediate / temp ----
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
+*.bak
+*~
+
+# ---- Logs & runtime output ----
+*.log
+telemetry_service/telemetry_log.txt
+# Preserve sample / test input files
+!telemetry_service/telemetry_test.txt
+
+# ---- Local config overrides (create locally if needed) ----
+service_config.local.json
+*.local.json
+
+# ---- IDE / Editor ----
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Visual Studio / MSBuild
+.vs/
+# VS user files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# VS Code CMake Tools generated cache (outside build dir)
+CMakeUserPresets.json
+
+# ---- Crash / profiler / sanitizer dumps ----
+*.dSYM/
+*.stackdump
+*.core
+core.*
+
+# ---- Python / scripting (if added later) ----
+__pycache__/
+*.pyc
+
+# ---- vcpkg heavy transient directories (optional ignore if NOT vendoring) ----
+# If you decide to stop committing built packages, uncomment below:
+# vcpkg/buildtrees/
+# vcpkg/downloads/
+# vcpkg/packages/
+# vcpkg/installed/
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Backup archives ----
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+
+# ---- Node / web (future expansion) ----
+node_modules/
+
+# ---- Binary data captures (future) ----
+*.pcap
+
+# ---- Security: never commit secrets (patterns) ----
+*.pem
+*.crt
+*.key
+*.pfx
+*.der
+
+# ==============================
+# Notes:
+# 1. Executables are rebuilt; stored next to sources per project CMake.
+# 2. libzmq DLLs + vcpkg.exe kept since they are already committed/needed.
+# 3. To slim repo size later, consider purging vendored vcpkg build outputs
+#    and enabling the optional ignore block above.
+# 4. Adjust service_config.local.json pattern for per-machine overrides.
+# ==============================

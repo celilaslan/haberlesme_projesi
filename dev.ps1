@@ -30,6 +30,26 @@ function Get-ExePath([string]$relativeNoExt) {
     else { return $p1 } # default to .exe path for Windows builds
 }
 
+function Get-CmakePath {
+    # 1. Check if it's in the PATH
+    if (Have 'cmake') { return 'cmake' }
+
+    # 2. Check common installation directories
+    $commonPaths = @(
+        "C:\Program Files\CMake\bin\cmake.exe",
+        "C:\Program Files (x86)\CMake\bin\cmake.exe",
+        "$env:LOCALAPPDATA\Programs\CMake\bin\cmake.exe", # User-specific install
+        "$env:ProgramData\chocolatey\bin\cmake.exe"
+    )
+    foreach ($p in $commonPaths) {
+        if (Test-Path $p) {
+            Write-Host "Found cmake at $p" -ForegroundColor Gray
+            return $p
+        }
+    }
+    return $null
+}
+
 function Kill-Procs {
     param([string[]] $names = @('telemetry_service','uav_sim','camera_ui','mapping_ui'))
     foreach ($n in $names) {
@@ -89,18 +109,42 @@ function Configure {
         else { $Generator = 'Ninja' }
     }
 
+    # If NMake selected but nmake.exe not available, fallback to VS generator (more robust on Windows)
+    if ($Generator -eq 'NMake Makefiles' -and -not (Have 'nmake')) {
+        Write-Host 'nmake not found; switching generator to Visual Studio 17 2022 (x64)' -ForegroundColor Yellow
+        $Generator = 'Visual Studio 17 2022'
+    }
+
     Write-Host "Configuring with generator: $Generator" -ForegroundColor Cyan
-    & cmake -S $RepoRoot -B (Join-Path $RepoRoot 'build') -G "$Generator"
+    $cmakePath = Get-CmakePath
+    if (-not $cmakePath) { throw "CMake not found. Please install it and ensure it's in your PATH." }
+    $buildDir = Join-Path $RepoRoot 'build'
+    $toolchainArg = @()
+    # Build the vcpkg toolchain path safely (Join-Path only supports one child at a time)
+    $vcpkgToolchain = [IO.Path]::Combine($RepoRoot,'vcpkg','scripts','buildsystems','vcpkg.cmake')
+    if (Test-Path $vcpkgToolchain) {
+        Write-Host "Detected vcpkg toolchain: $vcpkgToolchain" -ForegroundColor Gray
+        $toolchainArg = @('-DCMAKE_TOOLCHAIN_FILE=' + $vcpkgToolchain)
+        if (-not $Env:VCPKG_TARGET_TRIPLET) { $toolchainArg += '-DVCPKG_TARGET_TRIPLET=x64-windows' }
+    }
+    $extra = @()
+    if ($Generator -like 'Visual Studio*' -and -not $env:CMAKE_GENERATOR_PLATFORM) {
+        # Ensure 64-bit build
+        $extra += '-A'; $extra += 'x64'
+    }
+    & $cmakePath -S $RepoRoot -B $buildDir -G "$Generator" @toolchainArg @extra
 }
 
 function Build {
     param([string[]] $Targets)
     Ensure-BuildDirs
+    $cmakePath = Get-CmakePath
+    if (-not $cmakePath) { throw "CMake not found." }
     $args = @('--build', (Join-Path $RepoRoot 'build'))
     if ($Targets -and $Targets.Count -gt 0) { $args += @('--target'); $args += $Targets }
     # Prefer Release config where applicable
     $args += @('--config','Release')
-    & cmake @args
+    & $cmakePath @args
 }
 
 function Clean {
@@ -196,7 +240,7 @@ if (-not $Command) {
 }
 
 switch ($Command) {
-    'configure'      { Configure -Generator ($Args[0]) }
+    'configure'      { if ($Args) { Configure -Generator $Args[0] } else { Configure } }
     'build'          { if ($Args) { Build -Targets $Args } else { Build } }
     'build-targets'  { if (-not $Args) { throw 'Specify one or more CMake targets' } else { Build -Targets $Args } }
     'clean'          { Clean }
