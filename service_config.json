@@ -23,10 +23,8 @@
     }
   ],
   "ui_ports": {
-    "zmq_command_port": 5558,
-    "zmq_publish_port": 5557,
-    "udp_broadcast_address": "127.0.0.1",
-    "udp_broadcast_port": 5561
+    "command_port": 5558,
+    "publish_port": 5557
   },
   "log_file": "telemetry_log.txt"
 }
