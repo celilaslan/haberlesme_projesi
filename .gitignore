@@ -198,3 +198,4 @@ test-output/
 
 telemetry_service/telemetry_log.txt
 telemetry_service/telemetry_test.txt
+!**/libzmq-*.dll
