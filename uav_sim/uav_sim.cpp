@@ -223,13 +223,12 @@ int main(int argc, char* argv[]) {
             udp::endpoint remote_endpoint = *endpoints.begin();
 
             for (int i = 0; i < 50 && g_running; ++i) {
-                // UDP messages must be prefixed with UAV name
-                std::string msg1 = config.name + ":" + config.name + "  " + std::to_string(mapping + i);
+                std::string msg1 = config.name + "  " + std::to_string(mapping + i);
                 socket.send_to(boost::asio::buffer(msg1), remote_endpoint);
                 std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (UDP): " << msg1 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 
-                std::string msg2 = config.name + ":" + config.name + "  " + std::to_string(camera + i);
+                std::string msg2 = config.name + "  " + std::to_string(camera + i);
                 socket.send_to(boost::asio::buffer(msg2), remote_endpoint);
                 std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (UDP): " << msg2 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));

@@ -1,147 +1,67 @@
-[2025-08-15 16:58:53.621] === SERVICE STARTED - Multi-UAV Telemetry Service ===
-[2025-08-15 16:58:53.621] Config loaded successfully. Found 3 UAVs
-[2025-08-15 16:58:53.621] UI Publisher bound to: tcp://*:5557
-[2025-08-15 16:58:53.621] UI Command receiver bound to: tcp://*:5558
-[2025-08-15 16:58:53.622] UAV UAV_1 (ZMQ) - Telemetry: tcp://*:5555, Commands: tcp://*:5559
-[2025-08-15 16:58:53.622] UAV UAV_2 (ZMQ) - Telemetry: tcp://*:5565, Commands: tcp://*:5569
-[2025-08-15 16:58:53.622] UAV UAV_3 (ZMQ) - Telemetry: tcp://*:5575, Commands: tcp://*:5579
-[2025-08-15 16:58:53.623] UDP Server for UAV_1 bound to localhost:5556
-[2025-08-15 16:58:53.623] UDP Server for UAV_2 bound to localhost:5566
-[2025-08-15 16:58:53.623] UDP Server for UAV_3 bound to localhost:5576
-[2025-08-15 16:58:53.623] All services running.
-[2025-08-15 16:59:24.196] Received from ZMQ:UAV_1: UAV_1  1001
-[2025-08-15 16:59:24.196] Published to [mapping_ZMQ:UAV_1]: UAV_1  1001
-[2025-08-15 16:59:24.296] Received from ZMQ:UAV_1: UAV_1  2001
-[2025-08-15 16:59:24.296] Published to [camera_ZMQ:UAV_1]: UAV_1  2001
-[2025-08-15 16:59:24.838] Received from ZMQ:UAV_1: UAV_1  1002
-[2025-08-15 16:59:24.839] Published to [mapping_ZMQ:UAV_1]: UAV_1  1002
-[2025-08-15 16:59:24.938] Received from ZMQ:UAV_1: UAV_1  2002
-[2025-08-15 16:59:24.939] Published to [camera_ZMQ:UAV_1]: UAV_1  2002
-[2025-08-15 16:59:25.455] Received from ZMQ:UAV_1: UAV_1  1003
-[2025-08-15 16:59:25.455] Published to [mapping_ZMQ:UAV_1]: UAV_1  1003
-[2025-08-15 16:59:25.556] Received from ZMQ:UAV_1: UAV_1  2003
-[2025-08-15 16:59:25.556] Published to [camera_ZMQ:UAV_1]: UAV_1  2003
-[2025-08-15 16:59:26.065] Received from ZMQ:UAV_1: UAV_1  1004
-[2025-08-15 16:59:26.066] Published to [mapping_ZMQ:UAV_1]: UAV_1  1004
-[2025-08-15 16:59:26.164] Received from ZMQ:UAV_1: UAV_1  2004
-[2025-08-15 16:59:26.165] Published to [camera_ZMQ:UAV_1]: UAV_1  2004
-[2025-08-15 16:59:26.678] Received from ZMQ:UAV_1: UAV_1  1005
-[2025-08-15 16:59:26.679] Published to [mapping_ZMQ:UAV_1]: UAV_1  1005
-[2025-08-15 16:59:26.778] Received from ZMQ:UAV_1: UAV_1  2005
-[2025-08-15 16:59:26.778] Published to [camera_ZMQ:UAV_1]: UAV_1  2005
-[2025-08-15 16:59:27.279] Received from ZMQ:UAV_1: UAV_1  1006
-[2025-08-15 16:59:27.279] Published to [mapping_ZMQ:UAV_1]: UAV_1  1006
-[2025-08-15 16:59:27.381] Received from ZMQ:UAV_1: UAV_1  2006
-[2025-08-15 16:59:27.381] Published to [camera_ZMQ:UAV_1]: UAV_1  2006
-[2025-08-15 16:59:27.885] Received from ZMQ:UAV_1: UAV_1  1007
-[2025-08-15 16:59:27.885] Published to [mapping_ZMQ:UAV_1]: UAV_1  1007
-[2025-08-15 16:59:27.985] Received from ZMQ:UAV_1: UAV_1  2007
-[2025-08-15 16:59:27.985] Published to [camera_ZMQ:UAV_1]: UAV_1  2007
-[2025-08-15 16:59:28.499] Received from ZMQ:UAV_1: UAV_1  1008
-[2025-08-15 16:59:28.499] Published to [mapping_ZMQ:UAV_1]: UAV_1  1008
-[2025-08-15 16:59:28.599] Received from ZMQ:UAV_1: UAV_1  2008
-[2025-08-15 16:59:28.599] Published to [camera_ZMQ:UAV_1]: UAV_1  2008
-[2025-08-15 16:59:29.125] Received from ZMQ:UAV_1: UAV_1  1009
-[2025-08-15 16:59:29.127] Published to [mapping_ZMQ:UAV_1]: UAV_1  1009
-[2025-08-15 16:59:29.228] Received from ZMQ:UAV_1: UAV_1  2009
-[2025-08-15 16:59:29.228] Published to [camera_ZMQ:UAV_1]: UAV_1  2009
-[2025-08-15 16:59:29.728] Received from ZMQ:UAV_1: UAV_1  1010
-[2025-08-15 16:59:29.729] Published to [mapping_ZMQ:UAV_1]: UAV_1  1010
-[2025-08-15 16:59:29.830] Received from ZMQ:UAV_1: UAV_1  2010
-[2025-08-15 16:59:29.830] Published to [camera_ZMQ:UAV_1]: UAV_1  2010
-[2025-08-15 16:59:30.330] Received from ZMQ:UAV_1: UAV_1  1011
-[2025-08-15 16:59:30.330] Published to [mapping_ZMQ:UAV_1]: UAV_1  1011
-[2025-08-15 16:59:30.437] Received from ZMQ:UAV_1: UAV_1  2011
-[2025-08-15 16:59:30.437] Published to [camera_ZMQ:UAV_1]: UAV_1  2011
-[2025-08-15 16:59:30.958] Received from ZMQ:UAV_1: UAV_1  1012
-[2025-08-15 16:59:30.958] Published to [mapping_ZMQ:UAV_1]: UAV_1  1012
-[2025-08-15 16:59:31.058] Received from ZMQ:UAV_1: UAV_1  2012
-[2025-08-15 16:59:31.058] Published to [camera_ZMQ:UAV_1]: UAV_1  2012
-[2025-08-15 16:59:31.559] Received from ZMQ:UAV_1: UAV_1  1013
-[2025-08-15 16:59:31.559] Published to [mapping_ZMQ:UAV_1]: UAV_1  1013
-[2025-08-15 16:59:31.659] Received from ZMQ:UAV_1: UAV_1  2013
-[2025-08-15 16:59:31.659] Published to [camera_ZMQ:UAV_1]: UAV_1  2013
-[2025-08-15 16:59:32.160] Received from ZMQ:UAV_1: UAV_1  1014
-[2025-08-15 16:59:32.160] Published to [mapping_ZMQ:UAV_1]: UAV_1  1014
-[2025-08-15 16:59:32.261] Received from ZMQ:UAV_1: UAV_1  2014
-[2025-08-15 16:59:32.261] Published to [camera_ZMQ:UAV_1]: UAV_1  2014
-[2025-08-15 16:59:32.762] Received from ZMQ:UAV_1: UAV_1  1015
-[2025-08-15 16:59:32.762] Published to [mapping_ZMQ:UAV_1]: UAV_1  1015
-[2025-08-15 16:59:32.864] Received from ZMQ:UAV_1: UAV_1  2015
-[2025-08-15 16:59:32.864] Published to [camera_ZMQ:UAV_1]: UAV_1  2015
-[2025-08-15 16:59:33.363] Received from ZMQ:UAV_1: UAV_1  1016
-[2025-08-15 16:59:33.364] Published to [mapping_ZMQ:UAV_1]: UAV_1  1016
-[2025-08-15 16:59:33.464] Received from ZMQ:UAV_1: UAV_1  2016
-[2025-08-15 16:59:33.464] Published to [camera_ZMQ:UAV_1]: UAV_1  2016
-[2025-08-15 16:59:33.964] Received from ZMQ:UAV_1: UAV_1  1017
-[2025-08-15 16:59:33.964] Published to [mapping_ZMQ:UAV_1]: UAV_1  1017
-[2025-08-15 16:59:34.065] Received from ZMQ:UAV_1: UAV_1  2017
-[2025-08-15 16:59:34.065] Published to [camera_ZMQ:UAV_1]: UAV_1  2017
-[2025-08-15 16:59:34.568] Received from ZMQ:UAV_1: UAV_1  1018
-[2025-08-15 16:59:34.568] Published to [mapping_ZMQ:UAV_1]: UAV_1  1018
-[2025-08-15 16:59:34.673] Received from ZMQ:UAV_1: UAV_1  2018
-[2025-08-15 16:59:34.674] Published to [camera_ZMQ:UAV_1]: UAV_1  2018
-[2025-08-15 16:59:35.175] Received from ZMQ:UAV_1: UAV_1  1019
-[2025-08-15 16:59:35.175] Published to [mapping_ZMQ:UAV_1]: UAV_1  1019
-[2025-08-15 16:59:35.276] Received from ZMQ:UAV_1: UAV_1  2019
-[2025-08-15 16:59:35.276] Published to [camera_ZMQ:UAV_1]: UAV_1  2019
-[2025-08-15 16:59:35.942] Received from ZMQ:UAV_1: UAV_1  1020
-[2025-08-15 16:59:35.943] Published to [mapping_ZMQ:UAV_1]: UAV_1  1020
-[2025-08-15 16:59:36.042] Received from ZMQ:UAV_1: UAV_1  2020
-[2025-08-15 16:59:36.042] Published to [camera_ZMQ:UAV_1]: UAV_1  2020
-[2025-08-15 16:59:36.543] Received from ZMQ:UAV_1: UAV_1  1021
-[2025-08-15 16:59:36.543] Published to [mapping_ZMQ:UAV_1]: UAV_1  1021
-[2025-08-15 16:59:36.644] Received from ZMQ:UAV_1: UAV_1  2021
-[2025-08-15 16:59:36.644] Published to [camera_ZMQ:UAV_1]: UAV_1  2021
-[2025-08-15 16:59:37.145] Received from ZMQ:UAV_1: UAV_1  1022
-[2025-08-15 16:59:37.145] Published to [mapping_ZMQ:UAV_1]: UAV_1  1022
-[2025-08-15 16:59:37.245] Received from ZMQ:UAV_1: UAV_1  2022
-[2025-08-15 16:59:37.245] Published to [camera_ZMQ:UAV_1]: UAV_1  2022
-[2025-08-15 16:59:37.746] Received from ZMQ:UAV_1: UAV_1  1023
-[2025-08-15 16:59:37.746] Published to [mapping_ZMQ:UAV_1]: UAV_1  1023
-[2025-08-15 16:59:37.847] Received from ZMQ:UAV_1: UAV_1  2023
-[2025-08-15 16:59:37.847] Published to [camera_ZMQ:UAV_1]: UAV_1  2023
-[2025-08-15 16:59:38.347] Received from ZMQ:UAV_1: UAV_1  1024
-[2025-08-15 16:59:38.347] Published to [mapping_ZMQ:UAV_1]: UAV_1  1024
-[2025-08-15 16:59:38.448] Received from ZMQ:UAV_1: UAV_1  2024
-[2025-08-15 16:59:38.448] Published to [camera_ZMQ:UAV_1]: UAV_1  2024
-[2025-08-15 16:59:44.160] Received from UDP:UAV_1: UAV_1:UAV_1  1001
-[2025-08-15 16:59:44.160] Published to [mapping_UAV_1]: UAV_1  1001
-[2025-08-15 16:59:44.261] Received from UDP:UAV_1: UAV_1:UAV_1  2001
-[2025-08-15 16:59:44.261] Published to [camera_UAV_1]: UAV_1  2001
-[2025-08-15 16:59:44.761] Received from UDP:UAV_1: UAV_1:UAV_1  1002
-[2025-08-15 16:59:44.761] Published to [mapping_UAV_1]: UAV_1  1002
-[2025-08-15 16:59:44.862] Received from UDP:UAV_1: UAV_1:UAV_1  2002
-[2025-08-15 16:59:44.862] Published to [camera_UAV_1]: UAV_1  2002
-[2025-08-15 16:59:45.363] Received from UDP:UAV_1: UAV_1:UAV_1  1003
-[2025-08-15 16:59:45.363] Published to [mapping_UAV_1]: UAV_1  1003
-[2025-08-15 16:59:45.464] Received from UDP:UAV_1: UAV_1:UAV_1  2003
-[2025-08-15 16:59:45.464] Published to [camera_UAV_1]: UAV_1  2003
-[2025-08-15 16:59:45.964] Received from UDP:UAV_1: UAV_1:UAV_1  1004
-[2025-08-15 16:59:45.964] Published to [mapping_UAV_1]: UAV_1  1004
-[2025-08-15 16:59:46.066] Received from UDP:UAV_1: UAV_1:UAV_1  2004
-[2025-08-15 16:59:46.066] Published to [camera_UAV_1]: UAV_1  2004
-[2025-08-15 16:59:46.566] Received from UDP:UAV_1: UAV_1:UAV_1  1005
-[2025-08-15 16:59:46.567] Published to [mapping_UAV_1]: UAV_1  1005
-[2025-08-15 16:59:46.669] Received from UDP:UAV_1: UAV_1:UAV_1  2005
-[2025-08-15 16:59:46.669] Published to [camera_UAV_1]: UAV_1  2005
-[2025-08-15 16:59:47.171] Received from UDP:UAV_1: UAV_1:UAV_1  1006
-[2025-08-15 16:59:47.171] Published to [mapping_UAV_1]: UAV_1  1006
-[2025-08-15 16:59:47.272] Received from UDP:UAV_1: UAV_1:UAV_1  2006
-[2025-08-15 16:59:47.272] Published to [camera_UAV_1]: UAV_1  2006
-[2025-08-15 16:59:47.772] Received from UDP:UAV_1: UAV_1:UAV_1  1007
-[2025-08-15 16:59:47.772] Published to [mapping_UAV_1]: UAV_1  1007
-[2025-08-15 16:59:47.874] Received from UDP:UAV_1: UAV_1:UAV_1  2007
-[2025-08-15 16:59:47.874] Published to [camera_UAV_1]: UAV_1  2007
-[2025-08-15 16:59:48.375] Received from UDP:UAV_1: UAV_1:UAV_1  1008
-[2025-08-15 16:59:48.375] Published to [mapping_UAV_1]: UAV_1  1008
-[2025-08-15 16:59:48.477] Received from UDP:UAV_1: UAV_1:UAV_1  2008
-[2025-08-15 16:59:48.477] Published to [camera_UAV_1]: UAV_1  2008
-[2025-08-15 16:59:48.981] Received from UDP:UAV_1: UAV_1:UAV_1  1009
-[2025-08-15 16:59:48.981] Published to [mapping_UAV_1]: UAV_1  1009
-[2025-08-15 16:59:49.081] Received from UDP:UAV_1: UAV_1:UAV_1  2009
-[2025-08-15 16:59:49.081] Published to [camera_UAV_1]: UAV_1  2009
-[2025-08-15 17:00:22.325] Shutdown signal received. Stopping services...
-[2025-08-15 17:00:22.415] ZMQ Forwarder thread stopped.
-[2025-08-15 17:00:22.425] ZMQ Receiver thread stopped.
-[2025-08-15 17:00:22.425] === SERVICE SHUTDOWN COMPLETED ===
+[2025-08-15 17:23:04.791] === SERVICE STARTED - Multi-UAV Telemetry Service ===
+[2025-08-15 17:23:04.791] Config loaded successfully. Found 3 UAVs
+[2025-08-15 17:23:04.791] UI Publisher bound to: tcp://*:5557
+[2025-08-15 17:23:04.791] UI Command receiver bound to: tcp://*:5558
+[2025-08-15 17:23:04.791] UAV UAV_1 (ZMQ) - Telemetry: tcp://*:5555, Commands: tcp://*:5559
+[2025-08-15 17:23:04.791] UAV UAV_2 (ZMQ) - Telemetry: tcp://*:5565, Commands: tcp://*:5569
+[2025-08-15 17:23:04.791] UAV UAV_3 (ZMQ) - Telemetry: tcp://*:5575, Commands: tcp://*:5579
+[2025-08-15 17:23:04.792] UDP Server for UAV_1 bound to localhost:5556
+[2025-08-15 17:23:04.792] UDP Server for UAV_2 bound to localhost:5566
+[2025-08-15 17:23:04.793] UDP Server for UAV_3 bound to localhost:5576
+[2025-08-15 17:23:04.793] All services running.
+[2025-08-15 17:23:22.886] Received from ZMQ:UAV_1: UAV_1  1001
+[2025-08-15 17:23:22.886] Published to [mapping_UAV_1]: UAV_1  1001
+[2025-08-15 17:23:22.997] Received from ZMQ:UAV_1: UAV_1  2001
+[2025-08-15 17:23:22.997] Published to [camera_UAV_1]: UAV_1  2001
+[2025-08-15 17:23:23.499] Received from ZMQ:UAV_1: UAV_1  1002
+[2025-08-15 17:23:23.499] Published to [mapping_UAV_1]: UAV_1  1002
+[2025-08-15 17:23:23.599] Received from ZMQ:UAV_1: UAV_1  2002
+[2025-08-15 17:23:23.599] Published to [camera_UAV_1]: UAV_1  2002
+[2025-08-15 17:23:24.102] Received from ZMQ:UAV_1: UAV_1  1003
+[2025-08-15 17:23:24.102] Published to [mapping_UAV_1]: UAV_1  1003
+[2025-08-15 17:23:24.203] Received from ZMQ:UAV_1: UAV_1  2003
+[2025-08-15 17:23:24.203] Published to [camera_UAV_1]: UAV_1  2003
+[2025-08-15 17:23:24.705] Received from ZMQ:UAV_1: UAV_1  1004
+[2025-08-15 17:23:24.706] Published to [mapping_UAV_1]: UAV_1  1004
+[2025-08-15 17:23:24.811] Received from ZMQ:UAV_1: UAV_1  2004
+[2025-08-15 17:23:24.811] Published to [camera_UAV_1]: UAV_1  2004
+[2025-08-15 17:23:25.311] Received from ZMQ:UAV_1: UAV_1  1005
+[2025-08-15 17:23:25.311] Published to [mapping_UAV_1]: UAV_1  1005
+[2025-08-15 17:23:25.413] Received from ZMQ:UAV_1: UAV_1  2005
+[2025-08-15 17:23:25.413] Published to [camera_UAV_1]: UAV_1  2005
+[2025-08-15 17:23:25.914] Received from ZMQ:UAV_1: UAV_1  1006
+[2025-08-15 17:23:25.914] Published to [mapping_UAV_1]: UAV_1  1006
+[2025-08-15 17:23:26.016] Received from ZMQ:UAV_1: UAV_1  2006
+[2025-08-15 17:23:26.016] Published to [camera_UAV_1]: UAV_1  2006
+[2025-08-15 17:23:26.518] Received from ZMQ:UAV_1: UAV_1  1007
+[2025-08-15 17:23:26.519] Published to [mapping_UAV_1]: UAV_1  1007
+[2025-08-15 17:23:26.624] Received from ZMQ:UAV_1: UAV_1  2007
+[2025-08-15 17:23:26.624] Published to [camera_UAV_1]: UAV_1  2007
+[2025-08-15 17:23:33.300] Received from UDP:UAV_1: UAV_1  1001
+[2025-08-15 17:23:33.300] Published to [mapping_UAV_1]: UAV_1  1001
+[2025-08-15 17:23:33.400] Received from UDP:UAV_1: UAV_1  2001
+[2025-08-15 17:23:33.401] Published to [camera_UAV_1]: UAV_1  2001
+[2025-08-15 17:23:33.903] Received from UDP:UAV_1: UAV_1  1002
+[2025-08-15 17:23:33.904] Published to [mapping_UAV_1]: UAV_1  1002
+[2025-08-15 17:23:34.004] Received from UDP:UAV_1: UAV_1  2002
+[2025-08-15 17:23:34.005] Published to [camera_UAV_1]: UAV_1  2002
+[2025-08-15 17:23:34.505] Received from UDP:UAV_1: UAV_1  1003
+[2025-08-15 17:23:34.505] Published to [mapping_UAV_1]: UAV_1  1003
+[2025-08-15 17:23:34.605] Received from UDP:UAV_1: UAV_1  2003
+[2025-08-15 17:23:34.606] Published to [camera_UAV_1]: UAV_1  2003
+[2025-08-15 17:23:35.108] Received from UDP:UAV_1: UAV_1  1004
+[2025-08-15 17:23:35.108] Published to [mapping_UAV_1]: UAV_1  1004
+[2025-08-15 17:23:35.210] Received from UDP:UAV_1: UAV_1  2004
+[2025-08-15 17:23:35.210] Published to [camera_UAV_1]: UAV_1  2004
+[2025-08-15 17:23:35.722] Received from UDP:UAV_1: UAV_1  1005
+[2025-08-15 17:23:35.723] Published to [mapping_UAV_1]: UAV_1  1005
+[2025-08-15 17:23:35.825] Received from UDP:UAV_1: UAV_1  2005
+[2025-08-15 17:23:35.825] Published to [camera_UAV_1]: UAV_1  2005
+[2025-08-15 17:23:36.327] Received from UDP:UAV_1: UAV_1  1006
+[2025-08-15 17:23:36.328] Published to [mapping_UAV_1]: UAV_1  1006
+[2025-08-15 17:23:36.428] Received from UDP:UAV_1: UAV_1  2006
+[2025-08-15 17:23:36.428] Published to [camera_UAV_1]: UAV_1  2006
+[2025-08-15 17:23:36.938] Received from UDP:UAV_1: UAV_1  1007
+[2025-08-15 17:23:36.939] Published to [mapping_UAV_1]: UAV_1  1007
+[2025-08-15 17:23:37.041] Received from UDP:UAV_1: UAV_1  2007
+[2025-08-15 17:23:37.041] Published to [camera_UAV_1]: UAV_1  2007

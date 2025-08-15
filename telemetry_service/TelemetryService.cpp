@@ -78,29 +78,19 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     std::string topic = "unknown";
     std::string uav_name = "unknown_uav";
 
-    // --- BAŞLANGIÇ: Düzeltilmiş Mantık ---
-
-    // 1. Önce ham veriden UAV adını ve asıl veriyi ayıralım
-    size_t data_colon_pos = data.find(':');
-    std::string actual_data = data;
-    if (data_colon_pos != std::string::npos) {
-        // Ham veride "UAV_1:UAV_1  1001" gibi bir yapı varsa, ilk kısmı al
-        uav_name = data.substr(0, data_colon_pos);
-        actual_data = data.substr(data_colon_pos + 1);
+    // Protokol etiketini ("ZMQ:", "UDP:") temizleyerek saf UAV adını al.
+    size_t colon_pos = source_description.find(':');
+    if (colon_pos != std::string::npos) {
+        uav_name = source_description.substr(colon_pos + 1);
     } else {
-        // 2. Eğer ham veride ':' yoksa, source_description'dan almayı dene
-        size_t source_colon_pos = source_description.find(':');
-        if (source_colon_pos != std::string::npos) {
-            // "ZMQ:UAV_1" veya "UDP:UAV_1" formatından "UAV_1" kısmını al
-            uav_name = source_description.substr(source_colon_pos + 1);
-        } else {
-            uav_name = source_description;
-        }
+        uav_name = source_description;
     }
     
-    // --- BİTİŞ: Düzeltilmiş Mantık ---
+    // Gelen veri zaten "UAV_1  1001" formatında. Bunu doğrudan kullanalım.
+    const std::string& actual_data = data;
     
     try {
+        // Verinin sonundaki sayısal kısmı al
         size_t last_space = actual_data.find_last_of(" \t");
         std::string numeric_part = (last_space != std::string::npos) ? actual_data.substr(last_space + 1) : actual_data;
         int code = std::stoi(numeric_part);
@@ -113,9 +103,9 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         else if (code >= 6000 && code < 7000) topic = "camera";
 
     } catch (...) {
-        // Hata durumunda topic "unknown" kalır
+        Logger::error("Could not parse telemetry data: " + actual_data);
     }
-
+    
     std::string full_topic = topic + "_" + uav_name;
     zmqManager_->publishTelemetry(full_topic, actual_data);
 }
