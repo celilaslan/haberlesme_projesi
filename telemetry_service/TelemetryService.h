@@ -15,6 +15,9 @@ public:
 
 private:
     void onUdpMessage(const std::string& sourceDescription, const std::string& data);
+    // ZMQ için yeni handler metot
+    void onZmqMessage(const std::string& sourceDescription, const std::string& data);
+    
     void processAndPublishTelemetry(const std::string& data, const std::string& source_description);
     
     static std::string resolveConfigPath();

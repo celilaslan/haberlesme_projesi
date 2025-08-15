@@ -5,11 +5,16 @@
 #include <thread>
 #include <atomic>
 #include <memory>
+#include <functional> // functional başlık dosyasını ekleyin
 #include "Config.h"
+
+// Gelen ZMQ mesajlarını işlemek için callback fonksiyonu tanımı
+using ZmqMessageCallback = std::function<void(const std::string&, const std::string&)>;
 
 class ZmqManager {
 public:
-    ZmqManager(zmq::context_t& ctx, const Config& config);
+    // Constructor'ı callback alacak şekilde güncelleyin
+    ZmqManager(zmq::context_t& ctx, const Config& config, ZmqMessageCallback callback);
     ~ZmqManager();
 
     void start();
@@ -27,6 +32,9 @@ private:
     zmq::context_t& context;
     const Config& config;
     std::atomic<bool> running{false};
+
+    // Callback fonksiyonunu üye olarak ekleyin
+    ZmqMessageCallback messageCallback_;
 
     // Socket'ler
     std::unique_ptr<zmq::socket_t> pubToUi;

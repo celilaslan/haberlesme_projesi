@@ -2,8 +2,9 @@
 #include "Logger.h"
 #include <vector>
 
-ZmqManager::ZmqManager(zmq::context_t& ctx, const Config& cfg)
-    : context(ctx), config(cfg) {}
+// Constructor tanımını callback alacak şekilde güncelleyin
+ZmqManager::ZmqManager(zmq::context_t& ctx, const Config& cfg, ZmqMessageCallback callback)
+    : context(ctx), config(cfg), messageCallback_(std::move(callback)) {}
 
 ZmqManager::~ZmqManager() {
     stop();
@@ -77,11 +78,12 @@ void ZmqManager::receiverLoop() {
                 zmq::message_t message;
                 if (uavTelemetrySockets[i]->recv(message, zmq::recv_flags::none)) {
                     std::string data(static_cast<char*>(message.data()), message.size());
-                    // Ana service'e callback ile bildirmek daha iyi bir tasarım olabilir,
-                    // ama şimdilik doğrudan yayın yapıyoruz.
                     std::string uav_name = config.getUAVs()[i].name;
-                    // Bu mantık artık TelemetryService sınıfında
-                    // processAndPublishTelemetry(data, uav_name);
+                    
+                    // Alınan veriyi callback ile TelemetryService'e gönder
+                    if (messageCallback_) {
+                        messageCallback_(uav_name, data);
+                    }
                 }
             }
         }
