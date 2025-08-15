@@ -193,3 +193,7 @@
 [2025-08-15 16:45:44.057] Published to [mapping_UAV_1]: UAV_1  1021
 [2025-08-15 16:45:44.157] Received from UDP:UAV_1: UAV_1:UAV_1  2021
 [2025-08-15 16:45:44.157] Published to [camera_UAV_1]: UAV_1  2021
+[2025-08-15 16:46:26.366] Shutdown signal received. Stopping services...
+[2025-08-15 16:46:26.366] ZMQ Receiver thread stopped.
+[2025-08-15 16:46:26.465] ZMQ Forwarder thread stopped.
+[2025-08-15 16:46:26.465] === SERVICE SHUTDOWN COMPLETED ===

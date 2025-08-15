@@ -80,9 +80,9 @@ void ZmqManager::receiverLoop() {
                     std::string data(static_cast<char*>(message.data()), message.size());
                     std::string uav_name = config.getUAVs()[i].name;
                     
-                    // Alınan veriyi callback ile TelemetryService'e gönder
+                    // DOĞRU YER: Veriyi burada etiketle ve callback ile gönder
                     if (messageCallback_) {
-                        messageCallback_(uav_name, data);
+                        messageCallback_("ZMQ:" + uav_name, data);
                     }
                 }
             }

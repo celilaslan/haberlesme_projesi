@@ -68,7 +68,6 @@ void TelemetryService::onUdpMessage(const std::string& sourceDescription, const 
     processAndPublishTelemetry(data, sourceDescription);
 }
 
-// Yeni eklenen metot
 void TelemetryService::onZmqMessage(const std::string& sourceDescription, const std::string& data) {
     processAndPublishTelemetry(data, sourceDescription);
 }
