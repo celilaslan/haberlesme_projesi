@@ -31,8 +31,13 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
     Logger::info("=== SERVICE STARTED - Multi-UAV Telemetry Service ===");
     Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
-    // Manager'ları başlat
-    zmqManager_ = std::make_unique<ZmqManager>(zmqContext_, config_);
+    // HATA BURADAYDI -> DÜZELTİLDİ: ZmqManager'ı callback ile başlat
+    zmqManager_ = std::make_unique<ZmqManager>(zmqContext_, config_, 
+        [this](const std::string& source, const std::string& data) {
+            this->onZmqMessage(source, data);
+        }
+    );
+    
     udpManager_ = std::make_unique<UdpManager>(config_, 
         [this](const std::string& source, const std::string& data) {
             this->onUdpMessage(source, data);
@@ -63,6 +68,11 @@ void TelemetryService::onUdpMessage(const std::string& sourceDescription, const 
     processAndPublishTelemetry(data, sourceDescription);
 }
 
+// Yeni eklenen metot
+void TelemetryService::onZmqMessage(const std::string& sourceDescription, const std::string& data) {
+    processAndPublishTelemetry(data, sourceDescription);
+}
+
 void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description) {
     Logger::info("Received from " + source_description + ": " + data);
     
@@ -82,8 +92,14 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         size_t last_space = actual_data.find_last_of(" \t");
         std::string numeric_part = (last_space != std::string::npos) ? actual_data.substr(last_space + 1) : actual_data;
         int code = std::stoi(numeric_part);
-        if (code >= 1000 && code < 3000) topic = "mapping";
-        else if (code >= 3000 && code < 5000) topic = "camera"; // Örnek aralıklar
+        
+        if (code >= 1000 && code < 2000) topic = "mapping";
+        else if (code >= 2000 && code < 3000) topic = "camera";
+        else if (code >= 3000 && code < 4000) topic = "mapping"; // UAV_2 için
+        else if (code >= 4000 && code < 5000) topic = "camera";  // UAV_2 için
+        else if (code >= 5000 && code < 6000) topic = "mapping"; // UAV_3 için
+        else if (code >= 6000 && code < 7000) topic = "camera";  // UAV_3 için
+
     } catch (...) {
         // Hata durumunda topic "unknown" kalır
     }
@@ -115,6 +131,7 @@ std::string TelemetryService::getExecutableDir() {
 #else
     char buf[4096];
     ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len == -1) return "";
     buf[len] = '\0';
     return std::filesystem::path(buf).parent_path().string();
 #endif
