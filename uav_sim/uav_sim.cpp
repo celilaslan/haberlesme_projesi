@@ -74,6 +74,15 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
             config.ip = uav_json["ip"];
             config.telemetry_port = uav_json["telemetry_port"];
             config.command_port = uav_json["command_port"];
+            
+            // Per-UAV UDP telemetry port
+            if (uav_json.contains("udp_telemetry_port")) {
+                config.udp_telemetry_port = uav_json["udp_telemetry_port"];
+            } else {
+                std::cerr << "ERROR: UAV '" << uav_name << "' missing 'udp_telemetry_port' in config!" << std::endl;
+                exit(1);
+            }
+            
             uav_found = true;
             break;
         }
@@ -81,14 +90,6 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
 
     if (!uav_found) {
         std::cerr << "ERROR: UAV '" << uav_name << "' not found in config file!" << std::endl;
-        exit(1);
-    }
-
-    // Global UDP portunu yükle
-    if (j.contains("udp_telemetry_port")) {
-        config.udp_telemetry_port = j["udp_telemetry_port"];
-    } else {
-        std::cerr << "ERROR: 'udp_telemetry_port' not found in config file!" << std::endl;
         exit(1);
     }
 

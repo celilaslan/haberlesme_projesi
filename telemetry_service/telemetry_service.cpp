@@ -33,6 +33,7 @@ struct UAVConfig {
     std::string ip;
     int telemetry_port;  // UAV'den telemetri alma portu
     int command_port;    // UAV'ye komut gönderme portu
+    int udp_telemetry_port; // UAV'nin UDP telemetri portu
 };
 
 struct ServiceConfig {
@@ -41,7 +42,7 @@ struct ServiceConfig {
         int ui_command_port = 5558;    // UI'lardan komut alma
         int ui_publish_port = 5557;    // UI'lara telemetri yayınlama
     } ui_ports;
-    int udp_telemetry_port = 5556; // UDP telemetri portu
+    // Global UDP port removed - now using per-UAV UDP ports
 
     std::string log_file = "telemetry_log.txt";
 };
@@ -107,6 +108,7 @@ void SaveConfig(const std::string& filename, const ServiceConfig& config) {
         uav_json["ip"] = uav.ip;
         uav_json["telemetry_port"] = uav.telemetry_port;
         uav_json["command_port"] = uav.command_port;
+        uav_json["udp_telemetry_port"] = uav.udp_telemetry_port;
         j["uavs"].push_back(uav_json);
     }
 
@@ -114,7 +116,6 @@ void SaveConfig(const std::string& filename, const ServiceConfig& config) {
     j["ui_ports"]["command_port"] = config.ui_ports.ui_command_port;
     j["ui_ports"]["publish_port"] = config.ui_ports.ui_publish_port;
 
-    j["udp_telemetry_port"] = config.udp_telemetry_port;
     j["log_file"] = config.log_file;
 
     std::ofstream file(filename);
@@ -147,6 +148,15 @@ ServiceConfig LoadConfig(const std::string& filename) {
         uav.ip = uav_json["ip"];
         uav.telemetry_port = uav_json["telemetry_port"];
         uav.command_port = uav_json["command_port"];
+        
+        // Per-UAV UDP telemetry port
+        if (uav_json.contains("udp_telemetry_port")) {
+            uav.udp_telemetry_port = uav_json["udp_telemetry_port"];
+        } else {
+            Log("WARNING: UAV " + uav.name + " missing udp_telemetry_port, skipping UDP for this UAV");
+            uav.udp_telemetry_port = -1; // Mark as disabled
+        }
+        
         config.uavs.push_back(uav);
     }
 
@@ -154,10 +164,6 @@ ServiceConfig LoadConfig(const std::string& filename) {
     if (j.contains("ui_ports")) {
         config.ui_ports.ui_command_port = j["ui_ports"]["command_port"];
         config.ui_ports.ui_publish_port = j["ui_ports"]["publish_port"];
-    }
-
-    if (j.contains("udp_telemetry_port")) {
-        config.udp_telemetry_port = j["udp_telemetry_port"];
     }
 
     if (j.contains("log_file")) {
@@ -246,10 +252,24 @@ void ProcessAndPublishTelemetry(const std::string& data, const std::string& sour
 
 class UdpServer {
 public:
-    UdpServer(boost::asio::io_context& io_context, short port, zmq::socket_t& pub_socket, std::ofstream& logfile)
-        : socket_(io_context, udp::endpoint(udp::v4(), port)),
+    UdpServer(boost::asio::io_context& io_context, const std::string& ip, short port, 
+              const std::string& uav_name, zmq::socket_t& pub_socket, std::ofstream& logfile)
+        : socket_(io_context),
           pub_socket_(pub_socket),
-          logfile_(logfile) {
+          logfile_(logfile),
+          uav_name_(uav_name) {
+        
+        // Resolve the IP address and bind to specific interface
+        udp::resolver resolver(io_context);
+        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), ip, std::to_string(port));
+        udp::endpoint bind_endpoint = *endpoints.begin();
+        
+        socket_.open(udp::v4());
+        socket_.bind(bind_endpoint);
+        
+        Log("UDP Server for " + uav_name + " bound to " + ip + ":" + std::to_string(port));
+        LogToFile(logfile, "UDP_BIND: " + uav_name + " -> " + ip + ":" + std::to_string(port));
+        
         do_receive();
     }
 
@@ -260,7 +280,7 @@ private:
             [this](boost::system::error_code ec, std::size_t bytes_recvd) {
                 if (!ec && bytes_recvd > 0) {
                     std::string received_data(data_, bytes_recvd);
-                    std::string source_desc = "UDP:" + remote_endpoint_.address().to_string();
+                    std::string source_desc = "UDP:" + uav_name_ + ":" + remote_endpoint_.address().to_string();
                     ProcessAndPublishTelemetry(received_data, source_desc, pub_socket_, logfile_);
                 }
                 if (g_running) {
@@ -275,6 +295,7 @@ private:
     char data_[max_length];
     zmq::socket_t& pub_socket_;
     std::ofstream& logfile_;
+    std::string uav_name_;
 };
 
 
@@ -316,7 +337,13 @@ void TelemetryWorker() {
     else {
         LogToFile(logfile, "=== SERVICE STARTED - Multi-UAV Telemetry Service ===");
         LogToFile(logfile, "Configured UAVs: " + std::to_string(config.uavs.size()));
-        LogToFile(logfile, "UDP Telemetry Port: " + std::to_string(config.udp_telemetry_port));
+        
+        // Log per-UAV UDP ports
+        for (const auto& uav : config.uavs) {
+            if (uav.udp_telemetry_port > 0) {
+                LogToFile(logfile, "UAV " + uav.name + " UDP Port: " + std::to_string(uav.udp_telemetry_port) + " on " + uav.ip);
+            }
+        }
     }
    
     zmq::context_t context(1);
@@ -333,9 +360,20 @@ void TelemetryWorker() {
     pull_from_ui.bind(ui_cmd_addr);
     Log("UI Command receiver bound to: " + ui_cmd_addr);
 
-    // UDP Telemetry Server
+    // Per-UAV UDP Telemetry Servers
+    std::vector<std::unique_ptr<UdpServer>> udp_servers;
+    
     try {
-        UdpServer udp_server(io_context, config.udp_telemetry_port, pub_to_ui, logfile);
+        for (const auto& uav : config.uavs) {
+            if (uav.udp_telemetry_port > 0) {
+                auto udp_server = std::make_unique<UdpServer>(
+                    io_context, uav.ip, uav.udp_telemetry_port, 
+                    uav.name, pub_to_ui, logfile
+                );
+                udp_servers.push_back(std::move(udp_server));
+            }
+        }
+        
         std::thread udp_thread([&io_context]() { 
             while(g_running) {
                 try {
@@ -346,7 +384,15 @@ void TelemetryWorker() {
                 }
             }
         });
-        Log("UDP Telemetry listener running on port: " + std::to_string(config.udp_telemetry_port));
+        
+        // Log all active UDP servers
+        std::string udp_ports_info = "UDP Telemetry servers running: ";
+        for (const auto& uav : config.uavs) {
+            if (uav.udp_telemetry_port > 0) {
+                udp_ports_info += uav.name + "(" + uav.ip + ":" + std::to_string(uav.udp_telemetry_port) + ") ";
+            }
+        }
+        Log(udp_ports_info);
 
         // Her UAV için telemetri alma socketleri
         std::vector<std::unique_ptr<zmq::socket_t>> uav_telemetry_sockets;
