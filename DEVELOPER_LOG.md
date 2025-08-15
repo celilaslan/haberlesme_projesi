@@ -101,3 +101,34 @@ Next:
     - These commands wrap `systemctl` and `journalctl` for convenient access.
 - **Documentation**:
     - Updated `README.md` to reflect the new installation script path and the new `dev.sh` service management commands.
+
+## 2025-08-15
+
+### Per-UAV UDP Telemetry Ports
+
+- **Goal**: Replace single global UDP server with dedicated UDP servers per UAV for better network isolation and security.
+- **Configuration Changes**:
+    - Added `udp_telemetry_port` field to each UAV configuration in `service_config.json`.
+    - Removed global `udp_telemetry_port` from service configuration.
+    - Updated UAV configurations: UAV_1:5556, UAV_2:5566, UAV_3:5576.
+- **Telemetry Service Refactoring**:
+    - Modified `UAVConfig` struct to include per-UAV `udp_telemetry_port`.
+    - Removed global UDP port from `ServiceConfig`.
+    - Updated `UdpServer` class to bind to specific IP addresses instead of `0.0.0.0`.
+    - Enhanced constructor to accept UAV name, IP, and port for targeted binding.
+    - Improved logging to show individual UDP server endpoints and UAV associations.
+    - Created multiple `UdpServer` instances - one per UAV configuration.
+- **UAV Simulator Updates**:
+    - Modified config loading to read UDP port from UAV's own configuration.
+    - Removed dependency on global UDP port configuration.
+    - Enhanced error handling for missing per-UAV UDP ports.
+- **Benefits Achieved**:
+    - **Network Isolation**: Each UAV has dedicated UDP endpoint.
+    - **Better Security**: Individual access control per UAV possible.
+    - **Fault Isolation**: UDP issues with one UAV don't affect others.
+    - **Flexibility**: UAVs can be on different network interfaces.
+    - **Easier Troubleshooting**: Clear endpoint identification in logs.
+- **Documentation Updates**:
+    - Updated `README.md` with new configuration format and architecture details.
+    - Added troubleshooting port ranges to include new UDP ports.
+    - Enhanced deployment section to mention per-UAV UDP capabilities.

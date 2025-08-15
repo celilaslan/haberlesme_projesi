@@ -85,14 +85,37 @@ On Windows (PowerShell):
 
 ## Config
 
-`service_config.json` defines the UAV endpoints, UI ports, and the global UDP telemetry port. The service writes logs to `log_file`. If relative, logs resolve next to the telemetry_service executable.
+`service_config.json` defines the UAV endpoints, UI ports, and per-UAV UDP telemetry ports. Each UAV now has its own dedicated UDP port for better network isolation and security:
+
+```json
+{
+  "uavs": [
+    {
+      "name": "UAV_1",
+      "ip": "localhost",
+      "telemetry_port": 5555,
+      "command_port": 5559,
+      "udp_telemetry_port": 5556
+    }
+  ]
+}
+```
+
+The service writes logs to `log_file`. If relative, logs resolve next to the telemetry_service executable.
+
+**Network Architecture**: Each UAV gets its own UDP server bound to its specific IP and port combination, providing:
+- Better fault isolation between UAVs
+- Individual network security per UAV  
+- Support for UAVs on different network interfaces
+- Easier troubleshooting and monitoring
 
 Note: With ZeroMQ PUB/SUB, subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
 
 ## Notes
 - The project now depends on the Boost C++ libraries for UDP networking.
 - For Windows builds, link against libzmq and Boost, and define the same C++17 flags; the code uses `localtime_s` on Windows and `localtime_r` on POSIX.
-- The service uses a poll-based receiver loop for ZMQ and an asynchronous listener for UDP to avoid busy waiting.
+- The service creates dedicated UDP servers for each UAV configuration, with each server binding to the UAV's specific IP and UDP port.
+- The service uses a poll-based receiver loop for ZMQ and asynchronous listeners for per-UAV UDP servers to avoid busy waiting.
 
 ## Orchestration helpers
 - Linux/macOS: `./dev.sh` supports configure/build/clean/run/demo/up/down/status/logs and service management.
@@ -146,13 +169,13 @@ ZeroMQ version note:
 		- If needed, kill the PID shown by `ss -ltnp` and retry.
 	- Windows:
 		- `.\\dev.ps1 down`
-		- Use `Get-NetTCPConnection -State Listen | ? { $_.LocalPort -in 5555,5556,5557,5558,... }` and `Stop-Process -Id <PID>` as needed.
+		- Use `Get-NetTCPConnection -State Listen | ? { $_.LocalPort -in 5555,5556,5557,5558,5565,5566,5575,5576,... }` and `Stop-Process -Id <PID>` as needed.
 
 - **Windows script execution policy**:
 	- If PowerShell blocks scripts, run in the current session: `Set-ExecutionPolicy -Scope Process Bypass`.
 
 ## Deployment (Linux Service)
-The `telemetry_service` can be installed and run as a `systemd` background service on modern Linux distributions. It will listen for both ZMQ and UDP telemetry.
+The `telemetry_service` can be installed and run as a `systemd` background service on modern Linux distributions. It will listen for both ZMQ and per-UAV UDP telemetry on their respective ports.
 
 1.  **Run the installer with sudo:**
     ```bash
