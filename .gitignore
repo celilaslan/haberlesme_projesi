@@ -42,7 +42,7 @@ compile_commands.json
 
 # Keep required committed tools / runtime DLLs
 !vcpkg/vcpkg.exe
-!**/libzmq-*.dll
+/libzmq-*.dll
 
 # ---- Intermediate / temp ----
 *.tmp
@@ -57,7 +57,7 @@ compile_commands.json
 *.log
 telemetry_service/telemetry_log.txt
 # Preserve sample / test input files
-!telemetry_service/telemetry_test.txt
+telemetry_service/telemetry_test.txt
 
 # ---- Local config overrides (create locally if needed) ----
 service_config.local.json
@@ -195,7 +195,3 @@ secrets/
 test-output/
 *.testlog
 .junit/
-
-telemetry_service/telemetry_log.txt
-telemetry_service/telemetry_test.txt
-!**/libzmq-*.dll
