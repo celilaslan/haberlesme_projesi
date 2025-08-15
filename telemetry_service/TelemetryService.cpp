@@ -78,14 +78,27 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     std::string topic = "unknown";
     std::string uav_name = "unknown_uav";
 
-    size_t colon_pos = data.find(':');
+    // --- BAŞLANGIÇ: Düzeltilmiş Mantık ---
+
+    // 1. Önce ham veriden UAV adını ve asıl veriyi ayıralım
+    size_t data_colon_pos = data.find(':');
     std::string actual_data = data;
-    if (colon_pos != std::string::npos) {
-        uav_name = data.substr(0, colon_pos);
-        actual_data = data.substr(colon_pos + 1);
+    if (data_colon_pos != std::string::npos) {
+        // Ham veride "UAV_1:UAV_1  1001" gibi bir yapı varsa, ilk kısmı al
+        uav_name = data.substr(0, data_colon_pos);
+        actual_data = data.substr(data_colon_pos + 1);
     } else {
-        uav_name = source_description;
+        // 2. Eğer ham veride ':' yoksa, source_description'dan almayı dene
+        size_t source_colon_pos = source_description.find(':');
+        if (source_colon_pos != std::string::npos) {
+            // "ZMQ:UAV_1" veya "UDP:UAV_1" formatından "UAV_1" kısmını al
+            uav_name = source_description.substr(source_colon_pos + 1);
+        } else {
+            uav_name = source_description;
+        }
     }
+    
+    // --- BİTİŞ: Düzeltilmiş Mantık ---
     
     try {
         size_t last_space = actual_data.find_last_of(" \t");
@@ -94,10 +107,10 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         
         if (code >= 1000 && code < 2000) topic = "mapping";
         else if (code >= 2000 && code < 3000) topic = "camera";
-        else if (code >= 3000 && code < 4000) topic = "mapping"; // UAV_2 için
-        else if (code >= 4000 && code < 5000) topic = "camera";  // UAV_2 için
-        else if (code >= 5000 && code < 6000) topic = "mapping"; // UAV_3 için
-        else if (code >= 6000 && code < 7000) topic = "camera";  // UAV_3 için
+        else if (code >= 3000 && code < 4000) topic = "mapping";
+        else if (code >= 4000 && code < 5000) topic = "camera";
+        else if (code >= 5000 && code < 6000) topic = "mapping";
+        else if (code >= 6000 && code < 7000) topic = "camera";
 
     } catch (...) {
         // Hata durumunda topic "unknown" kalır
