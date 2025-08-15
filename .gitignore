@@ -197,3 +197,4 @@ test-output/
 .junit/
 
 telemetry_service/telemetry_log.txt
+telemetry_service/telemetry_test.txt
