@@ -1,0 +1,79 @@
+Gün sonu raporum (Celil Aslan 07.08.2025):
+Temel Ağ Kavramları ve Protokol Araştırması
+- Çalışmalarıma, ağ programlamanın temelini oluşturan konuları araştırarak başladım. TCP/IP gibi temel haberleşme protokollerinin veri iletişimindeki rollerini ve katmanlı yapılarını inceledim.
+- Uygulamaların ağ üzerinden birbiriyle konuşmasını sağlayan arayüz olan soketleri araştırdım. Bu bağlamda, istemci-sunucu (client-server) modelinin nasıl işlediğini gözden geçirdim.
+ZeroMQ Kütüphanesi Araştırması ve Pratik Geliştirme
+- Temel kavramları tazeledikten sonra, ZeroMQ kütüphanesine odaklandım. Kütüphanenin resmi dokümantasyonunu okuyarak sunduğu farklı soket tiplerini ve asenkron mesajlaşma felsefesini öğrendim.
+- Teorik bilgileri pekiştirmek için, her bir ana mesajlaşma deseni (Request/Reply, Publish/Subscribe, Push/Pull) için basit, C++ örneklerini inceledim bazıları için basit örnekler geliştirdim.
+Geliştirme Ortamının Projeye Uygun Hale Getirilmesi
+- Edindiğim bilgiler ışığında, geliştirme ortamımı projenin teknik gereksinimlerine göre yapılandırdım.
+Mevcut Proje Mimarisi ve İlerleme Notlarının İncelenmesi
+- Projenin mevcut dokümantasyonunu inceledim. Projenin bugüne kadarki ilerleme notlarını ve mimari tasarım belgelerini okudum.
+- Projenin teoride öğrendiğim ZeroMQ desenlerini pratikte nasıl kullandığını, farklı modüllerinin rollerini ve aralarındaki iletişim akışını anlamaya çalıştım.
+
+Gün sonu raporum (Celil Aslan 08/08/2025):
+-Mevcut Projeye ait kontrol ve rapor dökümantasyonu okuma ve üzerine araştırma yapıldı.
+-ZeroMQ kütüphanesi dökümantasyonu üzerinde çalışıldı ve kütüphane örnek programlar üzerinde test edildi.
+-virtual box üzerine linux ubuntu kurulumu yapıldı.
+
+Gün sonu raporum (Celil Aslan 11.08.2025):
+-projenin mevcut kaynak kodunun windows ve linux ubuntu sistemlerinde kurulumu ve testi yapıldı
+-çeşitli edge caseler için programın davranışı test edildi
+-proje hakkında toplantı yapıldı
+-projenin yeni gereklilikleri hakkında araştırma yapıldı
+-sistemin udp protokolü ile haberleşmesi için gerekli altyapıda nelerin değişmesi veya eklenmesi hakkında araştırma yapıldı
+-C++ dilinde UDP tabanlı bir telemetri servisi için mevcut zeromq kütüphanesi uygunluğu hakkında araştırma yapıldı
+-Bu servis için bir diğer kütüphane olan Boost.Asio hakkında araştırma ve Zeromq ile karşılaştırma yapıldı
+
+Gün sonu raporum (Celil Aslan 12.08.2025):
+
+- UDP protokolü hakkında araştırma yapıldı.
+- Mevcut projenin UDP’ye entegrasyonu için ZeroMQ kütüphanesinin yeterliliği analiz edildi.
+- ZeroMQ’nun UDP desteği sağlayan radio/dish pattern mimarisi incelendi.
+- Radio/dish pattern kullanılarak mevcut TCP tabanlı socket API’lar UDP tabanlı API’lar ile değiştirildi.
+- UAV simülatörü ile gerçek zamanlı telemetri gönderimi test edildi.
+- UI’lar abone oldukları veri türlerini UAV’lardan servis aracılığıyla sorunsuz aldı.
+- Birden fazla UI’nın eşzamanlı subscription’ı doğrulandı.
+- Sistem edge case senaryolarında test edildi ve potansiyel iyileştirmeler belirlendi.
+- DLL kütüphaneleri ve cross-platform kullanımına dair araştırma gerçekleştirildi.
+
+Gün sonu raporum (Celil Aslan 13.08.2025)
+
+-Projenin mevcut ZeroMQ/TCP yapısını koruyarak, telemetri verileri için tek yönlü (İHA -> Servis -> UI) bir UDP haberleşme desteği eklenmesi çalışıldı.
+
+-Bu entegrasyon için ZeroMQ'nun kendi UDP desenleri yerine, platform bağımsız ve modern asenkron yetenekleri nedeniyle Boost.Asio kütüphanesinin kullanılmasına yönelik araştırma yapıldı ve bu yönde karar kılındı.
+
+-Boost.Asio kütüphanesi kullanılarak bir UDP soketi oluşturuldu. Servisin ana döngüsünü bloklamayacak (non-blocking) şekilde, io_context.poll() ile asenkron bir dinleme mekanizması geliştirildi ve mevcut ZeroMQ döngüsüne entegre edildi.
+
+-Simülatörün başlatma anında --protocol udp komut satırı argümanı alarak telemetri gönderim protokolünü TCP'den UDP'ye değiştirmesini sağlayacak kod eklendi.
+
+-service_config.json dosyasına "udp_telemetry_port" alanı eklendi. CMakeLists.txt dosyaları, Boost kütüphanelerini sisteme dahil edecek şekilde güncellendi.
+
+-Geliştirilen hibrit mimari test edildi. telemetry_service'in hem UDP hem de TCP üzerinden gelen telemetri verilerini eş zamanlı olarak sorunsuzca alabildiği ve arayüzlere doğru şekilde yayınladığı doğrulandı.
+
+-Arka plan uygulaması linux ubuntuda test edildi ve sorunsuz çalıştığı gözlemlendi. 
+
+-Sonraki adım olan ortak bir haberleşme kütüphanesi  geliştirme konusu incelendi. Arayüz uygulamalarının telemetry_service ile olan tüm  etkileşimlerini tek bir çatı altında toplayan bu yapı için araştırma yapıldı.
+
+Gün sonu raporum (Celil Aslan 14.08.2025): 
+- Arka plan servisinin windows ortamında testi ve gerekli geliştirmelerin daha rahat yapılması için virtual boxda sanal makina oluşturuldu.
+- Sanal makinada NSSM uygulaması ile arka plan servisi oluşturuldu ve test edildi.
+- Servisin windows ortamında sorunsuz çalıştığı gözlemlendi.
+- Projenin güncel durumu ve sonraki aşamalar hakkında görüşüldü.
+- Servisi kullanıcıların hizmetine sunacak olan kütüphane tasarımı, potansiyel iyileştirmeler ve güvenlikle alakalı olası geliştirmeler hakkında kısa araştırma yapıldı.
+
+Gün sonu raporum (Celil Aslan 15.08.2025):
+
+Servisin udp protokülü ile gelen mesajları sadece UAV -> Servis tarafında kullandığı; Servis->UI tarafında ise bu mesajları zeromq pub/sub soketi ile tcp üzerinden aktarılması hatası/eksikliği düzeltildi. Servis-> UI arasında mesajlar, yeni yazılan udp soketleri ile sorunsuz şekilde iletildi.
+
+Kaynak kodlarında kalite iyileştirmeleri üzerinde çalışıldı bir takım iyileştirmeler dahil edildi.
+
+Projenin kaynak kodları daha modüler bir yapı ile yeniden organize edildi; bu kapsamda Config, Logger, ZmqManager, UdpManager ve TelemetryService gibi yeni sınıflar için header (.h) ve kaynak (.cpp) dosyaları eklendi.
+
+Yeniden yapılandırma sürecinde hatalar keşfedildi ve giderildi.
+
+Ağ iletişimini soyutlayan bir İstemci Kütüphanesi (SDK) oluşturulması üzerine araştırma yapıldı.
+
+Kütüphanenin Windows için DLL, Linux için SO olarak derlenmesi için gerekli cross-platform yapılandırmaları incelendi.
+
+Sistemin güvenliğini artırmak amacıyla ZeroMQ'nun CurveZMQ kütüphanesi ve başka bir takım yaklaşımlar ile istemci kimlik doğrulama (authentication) ve veri şifreleme (encryption) konuları için kısa araştırma yapıldı.
