@@ -1,34 +1,75 @@
+# ============================================================================
+# TELEMETRY SERVICE SYSTEMD UNIT FILE
+# ============================================================================
+#
+# This systemd service unit file configures the telemetry service to run
+# as a system daemon. It handles service startup, restart policies, logging,
+# and security settings.
+#
+# INSTALLATION:
+#   This file is automatically installed by install_linux_service.sh to:
+#   /etc/systemd/system/telemetry_service.service
+#
+# MANUAL COMMANDS:
+#   sudo systemctl daemon-reload           # Reload after changes
+#   sudo systemctl enable telemetry_service.service   # Enable auto-start
+#   sudo systemctl start telemetry_service.service    # Start service
+#   sudo systemctl status telemetry_service.service   # Check status
+#   sudo journalctl -u telemetry_service.service -f   # View logs
+# ============================================================================
+
 [Unit]
+# Service description and documentation
 Description=Multi-UAV Telemetry Service
 Documentation=https://github.com/your-repo/haberlesme_projesi/blob/main/README.md
+
+# Service dependencies - wait for network to be available
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
+# Service type - simple means the process doesn't fork
 Type=simple
-# This path should point to where you install the executable
+
+# Command to execute (installed by install_linux_service.sh)
 ExecStart=/usr/local/bin/telemetry_service
+
+# Signal to send for configuration reload (HUP = hang up)
 ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy - always restart if the service fails
 Restart=always
 RestartSec=5
 
-# It's recommended to run the service as a dedicated non-root user.
-# First, create the user: `sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry`
-# Then uncomment the following lines:
+# SECURITY CONFIGURATION
+# ======================
+# For production deployment, it's recommended to run as a dedicated user
+# instead of root. To enable this:
+# 1. Create the user: sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry
+# 2. Set log directory ownership: sudo chown telemetry:telemetry /var/log/telemetry_service
+# 3. Uncomment the following lines:
 # User=telemetry
 # Group=telemetry
 
-# The service will look for the config in this environment variable path first.
+# ENVIRONMENT CONFIGURATION
+# ==========================
+# Tell the service where to find its configuration file
 Environment="SERVICE_CONFIG=/etc/telemetry_service/service_config.json"
 
-# The service will write logs to the directory specified by its internal config,
-# but its stdout/stderr will be captured by the systemd journal.
+# LOGGING CONFIGURATION
+# =====================
+# Capture stdout/stderr in the systemd journal
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=telemetry_service
 
+# FILESYSTEM PERMISSIONS
+# ======================
 # Grant write access to the log directory
+# This allows the service to create and write log files
 ReadWritePaths=/var/log/telemetry_service/
 
 [Install]
+# Target for service installation - multi-user.target means it starts
+# when the system reaches multi-user mode (after basic system services)
 WantedBy=multi-user.target

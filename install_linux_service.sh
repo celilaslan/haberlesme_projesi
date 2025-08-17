@@ -1,91 +1,148 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Installation script for the telemetry_service systemd service.
-# This script should be run with sudo.
+# ============================================================================
+# TELEMETRY SERVICE INSTALLATION SCRIPT
+# ============================================================================
+#
+# This script automates the installation of the telemetry service as a 
+# systemd service on Linux systems. It handles:
+# - Building the project
+# - Installing the executable to /usr/local/bin
+# - Setting up configuration in /etc/telemetry_service
+# - Creating log directories with proper permissions
+# - Installing and enabling the systemd service
+#
+# USAGE:
+#   sudo ./install_linux_service.sh
+#
+# REQUIREMENTS:
+#   - Root privileges (run with sudo)
+#   - Systemd-based Linux distribution
+#   - Build dependencies already installed
+# ============================================================================
 
-# --- Configuration ---
-# Source directory of the project
+# --- Configuration Variables ---
+# Source directory of the project (auto-detected from script location)
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# Destination for the executable
-INSTALL_BIN_DIR="/usr/local/bin"
+# Installation paths following Linux Filesystem Hierarchy Standard (FHS)
+INSTALL_BIN_DIR="/usr/local/bin"        # Executable installation directory
+INSTALL_CONFIG_DIR="/etc/telemetry_service"  # Configuration directory
+LOG_DIR="/var/log/telemetry_service"    # Log file directory
+SYSTEMD_DIR="/etc/systemd/system"       # Systemd service file directory
+
+# File names
 EXE_NAME="telemetry_service"
-SOURCE_EXE="${REPO_ROOT}/telemetry_service/${EXE_NAME}"
-
-# Destination for the configuration file
-INSTALL_CONFIG_DIR="/etc/telemetry_service"
 CONFIG_NAME="service_config.json"
-SOURCE_CONFIG="${REPO_ROOT}/${CONFIG_NAME}"
-
-# Destination for the systemd service file
-SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_FILE="telemetry_service.service"
+
+# Source file paths
+SOURCE_EXE="${REPO_ROOT}/telemetry_service/${EXE_NAME}"
+SOURCE_CONFIG="${REPO_ROOT}/${CONFIG_NAME}"
 SOURCE_SERVICE_FILE="${REPO_ROOT}/telemetry_service/${SERVICE_FILE}"
 
-# --- Script Logic ---
+# --- Pre-flight Checks ---
 
-# Check for root privileges
+# Check for root privileges (required for system-wide installation)
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root (use sudo)." 
+   echo "ERROR: This script must be run as root (use sudo)." 
+   echo "USAGE: sudo ./install_linux_service.sh"
    exit 1
 fi
 
-echo "--- Telemetry Service Installer ---"
+# Check if systemd is available
+if ! command -v systemctl >/dev/null 2>&1; then
+    echo "ERROR: systemctl not found. This script requires a systemd-based Linux distribution."
+    exit 1
+fi
 
-# 1. Build the project first
+echo "============================================================================"
+echo "TELEMETRY SERVICE INSTALLER"
+echo "============================================================================"
+echo "Repository root: ${REPO_ROOT}"
+echo "Target executable: ${INSTALL_BIN_DIR}/${EXE_NAME}"
+echo "Target config: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+echo "Log directory: ${LOG_DIR}"
+echo "============================================================================"
+
+# --- Installation Steps ---
+
+# Step 1: Build the project
 echo "[1/6] Building the project..."
 if ! "${REPO_ROOT}/dev.sh" build; then
-    echo "Error: Build failed. Please fix build errors before installing."
+    echo "ERROR: Build failed. Please fix build errors before installing."
     exit 1
 fi
 
+# Verify the executable was created
 if [[ ! -f "$SOURCE_EXE" ]]; then
-    echo "Error: Executable not found at ${SOURCE_EXE} after build."
+    echo "ERROR: Executable not found at ${SOURCE_EXE} after build."
+    echo "       Make sure the build completed successfully."
     exit 1
 fi
 
-# 2. Copy the executable
+# Step 2: Install the executable
 echo "[2/6] Installing executable to ${INSTALL_BIN_DIR}..."
 cp -v "$SOURCE_EXE" "${INSTALL_BIN_DIR}/${EXE_NAME}"
 chmod +x "${INSTALL_BIN_DIR}/${EXE_NAME}"
 
-# 3. Create log directory
-echo "[3/6] Creating log directory /var/log/telemetry_service..."
-mkdir -p /var/log/telemetry_service
-# In a production setup, you would `chown telemetry:telemetry /var/log/telemetry_service`
-# if you were running the service as a dedicated user.
+# Step 3: Create log directory with proper permissions
+echo "[3/6] Creating log directory ${LOG_DIR}..."
+mkdir -p "$LOG_DIR"
+# Set appropriate permissions for log directory
+chmod 755 "$LOG_DIR"
+# Note: In production, consider creating a dedicated 'telemetry' user:
+#   sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry
+#   sudo chown telemetry:telemetry "${LOG_DIR}"
 
-# 4. Copy and modify the configuration file
+# Step 4: Install and configure the configuration file
 echo "[4/6] Installing and updating configuration to ${INSTALL_CONFIG_DIR}..."
 mkdir -p "$INSTALL_CONFIG_DIR"
-# Use sed to replace the default relative log file path with an absolute one
-sed 's|"log_file": ".*"|"log_file": "/var/log/telemetry_service/telemetry_log.txt"|' \
-    "$SOURCE_CONFIG" > "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
-cp -v "$SOURCE_CONFIG" "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}.original" # keep a copy of original
 
-# 5. Copy the systemd service file
+# Create the production configuration with absolute log path
+# This replaces the relative path with an absolute system path
+sed 's|"log_file": ".*"|"log_file": "'"${LOG_DIR}/telemetry_log.txt"'"|' \
+    "$SOURCE_CONFIG" > "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+
+# Keep a backup of the original configuration for reference
+cp -v "$SOURCE_CONFIG" "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}.original"
+
+# Set appropriate permissions for configuration
+chmod 644 "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+
+# Step 5: Install the systemd service file
 echo "[5/6] Installing systemd service file..."
 cp -v "$SOURCE_SERVICE_FILE" "${SYSTEMD_DIR}/${SERVICE_FILE}"
+chmod 644 "${SYSTEMD_DIR}/${SERVICE_FILE}"
 
-# 6. Reload systemd and enable the service
+# Step 6: Enable and configure the systemd service
 echo "[6/6] Reloading systemd and enabling the service..."
 systemctl daemon-reload
-systemctl enable ${SERVICE_FILE}
+systemctl enable "${SERVICE_FILE}"
 
+# --- Installation Complete ---
 echo ""
-echo "--- Installation Complete ---"
-echo "The telemetry_service is now installed and enabled to start on boot."
+echo "============================================================================"
+echo "INSTALLATION COMPLETE"
+echo "============================================================================"
+echo "The telemetry service has been successfully installed and configured."
 echo ""
-echo "To start the service now, run:"
-echo "  sudo systemctl start ${SERVICE_FILE}"
+echo "INSTALLED FILES:"
+echo "  Executable: ${INSTALL_BIN_DIR}/${EXE_NAME}"
+echo "  Configuration: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+echo "  Service file: ${SYSTEMD_DIR}/${SERVICE_FILE}"
+echo "  Log directory: ${LOG_DIR}"
 echo ""
-echo "To see the service status, run:"
-echo "  sudo systemctl status ${SERVICE_FILE}"
+echo "NEXT STEPS:"
+echo "  Start the service:    sudo systemctl start ${SERVICE_FILE}"
+echo "  Check service status: sudo systemctl status ${SERVICE_FILE}"
+echo "  View live logs:       sudo journalctl -u ${SERVICE_FILE} -f"
+echo "  Stop the service:     sudo systemctl stop ${SERVICE_FILE}"
 echo ""
-echo "To view live logs, run:"
-echo "  sudo journalctl -u ${SERVICE_FILE} -f"
-echo ""
-echo "NOTE: The service is configured to run as root by default."
-echo "For better security, create a dedicated 'telemetry' user and"
-echo "uncomment the User/Group lines in ${SYSTEMD_DIR}/${SERVICE_FILE}."
+echo "SECURITY RECOMMENDATION:"
+echo "  For production deployment, create a dedicated user account:"
+echo "    sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry"
+echo "    sudo chown telemetry:telemetry ${LOG_DIR}"
+echo "  Then uncomment the User/Group lines in ${SYSTEMD_DIR}/${SERVICE_FILE}"
+echo "============================================================================"

@@ -37,8 +37,15 @@ compile_commands.json
 *.exp
 *.rsp
 *.pch
+*.pch.h.gch
+*.gch
 *.ipdb
 *.iobj
+
+# ---- Dependency tracking files ----
+*.d
+*.dep
+*.deps/
 
 # Keep required committed tools / runtime DLLs
 !vcpkg/vcpkg.exe
@@ -89,6 +96,16 @@ core.*
 # ---- Python / scripting (if added later) ----
 __pycache__/
 *.pyc
+
+# ---- Package managers (future) ----
+# Conan
+conandata.yml
+conanfile.txt
+conaninfo.txt
+conanbuildinfo.*
+.conan/
+
+# vcpkg (already handled above with optional ignore block)
 
 # ---- vcpkg heavy transient directories (optional ignore if NOT vendoring) ----
 # If you decide to stop committing built packages, uncomment below:
@@ -165,6 +182,13 @@ ubsan.*
 ccache/
 .clang-tidy-cache/
 
+# ---- Static analysis & code quality tools ----
+*.sarif
+cppcheck-build/
+cppcheck-report.*
+*.iwyu
+iwyu.out
+
 # ---- Alternate build dirs (prevent accidental in-source clutter) ----
 /bin/
 /dist/
@@ -195,3 +219,10 @@ secrets/
 test-output/
 *.testlog
 .junit/
+
+# ---- Documentation generation ----
+docs/html/
+docs/latex/
+docs/_build/
+Doxyfile.bak
+*.tag

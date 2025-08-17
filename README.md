@@ -16,10 +16,13 @@ chmod +x ./dev.sh
 Manual build with g++:
 
 ```bash
-g++ -std=c++17 telemetry_service/telemetry_service.cpp -lzmq -pthread -o telemetry_service/telemetry_service
-g++ -std=c++17 uav_sim/uav_sim.cpp -lzmq -pthread -o uav_sim/uav_sim
-g++ -std=c++17 camera_ui/camera_ui.cpp -lzmq -pthread -o camera_ui/camera_ui
-g++ -std=c++17 mapping_ui/mapping_ui.cpp -lzmq -pthread -o mapping_ui/mapping_ui
+# Build telemetry service (requires multiple source files)
+g++ -std=c++17 telemetry_service/main.cpp telemetry_service/TelemetryService.cpp telemetry_service/Config.cpp telemetry_service/Logger.cpp telemetry_service/ZmqManager.cpp telemetry_service/UdpManager.cpp -lzmq -lboost_system -lpthread -o telemetry_service/telemetry_service
+
+# Build other components (single file each)
+g++ -std=c++17 uav_sim/uav_sim.cpp -lzmq -lboost_system -lpthread -o uav_sim/uav_sim
+g++ -std=c++17 camera_ui/camera_ui.cpp -lzmq -lpthread -o camera_ui/camera_ui
+g++ -std=c++17 mapping_ui/mapping_ui.cpp -lzmq -lpthread -o mapping_ui/mapping_ui
 ```
 
 ## Build (Windows)
