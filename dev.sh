@@ -74,7 +74,7 @@ kill_existing_procs() {
   # Collect by process names
   for name in "${names[@]}"; do
     local foundn
-    foundn=$(pgrep -x "$name" || true)
+    foundn=$(pgrep -f "$name" || true)
     if [[ -n "$foundn" ]]; then pids_set+=" $foundn"; fi
   done
   # Collect by listening ports (common project ports)
