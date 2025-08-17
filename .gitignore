@@ -195,5 +195,3 @@ secrets/
 test-output/
 *.testlog
 .junit/
-
-telemetry_service/telemetry_log.txt
