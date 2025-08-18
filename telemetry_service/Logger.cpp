@@ -191,7 +191,7 @@ void Logger::metric(const std::string& metric, double value, const std::string& 
 /**
  * @brief Log service startup completion with summary
  * @param uavCount Number of UAVs configured
- * @param zmqPorts List of ZMQ ports in use
+ * @param tcpPorts List of TCP ports in use
  * @param udpPorts List of UDP ports in use
  */
 void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, const std::vector<int>& udpPorts) {
