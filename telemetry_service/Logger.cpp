@@ -15,17 +15,20 @@
 // Static member definitions
 std::unique_ptr<std::ofstream> Logger::logFile = nullptr;
 std::mutex Logger::mtx;
+LogLevel Logger::currentLevel = LogLevel::INFO;
 
 /**
  * @brief Initialize the logging system
  * @param logFilePath Path to the log file
+ * @param level Minimum log level to output
  * 
  * Creates or opens the specified log file for writing. If the file cannot
  * be opened, an error message is printed to stderr. This method is thread-safe
  * and can be called multiple times (subsequent calls are ignored).
  */
-void Logger::init(const std::string& logFilePath) {
+void Logger::init(const std::string& logFilePath, LogLevel level) {
     std::lock_guard<std::mutex> lock(mtx);
+    currentLevel = level;
     if (!logFile) {
         // Open log file in truncate mode (overwrite existing content)
         logFile = std::make_unique<std::ofstream>(logFilePath, std::ios::trunc);
@@ -73,16 +76,23 @@ std::string Logger::getTimestamp() {
  * Thread-safe through mutex protection.
  */
 void Logger::info(const std::string& msg) {
-    std::lock_guard<std::mutex> lock(mtx);
-    std::string logMsg = "[" + getTimestamp() + "] " + msg;
-    
-    // Write to console
-    std::cout << logMsg << std::endl;
-    
-    // Write to log file if available
-    if (logFile && logFile->is_open()) {
-        *logFile << logMsg << std::endl;
-    }
+    log(LogLevel::INFO, msg, false);
+}
+
+/**
+ * @brief Log a debug message
+ * @param msg The debug message to log
+ */
+void Logger::debug(const std::string& msg) {
+    log(LogLevel::DEBUG, msg, false);
+}
+
+/**
+ * @brief Log a warning message
+ * @param msg The warning message to log
+ */
+void Logger::warn(const std::string& msg) {
+    log(LogLevel::WARN, msg, false);
 }
 
 /**
@@ -93,16 +103,116 @@ void Logger::info(const std::string& msg) {
  * and the log file. Thread-safe through mutex protection.
  */
 void Logger::error(const std::string& msg) {
+    log(LogLevel::ERROR, msg, true);
+}
+
+/**
+ * @brief Set the minimum log level
+ * @param level New minimum log level
+ */
+void Logger::setLevel(LogLevel level) {
     std::lock_guard<std::mutex> lock(mtx);
-    std::string logMsg = "[" + getTimestamp() + "] ERROR: " + msg;
+    currentLevel = level;
+}
+
+/**
+ * @brief Internal logging method with level support
+ * @param level Log level
+ * @param msg Message to log
+ * @param useStderr Whether to use stderr instead of stdout
+ */
+void Logger::log(LogLevel level, const std::string& msg, bool useStderr) {
+    std::lock_guard<std::mutex> lock(mtx);
     
-    // Write to stderr for errors
-    std::cerr << logMsg << std::endl;
+    // Check if this message should be logged based on current level
+    if (level < currentLevel) {
+        return;
+    }
+    
+    std::string levelStr = levelToString(level);
+    std::string logMsg = "[" + getTimestamp() + "] " + levelStr + ": " + msg;
+    
+    // Write to appropriate output stream
+    if (useStderr) {
+        std::cerr << logMsg << std::endl;
+    } else {
+        std::cout << logMsg << std::endl;
+    }
     
     // Write to log file if available
     if (logFile && logFile->is_open()) {
         *logFile << logMsg << std::endl;
     }
+}
+
+/**
+ * @brief Convert log level to string
+ * @param level Log level to convert
+ * @return String representation of the log level
+ */
+std::string Logger::levelToString(LogLevel level) {
+    switch (level) {
+        case LogLevel::DEBUG: return "DEBUG";
+        case LogLevel::INFO:  return "INFO";
+        case LogLevel::WARN:  return "WARN";
+        case LogLevel::ERROR: return "ERROR";
+        default:              return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief Log a structured service status message
+ * @param component Component name
+ * @param status Status message
+ * @param details Optional additional details
+ */
+void Logger::status(const std::string& component, const std::string& status, const std::string& details) {
+    std::string msg = "[" + component + "] " + status;
+    if (!details.empty()) {
+        msg += " (" + details + ")";
+    }
+    info(msg);
+}
+
+/**
+ * @brief Log a performance metric
+ * @param metric Metric name
+ * @param value Metric value
+ * @param unit Optional unit
+ */
+void Logger::metric(const std::string& metric, double value, const std::string& unit) {
+    std::string msg = "METRIC: " + metric + " = " + std::to_string(value);
+    if (!unit.empty()) {
+        msg += " " + unit;
+    }
+    info(msg);
+}
+
+/**
+ * @brief Log service startup completion with summary
+ * @param uavCount Number of UAVs configured
+ * @param zmqPorts List of ZMQ ports in use
+ * @param udpPorts List of UDP ports in use
+ */
+void Logger::serviceStarted(int uavCount, const std::vector<int>& zmqPorts, const std::vector<int>& udpPorts) {
+    info("=== SERVICE STARTUP COMPLETE ===");
+    info("Configuration Summary:");
+    info("  UAVs configured: " + std::to_string(uavCount));
+    
+    std::string zmqPortsStr = "  ZMQ ports: ";
+    for (size_t i = 0; i < zmqPorts.size(); ++i) {
+        if (i > 0) zmqPortsStr += ", ";
+        zmqPortsStr += std::to_string(zmqPorts[i]);
+    }
+    info(zmqPortsStr);
+    
+    std::string udpPortsStr = "  UDP ports: ";
+    for (size_t i = 0; i < udpPorts.size(); ++i) {
+        if (i > 0) udpPortsStr += ", ";
+        udpPortsStr += std::to_string(udpPorts[i]);
+    }
+    info(udpPortsStr);
+    info("Service ready for connections.");
 }
 
 /**

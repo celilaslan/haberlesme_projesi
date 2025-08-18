@@ -10,6 +10,7 @@
 #include "Logger.h"
 #include <stdexcept>
 #include <vector>
+#include <string>
 #include <cstdlib>
 
 // Platform-specific includes for executable path detection
@@ -57,7 +58,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
     // Initialize logging system and log startup information
     Logger::init(logPath.string());
-    Logger::info("=== SERVICE STARTED - Multi-UAV Telemetry Service ===");
+    Logger::status("SERVICE", "STARTING", "Multi-UAV Telemetry Service v1.0");
     Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
     // Create ZeroMQ manager with callback for incoming messages
@@ -79,7 +80,17 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
     zmqManager_->start();
     udpManager_->start();
 
-    Logger::info("All services running.");
+    // Collect port information for startup summary
+    std::vector<int> zmqPorts, udpPorts;
+    for (const auto& uav : config_.getUAVs()) {
+        zmqPorts.push_back(uav.telemetry_port);
+        zmqPorts.push_back(uav.command_port);
+        udpPorts.push_back(uav.udp_telemetry_port);
+    }
+    zmqPorts.push_back(config_.getUiPorts().publish_port);
+    zmqPorts.push_back(config_.getUiPorts().command_port);
+
+    Logger::serviceStarted(config_.getUAVs().size(), zmqPorts, udpPorts);
 
     // Main service loop - just sleep and wait for shutdown signal
     while (app_running) {
@@ -87,17 +98,19 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
     }
 
     // Graceful shutdown sequence
-    Logger::info("Shutdown signal received. Stopping services...");
+    Logger::status("SERVICE", "SHUTTING DOWN", "Signal received");
     
     // Stop managers (this stops their internal threads)
+    Logger::status("UDP", "STOPPING", "Shutting down UDP services");
     udpManager_->stop();
+    Logger::status("ZMQ", "STOPPING", "Shutting down ZMQ services");
     zmqManager_->stop();
     
     // Wait for threads to complete
     udpManager_->join();
     zmqManager_->join();
 
-    Logger::info("=== SERVICE SHUTDOWN COMPLETED ===");
+    Logger::status("SERVICE", "SHUTDOWN COMPLETE", "All services stopped gracefully");
 }
 
 /**

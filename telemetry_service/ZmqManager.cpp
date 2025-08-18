@@ -44,13 +44,13 @@ void ZmqManager::start() {
     pubToUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pub);
     std::string ui_pub_addr = "tcp://*:" + std::to_string(config.getUiPorts().publish_port);
     pubToUi->bind(ui_pub_addr);
-    Logger::info("UI Publisher bound to: " + ui_pub_addr);
+    Logger::status("ZMQ", "UI Publisher bound", ui_pub_addr);
 
     // PULL socket for receiving commands from UI components
     pullFromUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
     std::string ui_cmd_addr = "tcp://*:" + std::to_string(config.getUiPorts().command_port);
     pullFromUi->bind(ui_cmd_addr);
-    Logger::info("UI Command receiver bound to: " + ui_cmd_addr);
+    Logger::status("ZMQ", "UI Command receiver bound", ui_cmd_addr);
     
     // Set up UAV communication sockets for each configured UAV
     for (const auto& uav : config.getUAVs()) {
@@ -66,7 +66,7 @@ void ZmqManager::start() {
         push_socket->bind(command_addr);
         uavCommandSockets.push_back(std::move(push_socket));
         
-        Logger::info("UAV " + uav.name + " (ZMQ) - Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
+        Logger::status("ZMQ", "UAV " + uav.name + " configured", "Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
     }
 
     // Start background processing threads
@@ -151,7 +151,7 @@ void ZmqManager::receiverLoop() {
             }
         }
     }
-    Logger::info("ZMQ Receiver thread stopped.");
+    Logger::status("ZMQ", "Receiver thread stopped", "");
 }
 
 /**
@@ -194,7 +194,7 @@ void ZmqManager::forwarderLoop() {
             }
         }
     }
-    Logger::info("ZMQ Forwarder thread stopped.");
+    Logger::status("ZMQ", "Forwarder thread stopped", "");
 }
 
 /**

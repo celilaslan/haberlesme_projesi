@@ -132,3 +132,63 @@ Next:
     - Updated `README.md` with new configuration format and architecture details.
     - Added troubleshooting port ranges to include new UDP ports.
     - Enhanced deployment section to mention per-UAV UDP capabilities.
+
+## 2025-08-18
+
+### Enhanced Logging System
+
+- **Goal**: Improve logging with structured, level-based output that works better with both console and systemd journald.
+- **Logger Class Enhancements**:
+    - **Added Log Levels**: DEBUG, INFO, WARN, ERROR with filtering capabilities.
+    - **Structured Logging**: Component-based prefixes (`[ZMQ]`, `[UDP]`, `[SERVICE]`) for better organization.
+    - **New Methods**: 
+        - `Logger::debug()`, `Logger::warn()` for additional log levels
+        - `Logger::status(component, action, details)` for structured status messages
+        - `Logger::metric(name, value, unit)` for performance metrics
+        - `Logger::serviceStarted()` for comprehensive startup summary
+        - `Logger::setLevel()` for runtime log level control
+    - **Enhanced Features**:
+        - Level-based filtering to reduce noise in production
+        - Consistent timestamp format with millisecond precision
+        - Better error context and structured information
+- **Service Startup Improvements**:
+    - **Comprehensive Summary**: Shows UAV count, all ZMQ ports, all UDP ports
+    - **Step-by-step Initialization**: Clear component binding status
+    - **Service Health**: Better visibility into service state
+    - **Before**: `=== SERVICE STARTED ===` / `All services running.`
+    - **After**: 
+        ```
+        [2025-08-18 08:02:05.224] INFO: [SERVICE] STARTING (Multi-UAV Telemetry Service v1.0)
+        [2025-08-18 08:02:05.225] INFO: === SERVICE STARTUP COMPLETE ===
+        [2025-08-18 08:02:05.225] INFO: Configuration Summary:
+        [2025-08-18 08:02:05.225] INFO:   UAVs configured: 3
+        [2025-08-18 08:02:05.225] INFO:   ZMQ ports: 5555, 5559, 5565, 5569, 5575, 5579, 5557, 5558
+        [2025-08-18 08:02:05.225] INFO:   UDP ports: 5556, 5566, 5576
+        [2025-08-18 08:02:05.225] INFO: Service ready for connections.
+        ```
+- **Shutdown Sequence Enhancement**:
+    - **Graceful Steps**: Clear component shutdown order with status updates
+    - **Before**: `Shutdown signal received` / `=== SERVICE SHUTDOWN COMPLETED ===`
+    - **After**:
+        ```
+        [2025-08-18 07:57:37.943] INFO: [SERVICE] SHUTTING DOWN (Signal received)
+        [2025-08-18 07:57:37.943] INFO: [UDP] STOPPING (Shutting down UDP services)
+        [2025-08-18 07:57:37.944] INFO: [ZMQ] STOPPING (Shutting down ZMQ services)
+        [2025-08-18 07:57:37.945] INFO: [ZMQ] Forwarder thread stopped
+        [2025-08-18 07:57:37.945] INFO: [ZMQ] Receiver thread stopped
+        [2025-08-18 07:57:37.946] INFO: [SERVICE] SHUTDOWN COMPLETE (All services stopped gracefully)
+        ```
+- **Component-Specific Logging**:
+    - **ZmqManager**: Updated to use structured status messages for bind operations and thread lifecycle
+    - **UdpManager**: Enhanced server binding messages with clear component identification
+    - **TelemetryService**: Improved startup and shutdown flow with detailed progress reporting
+- **Benefits Achieved**:
+    - **Console Usage**: Clear structure, visual hierarchy, easy component identification
+    - **systemd/journald**: Better integration with `journalctl`, structured metadata for filtering
+    - **Operations**: Component-based filtering for troubleshooting, clear status indicators
+    - **Development**: Debug level control, reduced noise in production
+    - **Monitoring**: Clear startup/shutdown states for automated monitoring
+- **Backward Compatibility**: All existing `Logger::info()` and `Logger::error()` calls preserved
+- **Service Update Workflow**: Established efficient update process without full service reinstallation:
+    - Build changes → Stop service → Run install script → Start service
+    - No need to delete/recreate systemd service for code updates

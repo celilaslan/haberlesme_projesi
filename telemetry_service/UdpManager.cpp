@@ -36,7 +36,7 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& ip,
     socket_.open(udp::v4());
     socket_.bind(bind_endpoint);
     
-    Logger::info("UDP Server for " + uav_name + " bound to " + ip + ":" + std::to_string(port));
+    Logger::status("UDP", "Server bound for " + uav_name, ip + ":" + std::to_string(port));
     
     // Start the asynchronous receive loop
     do_receive();
