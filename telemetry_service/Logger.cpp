@@ -194,17 +194,17 @@ void Logger::metric(const std::string& metric, double value, const std::string& 
  * @param zmqPorts List of ZMQ ports in use
  * @param udpPorts List of UDP ports in use
  */
-void Logger::serviceStarted(int uavCount, const std::vector<int>& zmqPorts, const std::vector<int>& udpPorts) {
+void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, const std::vector<int>& udpPorts) {
     info("=== SERVICE STARTUP COMPLETE ===");
     info("Configuration Summary:");
     info("  UAVs configured: " + std::to_string(uavCount));
     
-    std::string zmqPortsStr = "  ZMQ ports: ";
-    for (size_t i = 0; i < zmqPorts.size(); ++i) {
-        if (i > 0) zmqPortsStr += ", ";
-        zmqPortsStr += std::to_string(zmqPorts[i]);
+    std::string tcpPortsStr = "  TCP ports: ";
+    for (size_t i = 0; i < tcpPorts.size(); ++i) {
+        if (i > 0) tcpPortsStr += ", ";
+        tcpPortsStr += std::to_string(tcpPorts[i]);
     }
-    info(zmqPortsStr);
+    info(tcpPortsStr);
     
     std::string udpPortsStr = "  UDP ports: ";
     for (size_t i = 0; i < udpPorts.size(); ++i) {

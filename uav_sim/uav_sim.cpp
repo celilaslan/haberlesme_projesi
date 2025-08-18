@@ -30,17 +30,17 @@ std::atomic<bool> g_running(true);
 
 /**
  * @struct UAVConfig
- * @brief Configuration data for a UAV simulator instance
+ * @brief Configuration data for a single UAV simulator
  * 
- * Contains all the network and identification information needed
- * for a UAV to communicate with the telemetry service.
+ * Contains all the network configuration needed for the UAV simulator to
+ * connect to the telemetry service using either ZeroMQ or UDP protocols.
  */
 struct UAVConfig {
-    std::string name;           ///< Unique identifier for this UAV (e.g., "UAV_1")
-    std::string ip;             ///< IP address of the telemetry service
-    int telemetry_port;         ///< ZeroMQ port for sending telemetry data
-    int command_port;           ///< ZeroMQ port for receiving commands
-    int udp_telemetry_port;     ///< UDP port for sending telemetry data (service-side port)
+    std::string name;               ///< UAV identifier (e.g., "UAV_1")
+    std::string ip;                 ///< IP address of the telemetry service
+    int tcp_telemetry_port;         ///< TCP/ZeroMQ port for sending telemetry data
+    int tcp_command_port;           ///< TCP/ZeroMQ port for receiving commands
+    int udp_telemetry_port;         ///< UDP port for sending telemetry data (service-side port)
 };
 
 /**
@@ -114,8 +114,25 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
         if (uav_json["name"] == uav_name) {
             config.name = uav_json["name"];
             config.ip = uav_json["ip"];
-            config.telemetry_port = uav_json["telemetry_port"];
-            config.command_port = uav_json["command_port"];
+            
+            // Support both old and new field names for backward compatibility
+            if (uav_json.contains("tcp_telemetry_port")) {
+                config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
+            } else if (uav_json.contains("telemetry_port")) {
+                config.tcp_telemetry_port = uav_json["telemetry_port"];  // Backward compatibility
+            } else {
+                std::cerr << "ERROR: UAV '" << uav_name << "' missing telemetry port in config!" << std::endl;
+                exit(1);
+            }
+            
+            if (uav_json.contains("tcp_command_port")) {
+                config.tcp_command_port = uav_json["tcp_command_port"];
+            } else if (uav_json.contains("command_port")) {
+                config.tcp_command_port = uav_json["command_port"];  // Backward compatibility
+            } else {
+                std::cerr << "ERROR: UAV '" << uav_name << "' missing command port in config!" << std::endl;
+                exit(1);
+            }
             
             // Extract UDP telemetry port (required for UDP protocol)
             if (uav_json.contains("udp_telemetry_port")) {
@@ -158,9 +175,23 @@ void PrintAvailableUAVs(const std::string& config_file) {
 
     std::cout << "Available UAVs in " << config_file << ":" << std::endl;
     for (const auto& uav_json : j["uavs"]) {
+        // Support both old and new field names for display
+        int telemetry_port = 0, command_port = 0;
+        if (uav_json.contains("tcp_telemetry_port")) {
+            telemetry_port = uav_json["tcp_telemetry_port"];
+        } else if (uav_json.contains("telemetry_port")) {
+            telemetry_port = uav_json["telemetry_port"];
+        }
+        
+        if (uav_json.contains("tcp_command_port")) {
+            command_port = uav_json["tcp_command_port"];
+        } else if (uav_json.contains("command_port")) {
+            command_port = uav_json["command_port"];
+        }
+        
         std::cout << "  - " << uav_json["name"]
-            << " (Telemetry: " << uav_json["telemetry_port"]
-            << ", Commands: " << uav_json["command_port"] << ")" << std::endl;
+            << " (Telemetry: " << telemetry_port
+            << ", Commands: " << command_port << ")" << std::endl;
     }
 }
 
@@ -174,7 +205,7 @@ void PrintAvailableUAVs(const std::string& config_file) {
  * 1. Parses command line arguments (UAV name and protocol)
  * 2. Loads configuration for the specified UAV
  * 3. Starts telemetry generation thread
- * 4. Starts command receiver thread (ZMQ only)
+ * 4. Starts command receiver thread (TCP only)
  * 5. Waits for threads to complete
  */
 int main(int argc, char* argv[]) {
@@ -272,8 +303,8 @@ int main(int argc, char* argv[]) {
         std::cout << "Service UDP Port: " << config.udp_telemetry_port << std::endl;
     } else {
         std::cout << "Protocol: ZeroMQ (TCP)" << std::endl;
-        std::cout << "Telemetry Port: " << config.telemetry_port << std::endl;
-        std::cout << "Command Port: " << config.command_port << std::endl;
+        std::cout << "Telemetry Port: " << config.tcp_telemetry_port << std::endl;
+        std::cout << "Command Port: " << config.tcp_command_port << std::endl;
     }
     std::cout << "===========================================" << std::endl;
 
@@ -282,7 +313,7 @@ int main(int argc, char* argv[]) {
      * 
      * This thread:
      * 1. Determines base telemetry codes for this UAV
-     * 2. Sets up communication sockets (UDP or ZMQ)
+     * 2. Sets up communication sockets (UDP or TCP)
      * 3. Generates and sends telemetry data at regular intervals
      * 4. Alternates between mapping and camera data types
      */
@@ -335,7 +366,7 @@ int main(int argc, char* argv[]) {
         } else { // ZeroMQ implementation
             zmq::context_t context(1);
             zmq::socket_t push_to_service(context, zmq::socket_type::push);
-            std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.telemetry_port);
+            std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_telemetry_port);
             push_to_service.connect(telemetry_addr);
 
             // Send telemetry data for 50 iterations
@@ -343,13 +374,13 @@ int main(int argc, char* argv[]) {
                 // Send mapping data
                 std::string msg1 = config.name + "  " + std::to_string(mapping + i);
                 push_to_service.send(zmq::buffer(msg1), zmq::send_flags::none);
-                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (ZMQ): " << msg1 << std::endl;
+                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg1 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 
                 // Send camera data
                 std::string msg2 = config.name + "  " + std::to_string(camera + i);
                 push_to_service.send(zmq::buffer(msg2), zmq::send_flags::none);
-                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (ZMQ): " << msg2 << std::endl;
+                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg2 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
             }
         }
@@ -368,7 +399,7 @@ int main(int argc, char* argv[]) {
         command_receiver = std::thread([&]() {
             zmq::context_t context(1);
             zmq::socket_t pull_commands(context, zmq::socket_type::pull);
-            std::string command_addr = "tcp://" + config.ip + ":" + std::to_string(config.command_port);
+            std::string command_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_command_port);
             pull_commands.connect(command_addr);
 
             while (g_running) {

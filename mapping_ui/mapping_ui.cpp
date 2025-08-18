@@ -3,12 +3,12 @@
  * @brief Mapping UI application for receiving and displaying mapping telemetry data
  * 
  * This application connects to the telemetry service and subscribes to mapping-related
- * telemetry data from UAVs. It can also optionally send commands back to UAVs
- * via the telemetry service. The functionality is similar to camera_ui but focuses
- * on mapping/navigation data.
+ * telemetry data from UAVs. It supports both TCP and UDP protocols for receiving data.
+ * It can also optionally send commands back to UAVs via the telemetry service.
  */
 
 #include <zmq.hpp>
+#include <boost/asio.hpp>
 #include <iostream>
 #include <chrono>
 #include <ctime>
@@ -16,6 +16,9 @@
 #include <cstdlib>
 #include <memory>
 #include <thread>
+#include <string>
+
+using boost::asio::ip::udp;
 
 /**
  * @brief Generate a formatted timestamp string with millisecond precision
@@ -52,69 +55,142 @@ std::string GetTimestamp() {
  * @param argv Array of command line argument strings
  * @return Exit code (0 for success)
  * 
+ * Usage:
+ * ./mapping_ui [--protocol tcp|udp] [--send UAV_1]
+ * 
  * This function:
- * 1. Sets up a ZMQ subscriber to receive mapping telemetry data
- * 2. Optionally sets up a command sender if --send flag is provided
- * 3. Continuously receives and displays telemetry data
- * 4. Allows sending commands to UAVs via stdin input
+ * 1. Parses command line arguments to determine protocol and options
+ * 2. Sets up TCP or UDP receiver based on protocol selection
+ * 3. Optionally sets up a command sender if --send flag is provided
+ * 4. Continuously receives and displays telemetry data
+ * 5. Allows sending commands to UAVs via stdin input
  */
 int main(int argc, char* argv[]) {
-    // Create ZeroMQ context with 1 I/O thread
-    zmq::context_t context(1);
+    std::string protocol = "tcp";  // Default to TCP for backward compatibility
+    std::string target = "UAV_1";
+    bool enableSender = false;
     
-    // Create subscriber socket to receive telemetry data
-    zmq::socket_t subscriber(context, zmq::socket_type::sub);
-
-    // Connect to the telemetry service's publish port
-    subscriber.connect("tcp://localhost:5557");
-    
-    // Subscribe to all messages with "mapping" topic prefix
-    // This will receive messages like "mapping_UAV_1", "mapping_UAV_2", etc.
-    subscriber.set(zmq::sockopt::subscribe, "mapping");
-
-    std::cout << "[Mapping UI] Subscribed to 'mapping' topic\n";
-
-    // Optional command sender functionality
-    // Usage: ./mapping_ui --send UAV_1
-    std::unique_ptr<zmq::socket_t> push;
-    std::string target = "UAV_1";  // Default target UAV
-    
-    if (argc >= 3 && std::string(argv[1]) == "--send") {
-        target = argv[2];
-        
-        // Create PUSH socket for sending commands to the service
-        push = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
-        push->connect("tcp://localhost:5558");  // Service command port
-        
-        // Start background thread to read commands from stdin
-        std::thread([p = push.get(), target]() {
-            std::string line;
-            while (std::getline(std::cin, line)) {
-                // Format: "TARGET_UAV:[mapping-ui] user_command"
-                const std::string msg = target + ":[mapping-ui] " + line;
-                p->send(zmq::buffer(msg), zmq::send_flags::none);
-            }
-        }).detach();  // Detach thread to run independently
-        
-        std::cout << "[Mapping UI] Sender enabled to " << target << " via 5558\n";
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        if (std::string(argv[i]) == "--protocol" && i + 1 < argc) {
+            protocol = argv[++i];
+        } else if (std::string(argv[i]) == "--send" && i + 1 < argc) {
+            enableSender = true;
+            target = argv[++i];
+        }
     }
-
-    // Main telemetry reception loop
-    while (true) {
-        zmq::message_t topic, data;
+    
+    if (protocol == "udp") {
+        // UDP-based telemetry reception
+        std::cout << "[Mapping UI] Using UDP protocol on port 5571\n";
         
-        // Receive topic (first frame of multipart message)
-        if (!subscriber.recv(topic)) continue;
+        boost::asio::io_context io_context;
+        udp::socket socket(io_context, udp::endpoint(udp::v4(), 5571));
         
-        // Receive data (second frame of multipart message)
-        if (!subscriber.recv(data)) continue;
+        // Optional command sender via UDP
+        std::unique_ptr<udp::socket> cmdSocket;
+        udp::endpoint serviceEndpoint;
+        
+        if (enableSender) {
+            cmdSocket = std::make_unique<udp::socket>(io_context);
+            cmdSocket->open(udp::v4());
+            serviceEndpoint = udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 5572);
+            
+            // Start background thread to read commands from stdin
+            std::thread([&cmdSocket, &serviceEndpoint, target]() {
+                std::string line;
+                while (std::getline(std::cin, line)) {
+                    // Format: "TARGET_UAV:[mapping-ui] user_command"
+                    const std::string msg = target + ":[mapping-ui] " + line;
+                    cmdSocket->send_to(boost::asio::buffer(msg), serviceEndpoint);
+                }
+            }).detach();
+            
+            std::cout << "[Mapping UI] UDP Sender enabled to " << target << " via port 5572\n";
+        }
+        
+        // Main UDP telemetry reception loop
+        while (true) {
+            char buffer[1024];
+            udp::endpoint sender_endpoint;
+            
+            try {
+                size_t length = socket.receive_from(boost::asio::buffer(buffer), sender_endpoint);
+                std::string message(buffer, length);
+                
+                // Parse message format: "topic|data"
+                size_t separator = message.find('|');
+                if (separator != std::string::npos) {
+                    std::string topic = message.substr(0, separator);
+                    std::string data = message.substr(separator + 1);
+                    
+                    // Only display mapping-related topics
+                    if (topic.find("mapping") == 0) {
+                        std::cout << "[" << GetTimestamp() << "] Topic: " << topic << " | Data: " << data << std::endl;
+                    }
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "UDP receive error: " << e.what() << std::endl;
+            }
+        }
+        
+    } else {
+        // TCP-based telemetry reception (original implementation)
+        std::cout << "[Mapping UI] Using TCP protocol\n";
+        
+        // Create ZeroMQ context with 1 I/O thread
+        zmq::context_t context(1);
+        
+        // Create subscriber socket to receive telemetry data
+        zmq::socket_t subscriber(context, zmq::socket_type::sub);
 
-        // Convert ZMQ messages to strings
-        std::string msg(static_cast<char*>(data.data()), data.size());
-        std::string topic_str(static_cast<char*>(topic.data()), topic.size());
+        // Connect to the telemetry service's publish port
+        subscriber.connect("tcp://localhost:5557");
+        
+        // Subscribe to all messages with "mapping" topic prefix
+        // This will receive messages like "mapping_UAV_1", "mapping_UAV_2", etc.
+        subscriber.set(zmq::sockopt::subscribe, "mapping");
 
-        // Display received telemetry data with timestamp
-        std::cout << "[" << GetTimestamp() << "] Topic: " << topic_str << " | Data: " << msg << std::endl;
+        std::cout << "[Mapping UI] Subscribed to 'mapping' topic\n";
+
+        // Optional command sender functionality
+        std::unique_ptr<zmq::socket_t> push;
+        
+        if (enableSender) {
+            // Create PUSH socket for sending commands to the service
+            push = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
+            push->connect("tcp://localhost:5558");  // Service command port
+            
+            // Start background thread to read commands from stdin
+            std::thread([p = push.get(), target]() {
+                std::string line;
+                while (std::getline(std::cin, line)) {
+                    // Format: "TARGET_UAV:[mapping-ui] user_command"
+                    const std::string msg = target + ":[mapping-ui] " + line;
+                    p->send(zmq::buffer(msg), zmq::send_flags::none);
+                }
+            }).detach();  // Detach thread to run independently
+            
+            std::cout << "[Mapping UI] TCP Sender enabled to " << target << " via port 5558\n";
+        }
+
+        // Main TCP telemetry reception loop
+        while (true) {
+            zmq::message_t topic, data;
+            
+            // Receive topic (first frame of multipart message)
+            if (!subscriber.recv(topic)) continue;
+            
+            // Receive data (second frame of multipart message)
+            if (!subscriber.recv(data)) continue;
+
+            // Convert TCP messages to strings
+            std::string msg(static_cast<char*>(data.data()), data.size());
+            std::string topic_str(static_cast<char*>(topic.data()), topic.size());
+
+            // Display received telemetry data with timestamp
+            std::cout << "[" << GetTimestamp() << "] Topic: " << topic_str << " | Data: " << msg << std::endl;
+        }
     }
     
     return 0;

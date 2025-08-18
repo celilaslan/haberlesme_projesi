@@ -16,6 +16,7 @@
 #include <atomic>
 #include <memory>
 #include <filesystem>
+#include <unordered_map>
 
 /**
  * @class TelemetryService
@@ -42,7 +43,7 @@ public:
      * This method:
      * 1. Loads configuration from file
      * 2. Initializes logging system
-     * 3. Creates and starts ZMQ and UDP managers
+     * 3. Creates and starts TCP and UDP managers
      * 4. Runs the main service loop until shutdown is requested
      * 5. Performs graceful cleanup
      */
@@ -60,11 +61,11 @@ private:
     void onUdpMessage(const std::string& sourceDescription, const std::string& data);
     
     /**
-     * @brief Callback handler for incoming ZeroMQ messages
-     * @param sourceDescription Description of the message source (e.g., "ZMQ:UAV_1")
+     * @brief Callback handler for incoming TCP messages
+     * @param sourceDescription Description of the message source (e.g., "TCP:UAV_1")
      * @param data The raw message data received
      * 
-     * This method is called by the ZmqManager when a ZMQ message is received.
+     * This method is called by the ZmqManager when a TCP message is received.
      * It forwards the message to the common processing pipeline.
      */
     void onZmqMessage(const std::string& sourceDescription, const std::string& data);
@@ -103,6 +104,9 @@ private:
     zmq::context_t zmqContext_;                       ///< ZeroMQ context for all ZMQ operations
     std::unique_ptr<ZmqManager> zmqManager_;          ///< Manages ZeroMQ communications
     std::unique_ptr<UdpManager> udpManager_;          ///< Manages UDP communications
+    
+    // Protocol tracking for routing decisions
+    std::unordered_map<std::string, std::string> uavProtocols_; ///< Maps UAV name to protocol ("TCP" or "UDP")
 };
 
 #endif // TELEMETRYSERVICE_H

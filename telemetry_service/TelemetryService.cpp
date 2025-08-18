@@ -81,16 +81,16 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
     udpManager_->start();
 
     // Collect port information for startup summary
-    std::vector<int> zmqPorts, udpPorts;
+    std::vector<int> tcpPorts, udpPorts;
     for (const auto& uav : config_.getUAVs()) {
-        zmqPorts.push_back(uav.telemetry_port);
-        zmqPorts.push_back(uav.command_port);
+        tcpPorts.push_back(uav.tcp_telemetry_port);
+        tcpPorts.push_back(uav.tcp_command_port);
         udpPorts.push_back(uav.udp_telemetry_port);
     }
-    zmqPorts.push_back(config_.getUiPorts().publish_port);
-    zmqPorts.push_back(config_.getUiPorts().command_port);
+    tcpPorts.push_back(config_.getUiPorts().tcp_publish_port);
+    tcpPorts.push_back(config_.getUiPorts().tcp_command_port);
 
-    Logger::serviceStarted(config_.getUAVs().size(), zmqPorts, udpPorts);
+    Logger::serviceStarted(config_.getUAVs().size(), tcpPorts, udpPorts);
 
     // Main service loop - just sleep and wait for shutdown signal
     while (app_running) {
@@ -103,7 +103,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
     // Stop managers (this stops their internal threads)
     Logger::status("UDP", "STOPPING", "Shutting down UDP services");
     udpManager_->stop();
-    Logger::status("ZMQ", "STOPPING", "Shutting down ZMQ services");
+    Logger::status("TCP", "STOPPING", "Shutting down TCP services");
     zmqManager_->stop();
     
     // Wait for threads to complete
@@ -119,15 +119,29 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
  * @param data The received message data
  */
 void TelemetryService::onUdpMessage(const std::string& sourceDescription, const std::string& data) {
+    // Extract UAV name and mark it as using UDP protocol
+    size_t colon_pos = sourceDescription.find(':');
+    if (colon_pos != std::string::npos) {
+        std::string uav_name = sourceDescription.substr(colon_pos + 1);
+        uavProtocols_[uav_name] = "UDP";
+    }
+    
     processAndPublishTelemetry(data, sourceDescription);
 }
 
 /**
- * @brief Handler for ZMQ messages - forwards to common processing
- * @param sourceDescription Description of the ZMQ source
+ * @brief Handler for TCP messages - forwards to common processing
+ * @param sourceDescription Description of the TCP source
  * @param data The received message data
  */
 void TelemetryService::onZmqMessage(const std::string& sourceDescription, const std::string& data) {
+    // Extract UAV name and mark it as using TCP protocol
+    size_t colon_pos = sourceDescription.find(':');
+    if (colon_pos != std::string::npos) {
+        std::string uav_name = sourceDescription.substr(colon_pos + 1);
+        uavProtocols_[uav_name] = "TCP";
+    }
+    
     processAndPublishTelemetry(data, sourceDescription);
 }
 
@@ -140,7 +154,7 @@ void TelemetryService::onZmqMessage(const std::string& sourceDescription, const 
  * 1. Logs the incoming message
  * 2. Extracts the UAV name from the source description
  * 3. Determines the topic based on the numeric code in the data
- * 4. Publishes the data to the appropriate topic for UI subscribers
+ * 4. Routes the data to UI components using the same protocol as the source
  */
 void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description) {
     Logger::info("Received from " + source_description + ": " + data);
@@ -148,7 +162,7 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     std::string topic = "unknown";
     std::string uav_name = "unknown_uav";
 
-    // Extract UAV name by removing protocol prefix ("ZMQ:", "UDP:")
+    // Extract UAV name by removing protocol prefix ("TCP:", "UDP:")
     size_t colon_pos = source_description.find(':');
     if (colon_pos != std::string::npos) {
         uav_name = source_description.substr(colon_pos + 1);
@@ -186,7 +200,16 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     
     // Create the full topic name: "topic_UAVname" (e.g., "camera_UAV_1")
     std::string full_topic = topic + "_" + uav_name;
-    zmqManager_->publishTelemetry(full_topic, actual_data);
+    
+    // Route data based on the protocol used by the UAV
+    auto protocol_it = uavProtocols_.find(uav_name);
+    if (protocol_it != uavProtocols_.end() && protocol_it->second == "UDP") {
+        // UAV is using UDP, so forward to UI via UDP
+        udpManager_->publishTelemetry(full_topic, actual_data);
+    } else {
+        // UAV is using TCP or protocol unknown, use TCP (default behavior)
+        zmqManager_->publishTelemetry(full_topic, actual_data);
+    }
 }
 
 /**

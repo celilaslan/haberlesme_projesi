@@ -113,6 +113,16 @@ public:
      */
     void join();
 
+    /**
+     * @brief Publish telemetry data to UI components via UDP
+     * @param topic The topic to publish on (e.g., "camera_UAV_1")
+     * @param data The telemetry data to send
+     * 
+     * Sends telemetry data to UI components using UDP multicast.
+     * The message format includes both topic and data.
+     */
+    void publishTelemetry(const std::string& topic, const std::string& data);
+
 private:
     boost::asio::io_context io_context_;        ///< Boost.Asio I/O context for async operations
     const Config& config_;                      ///< Reference to configuration data
@@ -121,6 +131,12 @@ private:
     
     std::vector<std::unique_ptr<UdpServer>> servers_; ///< UDP servers for each UAV
     std::thread serviceThread_;                ///< Background thread running I/O context
+    
+    // UDP publishing for UI components
+    std::unique_ptr<udp::socket> cameraPublishSocket_;   ///< Socket for publishing camera data to UI
+    std::unique_ptr<udp::socket> mappingPublishSocket_;  ///< Socket for publishing mapping data to UI
+    udp::endpoint cameraEndpoint_;                       ///< Endpoint for camera UI UDP communication
+    udp::endpoint mappingEndpoint_;                      ///< Endpoint for mapping UI UDP communication
 };
 
 #endif // UDPMANAGER_H

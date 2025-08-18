@@ -1,6 +1,6 @@
 # haberlesme_projesi
 
-Cross-platform telemetry service and test apps using ZeroMQ.
+Cross-platform telemetry service and test apps using TCP (ZeroMQ) and UDP protocols.
 
 ## Build (Linux)
 
@@ -44,20 +44,20 @@ cmake --build build --config Release
 
 ## Run
 
-The `uav_sim` now supports sending telemetry over UDP in addition to the default ZeroMQ (TCP).
+The `uav_sim` now supports sending telemetry over UDP in addition to the default TCP (ZeroMQ) protocol.
 
 ```bash
 # 1) Start the telemetry_service
-# It listens on both ZMQ and UDP ports simultaneously.
+# It listens on both TCP and UDP ports simultaneously.
 # The service can be run directly or as a systemd service (see Deployment section).
 ./dev.sh run telemetry_service
 
-# 2) Start the UI clients (they only use ZMQ)
+# 2) Start the UI clients (they support both TCP and UDP)
 ./dev.sh run camera_ui
 ./dev.sh run mapping_ui
 
 # 3) Start one or more UAV sims
-# To use the default ZMQ protocol:
+# To use the default TCP protocol:
 ./dev.sh run uav_sim UAV_1
 
 # To use the new UDP protocol:
@@ -66,7 +66,7 @@ The `uav_sim` now supports sending telemetry over UDP in addition to the default
 # You can mix and match protocols for different UAVs.
 # The service will handle both seamlessly.
 ./dev.sh run uav_sim UAV_2 --protocol udp
-./dev.sh run uav_sim UAV_3 # (uses ZMQ)
+./dev.sh run uav_sim UAV_3 # (uses TCP)
 ```
 
 On Windows (PowerShell):
@@ -112,7 +112,7 @@ The service writes logs to `log_file`. If relative, logs resolve next to the tel
 - Support for UAVs on different network interfaces
 - Easier troubleshooting and monitoring
 
-Note: With ZeroMQ PUB/SUB, subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
+Note: With TCP PUB/SUB (ZeroMQ), subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
 
 ## Notes
 - The project now depends on the Boost C++ libraries for UDP networking.

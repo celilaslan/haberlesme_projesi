@@ -42,27 +42,27 @@ void ZmqManager::start() {
     // Set up UI communication sockets
     // PUB socket for publishing telemetry data to UI subscribers
     pubToUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pub);
-    std::string ui_pub_addr = "tcp://*:" + std::to_string(config.getUiPorts().publish_port);
+    std::string ui_pub_addr = "tcp://*:" + std::to_string(config.getUiPorts().tcp_publish_port);
     pubToUi->bind(ui_pub_addr);
-    Logger::status("ZMQ", "UI Publisher bound", ui_pub_addr);
+    Logger::status("TCP", "UI Publisher bound", ui_pub_addr);
 
     // PULL socket for receiving commands from UI components
     pullFromUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
-    std::string ui_cmd_addr = "tcp://*:" + std::to_string(config.getUiPorts().command_port);
+    std::string ui_cmd_addr = "tcp://*:" + std::to_string(config.getUiPorts().tcp_command_port);
     pullFromUi->bind(ui_cmd_addr);
-    Logger::status("ZMQ", "UI Command receiver bound", ui_cmd_addr);
+    Logger::status("TCP", "UI Command receiver bound", ui_cmd_addr);
     
     // Set up UAV communication sockets for each configured UAV
     for (const auto& uav : config.getUAVs()) {
         // PULL socket for receiving telemetry data from UAV
         auto pull_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
-        std::string telemetry_addr = "tcp://*:" + std::to_string(uav.telemetry_port);
+        std::string telemetry_addr = "tcp://*:" + std::to_string(uav.tcp_telemetry_port);
         pull_socket->bind(telemetry_addr);
         uavTelemetrySockets.push_back(std::move(pull_socket));
 
         // PUSH socket for sending commands to UAV
         auto push_socket = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
-        std::string command_addr = "tcp://*:" + std::to_string(uav.command_port);
+        std::string command_addr = "tcp://*:" + std::to_string(uav.tcp_command_port);
         push_socket->bind(command_addr);
         uavCommandSockets.push_back(std::move(push_socket));
         
@@ -145,7 +145,7 @@ void ZmqManager::receiverLoop() {
                     
                     // Call the registered callback with source identification
                     if (messageCallback_) {
-                        messageCallback_("ZMQ:" + uav_name, data);
+                        messageCallback_("TCP:" + uav_name, data);
                     }
                 }
             }

@@ -92,8 +92,9 @@ UdpManager::~UdpManager() {
  * 
  * This method:
  * 1. Creates UDP servers for all UAVs with valid UDP ports
- * 2. Starts a background thread to run the I/O context
- * 3. Handles any errors that occur during UDP operations
+ * 2. Sets up UDP publishing socket for UI communication
+ * 3. Starts a background thread to run the I/O context
+ * 4. Handles any errors that occur during UDP operations
  */
 void UdpManager::start() {
     running_ = true;
@@ -107,8 +108,16 @@ void UdpManager::start() {
         }
     }
 
-    // Start the I/O service thread if we have any UDP servers
-    if (!servers_.empty()) {
+    // Set up UDP publishing sockets for UI communication
+    cameraPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
+    mappingPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
+    cameraEndpoint_ = udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_camera_port);
+    mappingEndpoint_ = udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_mapping_port);
+    Logger::status("UDP", "UI Camera Publisher socket created", "Port: " + std::to_string(config_.getUiPorts().udp_camera_port));
+    Logger::status("UDP", "UI Mapping Publisher socket created", "Port: " + std::to_string(config_.getUiPorts().udp_mapping_port));
+
+    // Start the I/O service thread if we have any UDP servers or publishing is enabled
+    if (!servers_.empty() || cameraPublishSocket_ || mappingPublishSocket_) {
         serviceThread_ = std::thread([this]() {
             while (running_) {
                 try {
@@ -147,5 +156,45 @@ void UdpManager::stop() {
 void UdpManager::join() {
     if (serviceThread_.joinable()) {
         serviceThread_.join();
+    }
+}
+
+/**
+ * @brief Publish telemetry data to UI components via UDP
+ * @param topic The topic to publish on (e.g., "camera_UAV_1")
+ * @param data The telemetry data to send
+ * 
+ * Sends telemetry data to UI components using UDP. Routes camera topics
+ * to camera port and mapping topics to mapping port.
+ */
+void UdpManager::publishTelemetry(const std::string& topic, const std::string& data) {
+    // Determine which socket to use based on topic
+    std::unique_ptr<udp::socket>* socketPtr = nullptr;
+    udp::endpoint* endpointPtr = nullptr;
+    
+    if (topic.find("camera") == 0) {
+        socketPtr = &cameraPublishSocket_;
+        endpointPtr = &cameraEndpoint_;
+    } else if (topic.find("mapping") == 0) {
+        socketPtr = &mappingPublishSocket_;
+        endpointPtr = &mappingEndpoint_;
+    } else {
+        Logger::error("Unknown topic type for UDP publish: " + topic);
+        return;
+    }
+    
+    if (!*socketPtr) {
+        Logger::error("UDP publish socket not initialized for topic: " + topic);
+        return;
+    }
+    
+    // Format message as "topic|data" for easy parsing by UI components
+    std::string message = topic + "|" + data;
+    
+    try {
+        (*socketPtr)->send_to(boost::asio::buffer(message), *endpointPtr);
+        Logger::info("UDP Published to [" + topic + "]: " + data);
+    } catch (const std::exception& e) {
+        Logger::error("UDP publish error: " + std::string(e.what()));
     }
 }

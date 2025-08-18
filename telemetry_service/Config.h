@@ -22,11 +22,11 @@
  * including ports for different communication protocols.
  */
 struct UAVConfig {
-    std::string name;           ///< Unique identifier for the UAV (e.g., "UAV_1")
-    std::string ip;             ///< IP address or hostname of the UAV
-    int telemetry_port;         ///< ZeroMQ port for receiving telemetry data
-    int command_port;           ///< ZeroMQ port for sending commands to UAV
-    int udp_telemetry_port;     ///< UDP port for receiving telemetry data
+    std::string name;               ///< Unique identifier for the UAV (e.g., "UAV_1")
+    std::string ip;                 ///< IP address or hostname of the UAV
+    int tcp_telemetry_port;         ///< TCP/ZeroMQ port for receiving telemetry data
+    int tcp_command_port;           ///< TCP/ZeroMQ port for sending commands to UAV
+    int udp_telemetry_port;         ///< UDP port for receiving telemetry data
 };
 
 /**
@@ -36,8 +36,11 @@ struct UAVConfig {
  * Defines the ports used for communication with user interface components.
  */
 struct UIConfig {
-    int command_port = 5558;    ///< Port for receiving commands from UI components
-    int publish_port = 5557;    ///< Port for publishing telemetry data to UI components
+    int tcp_command_port = 5558;    ///< Port for receiving commands from UI components (TCP)
+    int tcp_publish_port = 5557;    ///< Port for publishing telemetry data to UI components (TCP)
+    int udp_camera_port = 5570;     ///< Port for publishing camera telemetry data via UDP
+    int udp_mapping_port = 5571;    ///< Port for publishing mapping telemetry data via UDP
+    int udp_command_port = 5572;    ///< Port for receiving commands from UI components (UDP)
 };
 
 /**

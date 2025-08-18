@@ -19,7 +19,8 @@ add_executable(camera_ui
 )
 
 # Link required libraries
-link_with_zmq(camera_ui)    # ZeroMQ for subscribing to telemetry and sending commands
+link_with_zmq(camera_ui)    # TCP (ZeroMQ) for subscribing to telemetry and sending commands
+link_with_boost(camera_ui)  # Boost.Asio for UDP communication
 
 # Place the executable in the source directory for easier development
 set_target_to_source_dir(camera_ui)

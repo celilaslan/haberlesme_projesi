@@ -7,9 +7,9 @@
 # send it via either ZeroMQ or UDP protocols.
 #
 # FEATURES:
-#   - Dual protocol support (ZeroMQ TCP and UDP)
+#   - Dual protocol support (TCP via ZeroMQ and UDP)
 #   - Configurable telemetry data generation
-#   - Command reception from UI components (ZMQ only)
+#   - Command reception from UI components (TCP only)
 #   - Multi-UAV simulation support
 # ============================================================================
 
@@ -19,7 +19,7 @@ add_executable(uav_sim
 )
 
 # Link required libraries
-link_with_zmq(uav_sim)      # ZeroMQ for TCP-based telemetry and commands
+link_with_zmq(uav_sim)      # TCP (ZeroMQ) for telemetry and commands
 link_with_boost(uav_sim)    # Boost.Asio for UDP-based telemetry
 link_with_json(uav_sim)     # nlohmann/json for configuration parsing
 
