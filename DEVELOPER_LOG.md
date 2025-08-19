@@ -1,7 +1,5 @@
 # Developer Daily Log
 
-This file records high-level changes and actions performed by the automation to keep a simple end-of-day report.
-
 ## 2025-08-13
 
 - Cross-platform fixes (Linux/Windows):
