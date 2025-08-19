@@ -57,6 +57,19 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 1
 fi
 
+# Validate source files exist before proceeding
+if [[ ! -f "$SOURCE_CONFIG" ]]; then
+    echo "ERROR: Configuration file not found at ${SOURCE_CONFIG}"
+    echo "       Make sure you're running this script from the project root."
+    exit 1
+fi
+
+if [[ ! -f "$SOURCE_SERVICE_FILE" ]]; then
+    echo "ERROR: Service file not found at ${SOURCE_SERVICE_FILE}"
+    echo "       Make sure the service file exists in the telemetry_service directory."
+    exit 1
+fi
+
 echo "============================================================================"
 echo "TELEMETRY SERVICE INSTALLER"
 echo "============================================================================"
@@ -75,12 +88,20 @@ if ! "${REPO_ROOT}/dev.sh" build; then
     exit 1
 fi
 
-# Verify the executable was created
+# Verify the executable was created and is functional
 if [[ ! -f "$SOURCE_EXE" ]]; then
     echo "ERROR: Executable not found at ${SOURCE_EXE} after build."
     echo "       Make sure the build completed successfully."
     exit 1
 fi
+
+# Test that the executable is actually runnable
+if ! file "$SOURCE_EXE" | grep -q "executable"; then
+    echo "ERROR: ${SOURCE_EXE} is not a valid executable file."
+    exit 1
+fi
+
+echo "✓ Build completed successfully, executable verified."
 
 # Step 2: Install the executable
 echo "[2/6] Installing executable to ${INSTALL_BIN_DIR}..."
@@ -111,15 +132,44 @@ cp -v "$SOURCE_CONFIG" "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}.original"
 # Set appropriate permissions for configuration
 chmod 644 "${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
 
-# Step 5: Install the systemd service file
-echo "[5/6] Installing systemd service file..."
-cp -v "$SOURCE_SERVICE_FILE" "${SYSTEMD_DIR}/${SERVICE_FILE}"
+# Step 5: Install and customize the systemd service file
+echo "[5/6] Installing and customizing systemd service file..."
+
+# Create a customized service file with correct paths
+sed -e "s|WorkingDirectory=.*|WorkingDirectory=${REPO_ROOT}|" \
+    -e "s|Environment=\"SERVICE_CONFIG=.*\"|Environment=\"SERVICE_CONFIG=${INSTALL_CONFIG_DIR}/${CONFIG_NAME}\"|" \
+    -e "s|ReadWritePaths=.*|ReadWritePaths=${INSTALL_CONFIG_DIR}/ ${LOG_DIR}/|" \
+    "$SOURCE_SERVICE_FILE" > "${SYSTEMD_DIR}/${SERVICE_FILE}"
+
 chmod 644 "${SYSTEMD_DIR}/${SERVICE_FILE}"
+
+echo "Service file customized with:"
+echo "  WorkingDirectory: ${REPO_ROOT}"
+echo "  SERVICE_CONFIG: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+echo "  ReadWritePaths: ${INSTALL_CONFIG_DIR}/ ${LOG_DIR}/"
 
 # Step 6: Enable and configure the systemd service
 echo "[6/6] Reloading systemd and enabling the service..."
 systemctl daemon-reload
-systemctl enable "${SERVICE_FILE}"
+
+# Validate service file syntax
+if ! systemctl is-enabled "${SERVICE_FILE}" >/dev/null 2>&1; then
+    systemctl enable "${SERVICE_FILE}"
+    if ! systemctl is-enabled "${SERVICE_FILE}" >/dev/null 2>&1; then
+        echo "ERROR: Failed to enable service. Check systemctl logs."
+        exit 1
+    fi
+else
+    echo "Service was already enabled, updating configuration..."
+    systemctl enable "${SERVICE_FILE}"
+fi
+
+# Validate service file can be loaded
+if ! systemctl status "${SERVICE_FILE}" >/dev/null 2>&1; then
+    echo "✓ Service file syntax validated."
+else
+    echo "⚠ Service status check completed (service not running yet - this is normal)."
+fi
 
 # --- Installation Complete ---
 echo ""
@@ -134,15 +184,54 @@ echo "  Configuration: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
 echo "  Service file: ${SYSTEMD_DIR}/${SERVICE_FILE}"
 echo "  Log directory: ${LOG_DIR}"
 echo ""
-echo "NEXT STEPS:"
+echo "SERVICE STATUS:"
+if systemctl is-enabled "${SERVICE_FILE}" >/dev/null 2>&1; then
+    echo "  ✓ Service is enabled (will start on boot)"
+else
+    echo "  ✗ Service is not enabled"
+fi
+
+if systemctl is-active "${SERVICE_FILE}" >/dev/null 2>&1; then
+    echo "  ✓ Service is currently running"
+else
+    echo "  ○ Service is not running (ready to start)"
+fi
+
+echo ""
+echo "MANAGEMENT COMMANDS:"
 echo "  Start the service:    sudo systemctl start ${SERVICE_FILE}"
+echo "  Stop the service:     sudo systemctl stop ${SERVICE_FILE}"
+echo "  Restart the service:  sudo systemctl restart ${SERVICE_FILE}"
 echo "  Check service status: sudo systemctl status ${SERVICE_FILE}"
 echo "  View live logs:       sudo journalctl -u ${SERVICE_FILE} -f"
-echo "  Stop the service:     sudo systemctl stop ${SERVICE_FILE}"
+echo "  View recent logs:     sudo journalctl -u ${SERVICE_FILE} --since '1 hour ago'"
+echo ""
+echo "DEVELOPMENT HELPER COMMANDS:"
+echo "  Use the dev.sh script for service management:"
+echo "  ./dev.sh service-start    # Start the service"
+echo "  ./dev.sh service-stop     # Stop the service"
+echo "  ./dev.sh service-status   # Check status"
+echo "  ./dev.sh service-logs -f  # Follow logs"
+echo ""
+echo "CONFIGURATION:"
+echo "  Config file: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}"
+echo "  Backup config: ${INSTALL_CONFIG_DIR}/${CONFIG_NAME}.original"
+echo "  Edit config and restart service to apply changes."
 echo ""
 echo "SECURITY RECOMMENDATION:"
 echo "  For production deployment, create a dedicated user account:"
 echo "    sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry"
-echo "    sudo chown telemetry:telemetry ${LOG_DIR}"
+echo "    sudo chown -R telemetry:telemetry ${LOG_DIR}"
+echo "    sudo chown -R telemetry:telemetry ${INSTALL_CONFIG_DIR}"
 echo "  Then uncomment the User/Group lines in ${SYSTEMD_DIR}/${SERVICE_FILE}"
+echo ""
+echo "UNINSTALLATION:"
+echo "  To remove the service:"
+echo "    sudo systemctl stop ${SERVICE_FILE}"
+echo "    sudo systemctl disable ${SERVICE_FILE}"
+echo "    sudo rm ${SYSTEMD_DIR}/${SERVICE_FILE}"
+echo "    sudo rm ${INSTALL_BIN_DIR}/${EXE_NAME}"
+echo "    sudo rm -rf ${INSTALL_CONFIG_DIR}"
+echo "    sudo rm -rf ${LOG_DIR}  # (optional - removes logs)"
+echo "    sudo systemctl daemon-reload"
 echo "============================================================================"

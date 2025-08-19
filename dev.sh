@@ -9,11 +9,17 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 #   ./dev.sh <command> [options]
 #
 # Build Commands:
-#   configure [build_dir] [build_type] - Run CMake to configure the project (Debug/Release).
+#   configure [build_dir] [build_type] [--warnings] [--debug] [--werror] 
+#                           - Run CMake to configure the project (Debug/Release).
+#                             --warnings: Enable compiler warnings
+#                             --debug: Enable debug information
+#                             --werror: Treat warnings as errors
 #   build [build_dir]       - Build all targets. Can use --clean.
 #   rebuild [build_dir]     - Clean, configure, and build the project.
 #   clean [build_dir]       - Clean the build directory and executables.
 #   watch [build_dir]       - Watch for file changes and rebuild automatically.
+#   install [build_dir] [prefix] - Install the project to the specified prefix.
+#   package [build_dir]     - Create distribution packages.
 #
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
@@ -303,10 +309,33 @@ cleanup_background() {
 configure() {
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
   local build_type="${2:-Release}"
+  shift 2 2>/dev/null || shift $# 2>/dev/null || true
+  
+  # Parse additional options
+  local enable_warnings="OFF"
+  local debug_info="OFF"
+  local warnings_as_errors="OFF"
+  
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --warnings) enable_warnings="ON"; shift ;;
+      --debug) debug_info="ON"; shift ;;
+      --werror) warnings_as_errors="ON"; shift ;;
+      *) echo "Unknown configure option: $1" >&2; return 1 ;;
+    esac
+  done
+  
   ensure_build_dir "$build_dir"
   
   echo "Configuring project (Build Type: $build_type)..."
+  if [[ "$enable_warnings" == "ON" ]]; then echo "  - Compiler warnings enabled"; fi
+  if [[ "$debug_info" == "ON" ]]; then echo "  - Debug information enabled"; fi
+  if [[ "$warnings_as_errors" == "ON" ]]; then echo "  - Treating warnings as errors"; fi
+  
   local cmake_args=("-S" "$ROOT_DIR" "-B" "$build_dir" "-DCMAKE_BUILD_TYPE=$build_type")
+  cmake_args+=("-DENABLE_WARNINGS=$enable_warnings")
+  cmake_args+=("-DBUILD_WITH_DEBUG_INFO=$debug_info")
+  cmake_args+=("-DTREAT_WARNINGS_AS_ERRORS=$warnings_as_errors")
   
   # Use Ninja if available for faster builds
   if have ninja; then
@@ -353,6 +382,32 @@ clean() {
   find "${ROOT_DIR}/camera_ui" -maxdepth 1 -type f -name "camera_ui" -executable -delete
   find "${ROOT_DIR}/mapping_ui" -maxdepth 1 -type f -name "mapping_ui" -executable -delete
   echo "Clean complete."
+}
+
+install_project() {
+  local build_dir="${1:-$DEFAULT_BUILD_DIR}"
+  local prefix="${2:-/usr/local}"
+  ensure_build_dir "$build_dir"
+  
+  echo "Installing project to: $prefix"
+  if [[ "$prefix" == "/usr/local" ]] || [[ "$prefix" == "/usr" ]] || [[ "$prefix" =~ ^/opt/.* ]]; then
+    sudo cmake --install "$build_dir" --prefix "$prefix"
+  else
+    cmake --install "$build_dir" --prefix "$prefix"
+  fi
+}
+
+package_project() {
+  local build_dir="${1:-$DEFAULT_BUILD_DIR}"
+  ensure_build_dir "$build_dir"
+  
+  echo "Creating distribution packages..."
+  cd "$build_dir"
+  cpack
+  cd "$ROOT_DIR"
+  
+  echo "Packages created in: $build_dir"
+  ls -la "$build_dir"/*.tar.gz "$build_dir"/*.deb 2>/dev/null || echo "No packages found"
 }
 
 # Run tests if available
@@ -767,6 +822,14 @@ case "$cmd" in
   demo)
     shift || true
     demo_test
+    ;;
+  install)
+    shift || true
+    install_project "$@"
+    ;;
+  package)
+    shift || true
+    package_project "$@"
     ;;
   service-start) sudo systemctl start telemetry_service.service ;;
   service-stop) sudo systemctl stop telemetry_service.service ;;

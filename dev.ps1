@@ -3,11 +3,17 @@
 #   .\dev.ps1 <command> [options]
 #
 # Build Commands:
-#   configure [generator] [build_type] - Run CMake to configure the project (Debug/Release).
+#   configure [generator] [build_type] [-EnableWarnings] [-DebugInfo] [-WarningsAsErrors]
+#                           - Run CMake to configure the project (Debug/Release).
+#                             -EnableWarnings: Enable compiler warnings
+#                             -DebugInfo: Enable debug information
+#                             -WarningsAsErrors: Treat warnings as errors
 #   build [targets...]      - Build all targets or specific targets.
 #   rebuild                 - Clean, configure, and build the project.
 #   clean                   - Clean the build directory and executables.
 #   watch                   - Watch for file changes and rebuild automatically.
+#   install [prefix]        - Install the project to the specified prefix.
+#   package                 - Create distribution packages.
 #
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
@@ -49,6 +55,11 @@
 
 param(
     [Parameter(Position=0)] [string] $Command,
+    [Parameter(Position=1)] [string] $Generator,
+    [Parameter(Position=2)] [string] $BuildType = "Release",
+    [switch] $EnableWarnings,
+    [switch] $DebugInfo,
+    [switch] $WarningsAsErrors,
     [Parameter(ValueFromRemainingArguments=$true)] [string[]] $Args
 )
 
@@ -513,6 +524,10 @@ function Configure {
     }
 
     Write-Host "Configuring with generator: $Generator (Build Type: $BuildType)" -ForegroundColor Cyan
+    if ($EnableWarnings) { Write-Host "  - Compiler warnings enabled" -ForegroundColor Gray }
+    if ($DebugInfo) { Write-Host "  - Debug information enabled" -ForegroundColor Gray }
+    if ($WarningsAsErrors) { Write-Host "  - Treating warnings as errors" -ForegroundColor Gray }
+    
     $cmakePath = Get-CmakePath
     if (-not $cmakePath) { throw "CMake not found. Please install it and ensure it's in your PATH." }
     $buildDir = Join-Path $RepoRoot 'build'
@@ -525,6 +540,12 @@ function Configure {
         if (-not $Env:VCPKG_TARGET_TRIPLET) { $toolchainArg += '-DVCPKG_TARGET_TRIPLET=x64-windows' }
     }
     $extra = @('-DCMAKE_BUILD_TYPE=' + $BuildType)
+    
+    # Add new build options
+    $extra += @("-DENABLE_WARNINGS=" + $(if ($EnableWarnings) { "ON" } else { "OFF" }))
+    $extra += @("-DBUILD_WITH_DEBUG_INFO=" + $(if ($DebugInfo) { "ON" } else { "OFF" }))
+    $extra += @("-DTREAT_WARNINGS_AS_ERRORS=" + $(if ($WarningsAsErrors) { "ON" } else { "OFF" }))
+    
     if ($Generator -like 'Visual Studio*' -and -not $env:CMAKE_GENERATOR_PLATFORM) {
         # Ensure 64-bit build
         $extra += '-A'; $extra += 'x64'
@@ -751,6 +772,50 @@ function Demo {
     Invoke-DemoTest
 }
 
+function Install-Project {
+    param([string] $Prefix = "C:\Program Files\TelemetryService")
+    
+    Ensure-BuildDirs
+    $cmakePath = Get-CmakePath
+    if (-not $cmakePath) { throw "CMake not found." }
+    
+    Write-Host "Installing project to: $Prefix" -ForegroundColor Cyan
+    $buildDir = Join-Path $RepoRoot 'build'
+    
+    if ($Prefix -like "C:\Program Files\*") {
+        # Requires admin for system directories
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+        if (-not $isAdmin) {
+            Write-Host "Installation to system directory requires administrator privileges." -ForegroundColor Yellow
+            Write-Host "Please run PowerShell as Administrator or choose a different prefix." -ForegroundColor Yellow
+            return
+        }
+    }
+    
+    & $cmakePath --install $buildDir --prefix $Prefix
+}
+
+function Package-Project {
+    Ensure-BuildDirs
+    $buildDir = Join-Path $RepoRoot 'build'
+    
+    Write-Host "Creating distribution packages..." -ForegroundColor Cyan
+    Push-Location $buildDir
+    try {
+        $cpackPath = Get-Command cpack -ErrorAction SilentlyContinue
+        if (-not $cpackPath) {
+            throw "CPack not found. Please ensure CMake is properly installed."
+        }
+        & cpack
+        
+        Write-Host "Packages created in: $buildDir" -ForegroundColor Green
+        Get-ChildItem $buildDir -Filter "*.zip" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+        Get-ChildItem $buildDir -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
+    } finally {
+        Pop-Location
+    }
+}
+
 # --- Command Router ---
 if (-not $Command) {
     Write-Host @"
@@ -767,9 +832,10 @@ Use '.\dev.ps1 <command> -?' for detailed help on each command.
 
 switch ($Command) {
     'configure'      { 
-        $generator = if ($Args.Count -gt 0) { $Args[0] } else { $null }
-        $buildType = if ($Args.Count -gt 1) { $Args[1] } else { "Release" }
-        Configure -Generator $generator -BuildType $buildType 
+        # Use script parameters if provided, otherwise use Args
+        $generatorToUse = if ($Generator) { $Generator } elseif ($Args.Count -gt 0) { $Args[0] } else { $null }
+        $buildTypeToUse = if ($BuildType -and $BuildType -ne "Release") { $BuildType } elseif ($Args.Count -gt 1) { $Args[1] } else { "Release" }
+        Configure -Generator $generatorToUse -BuildType $buildTypeToUse
     }
     'build'          { if ($Args) { Build -Targets $Args } else { Build } }
     'build-targets'  { if (-not $Args) { throw 'Specify one or more CMake targets' } else { Build -Targets $Args } }
@@ -796,5 +862,7 @@ switch ($Command) {
     'down'           { Down }
     'status'         { Status }
     'logs'           { $follow = ($Args -contains '-f' -or $Args -contains '--follow'); Logs -Follow:$follow }
+    'install'        { Install-Project -Prefix ($Args[0] ?? "C:\Program Files\TelemetryService") }
+    'package'        { Package-Project }
     default          { throw "Unknown command: $Command. Run '.\dev.ps1' for available commands." }
 }

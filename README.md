@@ -61,6 +61,42 @@ cmake -S . -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
 ```
 
+### Advanced Build Options
+
+The build system supports professional-grade configuration options:
+
+```bash
+# Configure with enhanced options
+./dev.sh configure build Debug --warnings --debug --werror
+
+# Install to custom location  
+./dev.sh install /opt/telemetry-service
+
+# Create distribution packages
+./dev.sh package
+```
+
+**Available Build Options:**
+- `--warnings`: Enable comprehensive compiler warnings
+- `--debug`: Include debug information in binaries
+- `--werror`: Treat warnings as errors for stricter builds
+
+**CMake Variables:**
+- `-DENABLE_WARNINGS=ON/OFF`: Control warning display
+- `-DBUILD_WITH_DEBUG_INFO=ON/OFF`: Debug information inclusion
+- `-DTREAT_WARNINGS_AS_ERRORS=ON/OFF`: Warning strictness
+- `-DCMAKE_INSTALL_PREFIX=/path`: Installation directory
+
+**PowerShell (Windows):**
+```powershell
+# Enhanced configuration with switches
+.\dev.ps1 configure -EnableWarnings -DebugInfo -WarningsAsErrors
+
+# Install and package
+.\dev.ps1 install "C:\TelemetryService"
+.\dev.ps1 package
+```
+
 ## Run
 
 **Important**: All UI applications require explicit protocol selection. UAVs receive commands only via TCP for security.

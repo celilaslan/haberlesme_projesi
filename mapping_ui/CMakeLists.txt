@@ -21,6 +21,7 @@ add_executable(mapping_ui
 # Link required libraries
 link_with_zmq(mapping_ui)   # TCP (ZeroMQ) for subscribing to telemetry and sending commands
 link_with_boost(mapping_ui) # Boost.Asio for UDP communication
+link_with_json(mapping_ui)  # nlohmann/json for JSON data parsing
 
 # Place the executable in the source directory for easier development
 set_target_to_source_dir(mapping_ui)
