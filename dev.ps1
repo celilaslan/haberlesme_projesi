@@ -41,6 +41,8 @@
 #   .\dev.ps1 watch                    # Auto-rebuild on changes
 #   .\dev.ps1 run telemetry_service
 #   .\dev.ps1 run uav_sim UAV_1 --protocol udp
+#   .\dev.ps1 run camera_ui --protocol tcp
+#   .\dev.ps1 run mapping_ui --protocol udp
 #   .\dev.ps1 up UAV_1 UAV_2 --protocol udp
 #   .\dev.ps1 down
 #   .\dev.ps1 logs -f
@@ -519,9 +521,9 @@ function Invoke-DemoTest {
         return
     }
     
-    Write-Host "Starting UIs briefly..." -ForegroundColor Green
-    $cameraProcess = Start-Process -FilePath (Get-ExePath 'camera_ui/camera_ui') -PassThru -NoNewWindow
-    $mappingProcess = Start-Process -FilePath (Get-ExePath 'mapping_ui/mapping_ui') -PassThru -NoNewWindow
+    Write-Host "Starting UIs briefly (with required protocols)..." -ForegroundColor Green
+    $cameraProcess = Start-Process -FilePath (Get-ExePath 'camera_ui/camera_ui') -ArgumentList '--protocol', 'tcp' -PassThru -NoNewWindow
+    $mappingProcess = Start-Process -FilePath (Get-ExePath 'mapping_ui/mapping_ui') -ArgumentList '--protocol', 'udp' -PassThru -NoNewWindow
     
     Start-Sleep -Milliseconds 500
     
@@ -567,13 +569,20 @@ function Clean {
 }
 
 function Run-One {
-    param([string] $name)
+    param([string] $name, [string[]] $arguments = @())
     $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
+    
+    # Show usage hint for UI applications if no arguments provided
+    if (($name -eq "camera_ui" -or $name -eq "mapping_ui") -and $arguments.Count -eq 0) {
+        Write-Host "Note: $name requires --protocol parameter (tcp or udp)" -ForegroundColor Yellow
+        Write-Host "Example: .\dev.ps1 run $name --protocol tcp" -ForegroundColor Gray
+    }
+    
     switch ($name) {
-        'telemetry_service' { & (Get-ExePath 'telemetry_service/telemetry_service') }
-        'uav_sim'           { & (Get-ExePath 'uav_sim/uav_sim') }
-        'camera_ui'         { & (Get-ExePath 'camera_ui/camera_ui') }
-        'mapping_ui'        { & (Get-ExePath 'mapping_ui/mapping_ui') }
+        'telemetry_service' { & (Get-ExePath 'telemetry_service/telemetry_service') @arguments }
+        'uav_sim'           { & (Get-ExePath 'uav_sim/uav_sim') @arguments }
+        'camera_ui'         { & (Get-ExePath 'camera_ui/camera_ui') @arguments }
+        'mapping_ui'        { & (Get-ExePath 'mapping_ui/mapping_ui') @arguments }
         default { throw "Unknown component: $name" }
     }
 }
@@ -590,11 +599,11 @@ function Up {
     Open-Term -Title 'telemetry_service' -CommandLine $svcCmd
     if (-not (Wait-ForPort -Port 5557 -TimeoutSec 10)) { Write-Warning "Service publish port 5557 not listening yet." }
 
-    Write-Host "Starting UIs..." -ForegroundColor Green
-    $camCmd = "Set-Location '$RepoRoot'; \$env:SERVICE_CONFIG='${env:SERVICE_CONFIG}'; & '$(Get-ExePath 'camera_ui/camera_ui')'"
-    $mapCmd = "Set-Location '$RepoRoot'; \$env:SERVICE_CONFIG='${env:SERVICE_CONFIG}'; & '$(Get-ExePath 'mapping_ui/mapping_ui')'"
-    Open-Term -Title 'camera_ui' -CommandLine $camCmd
-    Open-Term -Title 'mapping_ui' -CommandLine $mapCmd
+    Write-Host "Starting UIs with required protocols..." -ForegroundColor Green
+    $camCmd = "Set-Location '$RepoRoot'; \$env:SERVICE_CONFIG='${env:SERVICE_CONFIG}'; & '$(Get-ExePath 'camera_ui/camera_ui')' --protocol tcp"
+    $mapCmd = "Set-Location '$RepoRoot'; \$env:SERVICE_CONFIG='${env:SERVICE_CONFIG}'; & '$(Get-ExePath 'mapping_ui/mapping_ui')' --protocol udp"
+    Open-Term -Title 'camera_ui (TCP)' -CommandLine $camCmd
+    Open-Term -Title 'mapping_ui (UDP)' -CommandLine $mapCmd
 
     if (-not $Uavs -or $Uavs.Count -eq 0) { $Uavs = @('UAV_1') }
     foreach ($u in $Uavs) {
@@ -668,7 +677,7 @@ switch ($Command) {
     }
     'run'            { 
         if (-not $Args) { throw 'Specify component: telemetry_service|uav_sim|camera_ui|mapping_ui' } 
-        else { Run-One -name $Args[0] } 
+        else { Run-One -name $Args[0] -arguments $Args[1..($Args.Length-1)] } 
     }
     'demo'           { Demo }
     'test'           { Invoke-Tests }

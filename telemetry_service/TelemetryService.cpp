@@ -119,14 +119,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
  * @param data The received message data
  */
 void TelemetryService::onUdpMessage(const std::string& sourceDescription, const std::string& data) {
-    // Extract UAV name and mark it as using UDP protocol
-    size_t colon_pos = sourceDescription.find(':');
-    if (colon_pos != std::string::npos) {
-        std::string uav_name = sourceDescription.substr(colon_pos + 1);
-        uavProtocols_[uav_name] = "UDP";
-    }
-    
-    processAndPublishTelemetry(data, sourceDescription);
+    processAndPublishTelemetry(data, sourceDescription, "UDP");
 }
 
 /**
@@ -135,20 +128,14 @@ void TelemetryService::onUdpMessage(const std::string& sourceDescription, const 
  * @param data The received message data
  */
 void TelemetryService::onZmqMessage(const std::string& sourceDescription, const std::string& data) {
-    // Extract UAV name and mark it as using TCP protocol
-    size_t colon_pos = sourceDescription.find(':');
-    if (colon_pos != std::string::npos) {
-        std::string uav_name = sourceDescription.substr(colon_pos + 1);
-        uavProtocols_[uav_name] = "TCP";
-    }
-    
-    processAndPublishTelemetry(data, sourceDescription);
+    processAndPublishTelemetry(data, sourceDescription, "TCP");
 }
 
 /**
  * @brief Common processing pipeline for all telemetry data
  * @param data The telemetry data to process
  * @param source_description Description of the data source
+ * @param protocol The protocol used (TCP or UDP)
  * 
  * This method:
  * 1. Logs the incoming message
@@ -156,7 +143,7 @@ void TelemetryService::onZmqMessage(const std::string& sourceDescription, const 
  * 3. Determines the topic based on the numeric code in the data
  * 4. Routes the data to UI components using the same protocol as the source
  */
-void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description) {
+void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description, const std::string& protocol) {
     Logger::info("Received from " + source_description + ": " + data);
     
     std::string topic = "unknown";
@@ -201,14 +188,11 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     // Create the full topic name: "topic_UAVname" (e.g., "camera_UAV_1")
     std::string full_topic = topic + "_" + uav_name;
     
-    // Route data based on the protocol used by the UAV
-    auto protocol_it = uavProtocols_.find(uav_name);
-    if (protocol_it != uavProtocols_.end() && protocol_it->second == "UDP") {
-        // UAV is using UDP, so forward to UI via UDP
-        udpManager_->publishTelemetry(full_topic, actual_data);
-    } else {
-        // UAV is using TCP or protocol unknown, use TCP (default behavior)
+    // Route to UIs using the same protocol as the source
+    if (protocol == "TCP") {
         zmqManager_->publishTelemetry(full_topic, actual_data);
+    } else if (protocol == "UDP") {
+        udpManager_->publishTelemetry(full_topic, actual_data);
     }
 }
 

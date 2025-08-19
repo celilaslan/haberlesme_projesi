@@ -2,7 +2,20 @@
  * @file uav_sim.cpp
  * @brief UAV simulator for testing telemetry communication
  * 
- * This file contains a UAV simulator that generates and sends telemetry data
+ * This file contains a UAV s            // Extract TCP port configuration
+            config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
+            if (config.tcp_telemetry_port <= 0) {
+                std::cerr << "ERROR: UAV '" << uav_name << "' has invalid 'tcp_telemetry_port': " 
+                         << config.tcp_telemetry_port << std::endl;
+                continue;
+            }
+            
+            config.tcp_command_port = uav_json["tcp_command_port"];
+            if (config.tcp_command_port <= 0) {
+                std::cerr << "ERROR: UAV '" << uav_name << "' has invalid 'tcp_command_port': " 
+                         << config.tcp_command_port << std::endl;
+                continue;
+            }erates and sends telemetry data
  * to the telemetry service. It supports both ZeroMQ (TCP) and UDP protocols
  * and can also receive commands from UI components via ZeroMQ.
  */
@@ -115,24 +128,9 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
             config.name = uav_json["name"];
             config.ip = uav_json["ip"];
             
-            // Support both old and new field names for backward compatibility
-            if (uav_json.contains("tcp_telemetry_port")) {
-                config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
-            } else if (uav_json.contains("telemetry_port")) {
-                config.tcp_telemetry_port = uav_json["telemetry_port"];  // Backward compatibility
-            } else {
-                std::cerr << "ERROR: UAV '" << uav_name << "' missing telemetry port in config!" << std::endl;
-                exit(1);
-            }
-            
-            if (uav_json.contains("tcp_command_port")) {
-                config.tcp_command_port = uav_json["tcp_command_port"];
-            } else if (uav_json.contains("command_port")) {
-                config.tcp_command_port = uav_json["command_port"];  // Backward compatibility
-            } else {
-                std::cerr << "ERROR: UAV '" << uav_name << "' missing command port in config!" << std::endl;
-                exit(1);
-            }
+            // Extract TCP port configuration
+            config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
+            config.tcp_command_port = uav_json["tcp_command_port"];
             
             // Extract UDP telemetry port (required for UDP protocol)
             if (uav_json.contains("udp_telemetry_port")) {
@@ -175,23 +173,12 @@ void PrintAvailableUAVs(const std::string& config_file) {
 
     std::cout << "Available UAVs in " << config_file << ":" << std::endl;
     for (const auto& uav_json : j["uavs"]) {
-        // Support both old and new field names for display
-        int telemetry_port = 0, command_port = 0;
-        if (uav_json.contains("tcp_telemetry_port")) {
-            telemetry_port = uav_json["tcp_telemetry_port"];
-        } else if (uav_json.contains("telemetry_port")) {
-            telemetry_port = uav_json["telemetry_port"];
-        }
-        
-        if (uav_json.contains("tcp_command_port")) {
-            command_port = uav_json["tcp_command_port"];
-        } else if (uav_json.contains("command_port")) {
-            command_port = uav_json["command_port"];
-        }
+        int tcp_telemetry_port = uav_json["tcp_telemetry_port"];
+        int tcp_command_port = uav_json["tcp_command_port"];
         
         std::cout << "  - " << uav_json["name"]
-            << " (Telemetry: " << telemetry_port
-            << ", Commands: " << command_port << ")" << std::endl;
+            << " (Telemetry: " << tcp_telemetry_port
+            << ", Commands: " << tcp_command_port << ")" << std::endl;
     }
 }
 
@@ -201,8 +188,10 @@ void PrintAvailableUAVs(const std::string& config_file) {
  * @param argv Array of command line argument strings
  * @return Exit code (0 for success, 1 for error)
  * 
+ * Usage: ./uav_sim <UAV_NAME> --protocol <tcp|udp>
+ * 
  * This function:
- * 1. Parses command line arguments (UAV name and protocol)
+ * 1. Parses command line arguments (UAV name and protocol - both required)
  * 2. Loads configuration for the specified UAV
  * 3. Starts telemetry generation thread
  * 4. Starts command receiver thread (TCP only)
@@ -215,8 +204,12 @@ int main(int argc, char* argv[]) {
 
     // Check command line arguments
     if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <UAV_NAME> [--protocol <tcp|udp>]" << std::endl;
-        std::cout << "Example: " << argv[0] << " UAV_1 --protocol udp" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <UAV_NAME> [--protocol <tcp|udp|both>]" << std::endl;
+        std::cout << "Examples:" << std::endl;
+        std::cout << "  " << argv[0] << " UAV_1                    # Use both protocols (default)" << std::endl;
+        std::cout << "  " << argv[0] << " UAV_1 --protocol tcp     # TCP only (for debugging)" << std::endl;
+        std::cout << "  " << argv[0] << " UAV_1 --protocol udp     # UDP only (for debugging)" << std::endl;
+        std::cout << "  " << argv[0] << " UAV_1 --protocol both    # Both protocols (explicit)" << std::endl;
         std::cout << std::endl;
 
         // Display available UAVs from configuration
@@ -228,9 +221,15 @@ int main(int argc, char* argv[]) {
 
     // Parse command line arguments
     std::string uav_name = argv[1];
-    std::string protocol = "tcp"; // Default protocol
-    if (argc > 3 && std::string(argv[2]) == "--protocol") {
+    std::string protocol = "both";  // Default to both protocols
+    
+    if (argc >= 4 && std::string(argv[2]) == "--protocol") {
         protocol = argv[3];
+    }
+    
+    if (protocol != "tcp" && protocol != "udp" && protocol != "both") {
+        std::cerr << "Error: Protocol must be 'tcp', 'udp', or 'both'" << std::endl;
+        return 1;
     }
 
     /**
@@ -301,10 +300,15 @@ int main(int argc, char* argv[]) {
     if (protocol == "udp") {
         std::cout << "Protocol: UDP" << std::endl;
         std::cout << "Service UDP Port: " << config.udp_telemetry_port << std::endl;
-    } else {
+    } else if (protocol == "tcp") {
         std::cout << "Protocol: ZeroMQ (TCP)" << std::endl;
         std::cout << "Telemetry Port: " << config.tcp_telemetry_port << std::endl;
         std::cout << "Command Port: " << config.tcp_command_port << std::endl;
+    } else if (protocol == "both") {
+        std::cout << "Protocol: Both TCP and UDP (Default)" << std::endl;
+        std::cout << "TCP Telemetry Port: " << config.tcp_telemetry_port << std::endl;
+        std::cout << "TCP Command Port: " << config.tcp_command_port << std::endl;
+        std::cout << "UDP Service Port: " << config.udp_telemetry_port << std::endl;
     }
     std::cout << "===========================================" << std::endl;
 
@@ -340,7 +344,7 @@ int main(int argc, char* argv[]) {
 
         // Set up communication sockets based on selected protocol
         if (protocol == "udp") {
-            // UDP implementation using Boost.Asio
+            // UDP only implementation
             boost::asio::io_context io_context;
             udp::socket socket(io_context, udp::endpoint(udp::v4(), 0));
 
@@ -363,7 +367,8 @@ int main(int argc, char* argv[]) {
                 std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (UDP): " << msg2 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
             }
-        } else { // ZeroMQ implementation
+        } else if (protocol == "tcp") {
+            // TCP only implementation  
             zmq::context_t context(1);
             zmq::socket_t push_to_service(context, zmq::socket_type::push);
             std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_telemetry_port);
@@ -383,19 +388,51 @@ int main(int argc, char* argv[]) {
                 std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg2 << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
             }
+        } else if (protocol == "both") {
+            // Both protocols implementation - send to both TCP and UDP simultaneously
+            boost::asio::io_context io_context;
+            udp::socket udp_socket(io_context, udp::endpoint(udp::v4(), 0));
+
+            // Set up UDP endpoint
+            udp::resolver resolver(io_context);
+            udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), config.ip, std::to_string(config.udp_telemetry_port));
+            udp::endpoint remote_endpoint = *endpoints.begin();
+
+            // Set up TCP connection
+            zmq::context_t context(1);
+            zmq::socket_t push_to_service(context, zmq::socket_type::push);
+            std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_telemetry_port);
+            push_to_service.connect(telemetry_addr);
+
+            // Send telemetry data for 50 iterations to both protocols
+            for (int i = 0; i < 50 && g_running; ++i) {
+                // Send mapping data via both protocols
+                std::string msg1 = config.name + "  " + std::to_string(mapping + i);
+                udp_socket.send_to(boost::asio::buffer(msg1), remote_endpoint);
+                push_to_service.send(zmq::buffer(msg1), zmq::send_flags::none);
+                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg1 << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                
+                // Send camera data via both protocols
+                std::string msg2 = config.name + "  " + std::to_string(camera + i);
+                udp_socket.send_to(boost::asio::buffer(msg2), remote_endpoint);
+                push_to_service.send(zmq::buffer(msg2), zmq::send_flags::none);
+                std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg2 << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
+            }
         }
         std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Telemetry sending completed." << std::endl;
     });
 
     /**
-     * @brief Command receiver thread (ZMQ only)
+     * @brief Command receiver thread (TCP only)
      * 
      * This thread listens for commands from UI components via the telemetry service.
-     * Commands are only supported when using the ZMQ protocol, as UDP is
-     * unidirectional in this implementation.
+     * Commands are only supported when using TCP protocol (tcp or both modes).
+     * UDP is unidirectional in this implementation.
      */
     std::thread command_receiver;
-    if (protocol == "zmq") {
+    if (protocol == "tcp" || protocol == "both") {
         command_receiver = std::thread([&]() {
             zmq::context_t context(1);
             zmq::socket_t pull_commands(context, zmq::socket_type::pull);

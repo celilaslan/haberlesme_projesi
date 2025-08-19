@@ -44,7 +44,12 @@ cmake --build build --config Release
 
 ## Run
 
-The `uav_sim` now supports sending telemetry over UDP in addition to the default TCP (ZeroMQ) protocol.
+**Important**: All UI applications now require explicit protocol selection for professional usage.
+
+The `uav_sim` supports three protocol modes:
+- `--protocol tcp` - TCP only (ZeroMQ)
+- `--protocol udp` - UDP only  
+- Default (no --protocol) - Both TCP and UDP simultaneously
 
 ```bash
 # 1) Start the telemetry_service
@@ -52,21 +57,19 @@ The `uav_sim` now supports sending telemetry over UDP in addition to the default
 # The service can be run directly or as a systemd service (see Deployment section).
 ./dev.sh run telemetry_service
 
-# 2) Start the UI clients (they support both TCP and UDP)
-./dev.sh run camera_ui
-./dev.sh run mapping_ui
+# 2) Start the UI clients (protocol selection is REQUIRED)
+./dev.sh run camera_ui --protocol tcp
+./dev.sh run mapping_ui --protocol udp
 
-# 3) Start one or more UAV sims
-# To use the default TCP protocol:
-./dev.sh run uav_sim UAV_1
+# 3) Start UAV sims with protocol selection
+./dev.sh run uav_sim UAV_1 --protocol tcp    # TCP only
+./dev.sh run uav_sim UAV_2 --protocol udp    # UDP only  
+./dev.sh run uav_sim UAV_3                   # Both protocols (default)
 
-# To use the new UDP protocol:
-./dev.sh run uav_sim UAV_1 --protocol udp
-
-# You can mix and match protocols for different UAVs.
-# The service will handle both seamlessly.
-./dev.sh run uav_sim UAV_2 --protocol udp
-./dev.sh run uav_sim UAV_3 # (uses TCP)
+# Alternative: Use helper commands for comprehensive testing
+./dev.sh demo           # Quick system test with mixed protocols
+./dev.sh protocol-test  # Comprehensive test of all protocol combinations
+./dev.sh up UAV_1 UAV_2 --protocol udp  # Launch everything in terminals
 ```
 
 On Windows (PowerShell):
@@ -75,15 +78,18 @@ On Windows (PowerShell):
 # 1) Start service
 .\dev.ps1 run telemetry_service
 
-# 2) Start UIs, then start UAVs
-.\dev.ps1 run camera_ui
-.\dev.ps1 run mapping_ui
+# 2) Start UIs with required protocol selection
+.\dev.ps1 run camera_ui --protocol tcp
+.\dev.ps1 run mapping_ui --protocol udp
 
-# To use ZMQ:
-.\dev.ps1 run uav_sim UAV_1
+# 3) Start UAVs with protocol selection
+.\dev.ps1 run uav_sim UAV_1 --protocol tcp  # TCP only
+.\dev.ps1 run uav_sim UAV_2 --protocol udp  # UDP only
+.\dev.ps1 run uav_sim UAV_3                 # Both protocols (default)
 
-# To use UDP:
-.\dev.ps1 run uav_sim UAV_1 --protocol udp
+# Use helper commands for testing
+.\dev.ps1 demo           # Quick system test
+.\dev.ps1 up UAV_1       # Launch everything in terminals
 ```
 
 ## Config
@@ -112,7 +118,7 @@ The service writes logs to `log_file`. If relative, logs resolve next to the tel
 - Support for UAVs on different network interfaces
 - Easier troubleshooting and monitoring
 
-Note: With TCP PUB/SUB (ZeroMQ), subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
+Note: UI applications require explicit `--protocol` selection (tcp or udp) for professional usage. UAV simulators support three modes: tcp-only, udp-only, or both protocols simultaneously (default). With TCP PUB/SUB (ZeroMQ), subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
 
 ## Notes
 - The project now depends on the Boost C++ libraries for UDP networking.
@@ -131,10 +137,11 @@ Linux/macOS:
 ```bash
 ./dev.sh configure
 ./dev.sh build
-./dev.sh demo           # quick smoke test (service+UIs+UAV_1 over ZMQ)
-./dev.sh up UAV_1       # open service, UIs, and UAV_1 (ZMQ) in terminals
-./dev.sh status         # see PIDs and listening ports
-./dev.sh down           # stop everything and free ports
+./dev.sh demo           # Quick smoke test with mixed protocols  
+./dev.sh protocol-test  # Comprehensive test of all protocol combinations
+./dev.sh up UAV_1       # Open service, UIs, and UAV_1 in terminals
+./dev.sh status         # See PIDs and listening ports
+./dev.sh down           # Stop everything and free ports
 ```
 
 Windows (PowerShell):

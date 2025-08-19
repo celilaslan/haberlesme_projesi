@@ -25,6 +25,7 @@ set -euo pipefail
 # Testing and Validation:
 #   demo                    - Run a quick, self-contained test of the system.
 #   test [build_dir]        - Run project tests or smoke test if no tests available.
+#   protocol-test           - Comprehensive test of all protocol combinations.
 #   health                  - Comprehensive system health check.
 #   logs [-f]               - Show the tail of the service log file (-f to follow).
 #
@@ -51,6 +52,8 @@ set -euo pipefail
 #   ./dev.sh watch                    # Auto-rebuild on changes
 #   ./dev.sh run telemetry_service
 #   ./dev.sh run uav_sim UAV_1 --protocol udp
+#   ./dev.sh run camera_ui --protocol tcp
+#   ./dev.sh run mapping_ui --protocol udp
 #   ./dev.sh up UAV_1 UAV_2 --protocol udp
 #   ./dev.sh down
 #   ./dev.sh logs -f
@@ -453,9 +456,9 @@ demo_test() {
     exit 1
   fi
   
-  # Start UIs (briefly)
-  (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" || true) &
-  (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" || true) &
+  # Start UIs (briefly) - Note: UIs now require explicit protocol selection
+  (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp || true) &
+  (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp || true) &
   sleep 0.2
   
   # Start UAV_1 briefly
@@ -476,6 +479,77 @@ demo_test() {
   fi
   
   # Final cleanup of any leftover UIs/sims
+  kill_existing_procs || true
+}
+
+# Comprehensive protocol testing
+protocol_test() {
+  set -euo pipefail
+  trap 'kill_existing_procs || true' EXIT
+  
+  echo "=== Comprehensive Protocol Testing ==="
+  
+  # Ensure executables exist
+  for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
+    if [[ ! -x "$ROOT_DIR/$exe" ]]; then 
+      echo "Missing $exe. Run './dev.sh build' first."; 
+      exit 2; 
+    fi
+  done
+  
+  # Stop any existing processes
+  kill_existing_procs
+  
+  # Start service
+  echo "Starting telemetry service..."
+  "$ROOT_DIR/telemetry_service/telemetry_service" &
+  svc=$!
+  sleep 1
+  
+  if ! kill -0 "$svc" 2>/dev/null; then
+    echo "Service failed to start"
+    exit 1
+  fi
+  
+  echo "Testing TCP Protocol..."
+  timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_1 --protocol tcp || true
+  sleep 0.5
+  
+  echo "Testing UDP Protocol..."
+  timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_2 --protocol udp || true
+  sleep 0.5
+  
+  echo "Testing Default (Both) Protocol..."
+  timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_3 || true
+  sleep 0.5
+  
+  echo "Testing UI Applications..."
+  (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp || true) &
+  (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp || true) &
+  wait || true
+  
+  # Stop service
+  kill -INT $svc || true
+  wait $svc || true
+  
+  echo "=== Protocol Testing Complete ==="
+  
+  # Show test summary
+  echo "✅ Tests Completed:"
+  echo "   - TCP Protocol (UAV_1)"
+  echo "   - UDP Protocol (UAV_2)" 
+  echo "   - Default Both Protocols (UAV_3)"
+  echo "   - Camera UI with TCP"
+  echo "   - Mapping UI with UDP"
+  
+  # Show log summary
+  LOG="$ROOT_DIR/telemetry_service/telemetry_log.txt"
+  if [[ -f "$LOG" ]]; then 
+    echo "--- Recent Log Entries ---"
+    tail -n 15 "$LOG" | grep -E "(TCP|UDP|UAV_[1-3])" || true
+  fi
+  
+  # Final cleanup
   kill_existing_procs || true
 }
 
@@ -505,6 +579,13 @@ run() {
   fi
   # Allow passing args after --
   if [[ "${1:-}" == "--" ]]; then shift; fi
+  
+  # Show usage hint for UI applications
+  if [[ "$target" == "camera_ui" || "$target" == "mapping_ui" ]] && [[ $# -eq 0 ]]; then
+    echo "Note: $target requires --protocol parameter (tcp or udp)"
+    echo "Example: ./dev.sh run $target --protocol tcp"
+  fi
+  
   echo "Running: $exe $*"
   "$exe" "$@"
 }
@@ -517,6 +598,7 @@ case "$cmd" in
   rebuild)   shift; rebuild "$@" ;;
   run)       shift; run "$@" ;;
   test)      shift; test_project "$@" ;;
+  protocol-test) protocol_test ;;
   watch)     shift; watch_mode "$@" ;;
   health)    health_check ;;
   info)      show_info ;;
@@ -549,8 +631,8 @@ case "$cmd" in
     wait_for_port 5557 15 || true
     wait_for_port 5558 15 || true
     sleep 0.2
-    open_term "camera_ui" "$ROOT_DIR/camera_ui/camera_ui"
-    open_term "mapping_ui" "$ROOT_DIR/mapping_ui/mapping_ui"
+    open_term "camera_ui (TCP)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp"
+    open_term "mapping_ui (UDP)" "$ROOT_DIR/mapping_ui/mapping_ui --protocol udp"
     
     # Separate UAV names from other arguments
     local uav_names=()

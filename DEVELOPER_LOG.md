@@ -192,3 +192,38 @@ Next:
 - **Service Update Workflow**: Established efficient update process without full service reinstallation:
     - Build changes → Stop service → Run install script → Start service
     - No need to delete/recreate systemd service for code updates
+
+## 2025-08-19
+
+### Protocol Architecture Modernization
+
+- **Backward Compatibility Removal**:
+    - Eliminated all legacy configuration field name support (e.g., old `telemetry_port` vs new `tcp_telemetry_port`)
+    - Cleaned up Config.cpp from all backward compatibility checks
+    - Modern configuration enforced throughout codebase
+
+- **Protocol Equality Implementation**:
+    - Removed TCP default preference bias
+    - UAV simulator supports three explicit modes: `--protocol tcp`, `--protocol udp`, or default (both)
+    - UI applications require explicit protocol selection: `--protocol tcp|udp` (no defaults)
+    - Professional approach eliminating protocol assumptions
+
+- **Clean Architecture Separation**:
+    - Implemented protocol-specific routing in TelemetryService
+    - ZmqManager handles TCP data flows only
+    - UdpManager handles UDP data flows only  
+    - Eliminated cross-protocol contamination in service routing
+    - Updated `processAndPublishTelemetry()` to include protocol parameter
+
+- **Development Script Updates**:
+    - Enhanced `dev.sh` with new `protocol-test` command for comprehensive testing
+    - Fixed demo and up commands to include required protocol parameters
+    - Added helpful hints for UI applications when protocol not specified
+    - Updated `dev.ps1` with same improvements for Windows
+    - Updated README.md with correct usage examples and protocol requirements
+
+- **Testing Infrastructure**:
+    - Comprehensive protocol testing validates TCP-only, UDP-only, and dual-protocol modes
+    - Verified clean separation between protocol managers
+    - All components tested with proper protocol selection
+    - Professional development workflow established

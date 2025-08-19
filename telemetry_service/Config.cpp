@@ -43,18 +43,9 @@ bool Config::loadFromFile(const std::string& path) {
         uav.name = uav_json["name"];
         uav.ip = uav_json["ip"];
         
-        // Support both old and new field names for backward compatibility
-        if (uav_json.contains("tcp_telemetry_port")) {
-            uav.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
-        } else if (uav_json.contains("telemetry_port")) {
-            uav.tcp_telemetry_port = uav_json["telemetry_port"];  // Backward compatibility
-        }
-        
-        if (uav_json.contains("tcp_command_port")) {
-            uav.tcp_command_port = uav_json["tcp_command_port"];
-        } else if (uav_json.contains("command_port")) {
-            uav.tcp_command_port = uav_json["command_port"];  // Backward compatibility
-        }
+        // Extract TCP port configuration
+        uav.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
+        uav.tcp_command_port = uav_json["tcp_command_port"];
         
         // Extract optional UDP telemetry port
         if (uav_json.contains("udp_telemetry_port")) {
@@ -68,18 +59,8 @@ bool Config::loadFromFile(const std::string& path) {
 
     // Load UI port configuration if present
     if (j.contains("ui_ports")) {
-        // Support both old and new field names for backward compatibility
-        if (j["ui_ports"].contains("tcp_command_port")) {
-            uiPorts.tcp_command_port = j["ui_ports"]["tcp_command_port"];
-        } else if (j["ui_ports"].contains("command_port")) {
-            uiPorts.tcp_command_port = j["ui_ports"]["command_port"];  // Backward compatibility
-        }
-        
-        if (j["ui_ports"].contains("tcp_publish_port")) {
-            uiPorts.tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
-        } else if (j["ui_ports"].contains("publish_port")) {
-            uiPorts.tcp_publish_port = j["ui_ports"]["publish_port"];  // Backward compatibility
-        }
+        uiPorts.tcp_command_port = j["ui_ports"]["tcp_command_port"];
+        uiPorts.tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
         
         // Load optional UDP ports
         if (j["ui_ports"].contains("udp_camera_port")) {

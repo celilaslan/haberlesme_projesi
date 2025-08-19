@@ -74,13 +74,14 @@ private:
      * @brief Common message processing and publishing pipeline
      * @param data The telemetry data to process
      * @param source_description Description of where the data came from
+     * @param protocol The protocol used (TCP or UDP)
      * 
      * This method:
      * 1. Logs the incoming message
      * 2. Determines the appropriate topic based on message content
-     * 3. Publishes the processed data to UI subscribers
+     * 3. Publishes the processed data to UI subscribers using the same protocol
      */
-    void processAndPublishTelemetry(const std::string& data, const std::string& source_description);
+    void processAndPublishTelemetry(const std::string& data, const std::string& source_description, const std::string& protocol);
     
     /**
      * @brief Resolves the configuration file path
