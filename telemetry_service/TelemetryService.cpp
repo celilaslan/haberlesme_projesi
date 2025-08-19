@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <cstdlib>
+#include <thread>
 
 // Platform-specific includes for executable path detection
 #if defined(_WIN32)

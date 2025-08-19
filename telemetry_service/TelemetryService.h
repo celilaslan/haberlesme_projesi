@@ -105,9 +105,6 @@ private:
     zmq::context_t zmqContext_;                       ///< ZeroMQ context for all ZMQ operations
     std::unique_ptr<ZmqManager> zmqManager_;          ///< Manages ZeroMQ communications
     std::unique_ptr<UdpManager> udpManager_;          ///< Manages UDP communications
-    
-    // Protocol tracking for routing decisions
-    std::unordered_map<std::string, std::string> uavProtocols_; ///< Maps UAV name to protocol ("TCP" or "UDP")
 };
 
 #endif // TELEMETRYSERVICE_H

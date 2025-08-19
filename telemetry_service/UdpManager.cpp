@@ -124,11 +124,17 @@ void UdpManager::start() {
                     // Run the I/O context to process async operations
                     io_context_.run();
                     
-                    // If we're still supposed to be running, restart the context
-                    if (!running_) break; 
-                    io_context_.restart(); // Restart if run() returned but we're still running
+                    // If run() returned and we're still supposed to be running,
+                    // it means all handlers completed, so restart the context
+                    if (running_) {
+                        io_context_.restart();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
                 } catch (const std::exception& e) {
                     Logger::error("UDP service thread error: " + std::string(e.what()));
+                    if (running_) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
                 }
             }
         });
