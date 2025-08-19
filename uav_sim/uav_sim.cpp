@@ -2,20 +2,7 @@
  * @file uav_sim.cpp
  * @brief UAV simulator for testing telemetry communication
  * 
- * This file contains a UAV s            // Extract TCP port configuration
-            config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
-            if (config.tcp_telemetry_port <= 0) {
-                std::cerr << "ERROR: UAV '" << uav_name << "' has invalid 'tcp_telemetry_port': " 
-                         << config.tcp_telemetry_port << std::endl;
-                continue;
-            }
-            
-            config.tcp_command_port = uav_json["tcp_command_port"];
-            if (config.tcp_command_port <= 0) {
-                std::cerr << "ERROR: UAV '" << uav_name << "' has invalid 'tcp_command_port': " 
-                         << config.tcp_command_port << std::endl;
-                continue;
-            }erates and sends telemetry data
+ * This file contains a UAV simulator that generates and sends telemetry data
  * to the telemetry service. It supports both ZeroMQ (TCP) and UDP protocols
  * and can also receive commands from UI components via ZeroMQ.
  */
@@ -131,14 +118,7 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
             // Extract TCP port configuration
             config.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
             config.tcp_command_port = uav_json["tcp_command_port"];
-            
-            // Extract UDP telemetry port (required for UDP protocol)
-            if (uav_json.contains("udp_telemetry_port")) {
-                config.udp_telemetry_port = uav_json["udp_telemetry_port"];
-            } else {
-                std::cerr << "ERROR: UAV '" << uav_name << "' missing 'udp_telemetry_port' in config!" << std::endl;
-                exit(1);
-            }
+            config.udp_telemetry_port = uav_json["udp_telemetry_port"];
             
             uav_found = true;
             break;
@@ -175,10 +155,12 @@ void PrintAvailableUAVs(const std::string& config_file) {
     for (const auto& uav_json : j["uavs"]) {
         int tcp_telemetry_port = uav_json["tcp_telemetry_port"];
         int tcp_command_port = uav_json["tcp_command_port"];
+        int udp_telemetry_port = uav_json["udp_telemetry_port"];
         
         std::cout << "  - " << uav_json["name"]
-            << " (Telemetry: " << tcp_telemetry_port
-            << ", Commands: " << tcp_command_port << ")" << std::endl;
+            << " (TCP Telemetry: " << tcp_telemetry_port
+            << ", TCP Commands: " << tcp_command_port
+            << ", UDP Telemetry: " << udp_telemetry_port << ")" << std::endl;
     }
 }
 
