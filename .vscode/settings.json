@@ -90,12 +90,10 @@
     "files.insertFinalNewline": true,
     "terminal.integrated.defaultProfile.linux": "bash",
     "files.exclude": {
-        "**/build": true,
         "**/.git": true,
         "**/node_modules": true
     },
     "search.exclude": {
-        "**/build": true,
         "**/node_modules": true
     }
 }
