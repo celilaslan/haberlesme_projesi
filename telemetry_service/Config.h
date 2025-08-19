@@ -34,13 +34,14 @@ struct UAVConfig {
  * @brief Configuration for UI communication ports
  * 
  * Defines the ports used for communication with user interface components.
+ * All ports are required and must be specified in the JSON configuration.
  */
 struct UIConfig {
-    int tcp_command_port = 5558;    ///< Port for receiving commands from UI components (TCP)
-    int tcp_publish_port = 5557;    ///< Port for publishing telemetry data to UI components (TCP)
-    int udp_camera_port = 5570;     ///< Port for publishing camera telemetry data via UDP
-    int udp_mapping_port = 5571;    ///< Port for publishing mapping telemetry data via UDP
-    int udp_command_port = 5572;    ///< Port for receiving commands from UI components (UDP)
+    int tcp_command_port;    ///< Port for receiving commands from UI components (TCP)
+    int tcp_publish_port;    ///< Port for publishing telemetry data to UI components (TCP)
+    int udp_camera_port;     ///< Port for publishing camera telemetry data via UDP
+    int udp_mapping_port;    ///< Port for publishing mapping telemetry data via UDP
+    int udp_command_port;    ///< Port for receiving commands from UI components (UDP)
 };
 
 /**
@@ -88,7 +89,7 @@ public:
 private:
     std::vector<UAVConfig> uavs;                    ///< List of configured UAVs
     UIConfig uiPorts;                               ///< UI communication ports
-    std::string logFile = "telemetry_log.txt";     ///< Path to log file
+    std::string logFile;                            ///< Path to log file (required in JSON)
 };
 
 #endif // CONFIG_H

@@ -17,8 +17,8 @@
  * 
  * This method:
  * 1. Opens and parses the JSON file
- * 2. Extracts UAV configurations from the "uavs" array
- * 3. Loads UI port settings from "ui_ports" object
+ * 2. Extracts UAV configurations from the "uavs" array (TCP and UDP ports required)
+ * 3. Loads UI port settings from "ui_ports" object (TCP and UDP ports required)
  * 4. Sets the log file path from "log_file" field
  * 
  * @throws nlohmann::json::exception if JSON parsing fails
@@ -27,7 +27,7 @@ bool Config::loadFromFile(const std::string& path) {
     // Try to open the configuration file
     std::ifstream file(path);
     if (!file.is_open()) {
-        return false;  // File not found or not accessible
+        return false;
     }
 
     // Parse JSON content
@@ -47,32 +47,20 @@ bool Config::loadFromFile(const std::string& path) {
         uav.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
         uav.tcp_command_port = uav_json["tcp_command_port"];
         
-        // Extract optional UDP telemetry port
-        if (uav_json.contains("udp_telemetry_port")) {
-            uav.udp_telemetry_port = uav_json["udp_telemetry_port"];
-        } else {
-            uav.udp_telemetry_port = -1; // Disabled if not specified
-        }
+        // Extract UDP telemetry port
+        uav.udp_telemetry_port = uav_json["udp_telemetry_port"];
         
         uavs.push_back(uav);
     }
 
-    // Load UI port configuration if present
-    if (j.contains("ui_ports")) {
-        uiPorts.tcp_command_port = j["ui_ports"]["tcp_command_port"];
-        uiPorts.tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
-        
-        // Load optional UDP ports
-        if (j["ui_ports"].contains("udp_camera_port")) {
-            uiPorts.udp_camera_port = j["ui_ports"]["udp_camera_port"];
-        }
-        if (j["ui_ports"].contains("udp_mapping_port")) {
-            uiPorts.udp_mapping_port = j["ui_ports"]["udp_mapping_port"];
-        }
-        if (j["ui_ports"].contains("udp_command_port")) {
-            uiPorts.udp_command_port = j["ui_ports"]["udp_command_port"];
-        }
-    }
+    // Load UI port configuration
+    uiPorts.tcp_command_port = j["ui_ports"]["tcp_command_port"];
+    uiPorts.tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
+    
+    // Load UDP ports
+    uiPorts.udp_camera_port = j["ui_ports"]["udp_camera_port"];
+    uiPorts.udp_mapping_port = j["ui_ports"]["udp_mapping_port"];
+    uiPorts.udp_command_port = j["ui_ports"]["udp_command_port"];
 
     // Load log file path if specified
     if (j.contains("log_file")) {

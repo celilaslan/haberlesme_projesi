@@ -27,9 +27,15 @@ Documentation=https://github.com/your-repo/haberlesme_projesi/blob/main/README.m
 After=network.target network-online.target
 Wants=network-online.target
 
+# Configuration file check removed - TelemetryService auto-discovers config location
+
 [Service]
 # Service type - simple means the process doesn't fork
 Type=simple
+
+# Working directory for the service - set to your project directory
+# This ensures the service can find config files and write logs in the right location
+WorkingDirectory=/home/vboxuser/Desktop/repo/haberlesme_projesi
 
 # Command to execute (installed by install_linux_service.sh)
 ExecStart=/usr/local/bin/telemetry_service
@@ -41,20 +47,54 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
 
+# Resource limits to prevent system overload
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=100
+
 # SECURITY CONFIGURATION
 # ======================
 # For production deployment, it's recommended to run as a dedicated user
 # instead of root. To enable this:
-# 1. Create the user: sudo useradd --system --home-dir /var/lib/telemetry --create-home telemetry
-# 2. Set log directory ownership: sudo chown telemetry:telemetry /var/log/telemetry_service
+# 1. Create the user: sudo useradd --system --home-dir /var/lib/telemetry_service --create-home telemetry
+# 2. Set appropriate directory ownership for your project path
 # 3. Uncomment the following lines:
 # User=telemetry
 # Group=telemetry
 
+# ADVANCED SECURITY HARDENING
+# ============================
+# Enable these for maximum security in production:
+
+# Filesystem protection
+# ProtectSystem=strict
+# ProtectHome=true
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectControlGroups=true
+
+# Network security
+# PrivateNetwork=false  # Set to true if no external network access needed
+# RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Process security
+# NoNewPrivileges=true
+# ProtectKernelLogs=true
+# ProtectClock=true
+
+# Capability restrictions
+# CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# AmbientCapabilities=CAP_NET_BIND_SERVICE
+
 # ENVIRONMENT CONFIGURATION
 # ==========================
 # Tell the service where to find its configuration file
-Environment="SERVICE_CONFIG=/etc/telemetry_service/service_config.json"
+# Point to your actual config file location in the project directory
+Environment="SERVICE_CONFIG=/home/vboxuser/Desktop/repo/haberlesme_projesi/service_config.json"
+
+# Set runtime directories
+RuntimeDirectory=telemetry_service
+RuntimeDirectoryMode=0755
 
 # LOGGING CONFIGURATION
 # =====================
@@ -63,11 +103,20 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=telemetry_service
 
+# Log level for systemd journal
+LogLevelMax=info
+
 # FILESYSTEM PERMISSIONS
 # ======================
-# Grant write access to the log directory
-# This allows the service to create and write log files
-ReadWritePaths=/var/log/telemetry_service/
+# Grant write access to required directories
+# Allow writing to your project directory for logs
+ReadWritePaths=/home/vboxuser/Desktop/repo/haberlesme_projesi/
+
+# Note: For production, consider moving logs to /var/log/telemetry_service/
+# and config to /etc/telemetry_service/ for better security
+
+# Temporary file handling
+PrivateTmp=true
 
 [Install]
 # Target for service installation - multi-user.target means it starts

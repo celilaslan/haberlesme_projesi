@@ -15,6 +15,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
+#include <mutex>
 #include "Config.h"
 
 using boost::asio::ip::udp;
@@ -128,6 +129,7 @@ private:
     const Config& config_;                      ///< Reference to configuration data
     UdpMessageCallback messageCallback_;       ///< Callback for incoming messages
     std::atomic<bool> running_{false};         ///< Flag controlling thread execution
+    mutable std::mutex socketMutex_;           ///< Mutex for thread-safe socket operations
     
     std::vector<std::unique_ptr<UdpServer>> servers_; ///< UDP servers for each UAV
     std::thread serviceThread_;                ///< Background thread running I/O context

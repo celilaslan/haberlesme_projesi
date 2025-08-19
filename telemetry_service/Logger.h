@@ -71,6 +71,9 @@ public:
     /**
      * @brief Log a warning message
      * @param msg The warning message to log
+     * 
+     * Writes a WARNING level message with timestamp to both console (stderr) and log file.
+     * Thread-safe and can be called from multiple threads simultaneously.
      */
     static void warn(const std::string& msg);
     
@@ -108,13 +111,18 @@ public:
     static void serviceStarted(int uavCount, const std::vector<int>& tcpPorts, const std::vector<int>& udpPorts);
     
     /**
-     * @brief Get direct access to the log file stream
-     * @return Reference to the log file output stream
-     * 
-     * Provides direct access to the log file for advanced logging scenarios.
-     * Should be used with proper synchronization.
+     * @brief Check if the logger has been properly initialized
+     * @return true if logger is initialized and ready to use
      */
-    static std::ofstream& getLogStream();
+    static bool isInitialized();
+    
+    /**
+     * @brief Flush and close the log file (cleanup)
+     * 
+     * Ensures all pending log data is written to file and properly closed.
+     * Thread-safe and can be called multiple times safely.
+     */
+    static void shutdown();
 
 private:
     static std::unique_ptr<std::ofstream> logFile;  ///< Log file output stream

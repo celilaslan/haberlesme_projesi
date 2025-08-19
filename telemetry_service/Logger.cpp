@@ -92,7 +92,7 @@ void Logger::debug(const std::string& msg) {
  * @param msg The warning message to log
  */
 void Logger::warn(const std::string& msg) {
-    log(LogLevel::WARN, msg, false);
+    log(LogLevel::WARN, msg, true);  // Use stderr for warnings
 }
 
 /**
@@ -139,9 +139,10 @@ void Logger::log(LogLevel level, const std::string& msg, bool useStderr) {
         std::cout << logMsg << std::endl;
     }
     
-    // Write to log file if available
+    // Write to log file if available and properly initialized
     if (logFile && logFile->is_open()) {
         *logFile << logMsg << std::endl;
+        logFile->flush(); // Ensure immediate write for important messages
     }
 }
 
@@ -216,13 +217,25 @@ void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, cons
 }
 
 /**
- * @brief Get direct access to the log file stream
- * @return Reference to the log file output stream
- * 
- * Provides direct access to the log file for advanced scenarios.
- * Note: This method does not provide thread safety - caller must
- * handle synchronization if needed.
+ * @brief Check if the logger has been properly initialized
+ * @return true if logger is initialized and ready to use
  */
-std::ofstream& Logger::getLogStream() {
-    return *logFile;
+bool Logger::isInitialized() {
+    std::lock_guard<std::mutex> lock(mtx);
+    return logFile != nullptr && logFile->is_open();
+}
+
+/**
+ * @brief Flush and close the log file (cleanup)
+ * 
+ * Ensures all pending log data is written to file and properly closed.
+ * Thread-safe and can be called multiple times safely.
+ */
+void Logger::shutdown() {
+    std::lock_guard<std::mutex> lock(mtx);
+    if (logFile && logFile->is_open()) {
+        logFile->flush();
+        logFile->close();
+        logFile.reset();
+    }
 }

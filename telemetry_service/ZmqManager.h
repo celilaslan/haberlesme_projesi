@@ -15,6 +15,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
+#include <mutex>
 #include "Config.h"
 
 // Callback function type for handling incoming ZMQ messages
@@ -119,6 +120,7 @@ private:
     const Config& config;           ///< Reference to configuration data
     std::atomic<bool> running{false}; ///< Flag controlling thread execution
     ZmqMessageCallback messageCallback_; ///< Callback for incoming messages
+    mutable std::mutex socketMutex; ///< Mutex for thread-safe socket operations
 
     // ZeroMQ sockets for different communication patterns
     std::unique_ptr<zmq::socket_t> pubToUi;              ///< PUB socket for publishing to UI

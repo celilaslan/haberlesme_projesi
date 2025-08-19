@@ -17,6 +17,7 @@
 #include <memory>
 #include <filesystem>
 #include <unordered_map>
+#include <mutex>
 
 /**
  * @class TelemetryService
@@ -105,6 +106,7 @@ private:
     zmq::context_t zmqContext_;                       ///< ZeroMQ context for all ZMQ operations
     std::unique_ptr<ZmqManager> zmqManager_;          ///< Manages ZeroMQ communications
     std::unique_ptr<UdpManager> udpManager_;          ///< Manages UDP communications
+    mutable std::mutex processingMutex_;              ///< Mutex for thread-safe message processing
 };
 
 #endif // TELEMETRYSERVICE_H
