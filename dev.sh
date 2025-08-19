@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Cleanup background processes on script exit
+trap 'cleanup_background 2>/dev/null || true' EXIT
+
 # Fast dev helper for this repo
 # Usage:
 #   ./dev.sh <command> [options]
@@ -156,6 +159,7 @@ kill_existing_procs() {
   )
   local names=("telemetry_service" "uav_sim" "camera_ui" "mapping_ui")
   local pids_set=""
+  
   # Collect by absolute and relative command patterns
   for exe in "${targets[@]}"; do
     for pat in "${ROOT_DIR}/${exe}" "./${exe}" "${exe}"; do
@@ -164,28 +168,63 @@ kill_existing_procs() {
       if [[ -n "$found" ]]; then pids_set+=" $found"; fi
     done
   done
+  
   # Collect by process names (using -f to avoid 15-char limit)
   for name in "${names[@]}"; do
     local foundn
     foundn=$(pgrep -f "$name" || true)
     if [[ -n "$foundn" ]]; then pids_set+=" $foundn"; fi
   done
-  # Collect by listening ports (common project ports)
-  local port_pids
-  port_pids=$(ss -ltnp 2>/dev/null | grep -oP 'pid=\K[0-9]+' 2>/dev/null | sort -u | tr '\n' ' ' || true)
-  if [[ -n "$port_pids" ]]; then pids_set+=" $port_pids"; fi
+  
+  # Only collect PIDs from PROJECT-SPECIFIC ports, not all ports
+  local project_ports=(5555 5556 5557 5558 5559 5565 5566 5569 5570 5571 5572 5575 5579)
+  for port in "${project_ports[@]}"; do
+    local port_pid
+    port_pid=$(ss -ltnp 2>/dev/null | awk -v port=":$port" '$4 ~ port {gsub(/.*pid=/, "", $7); gsub(/,.*/, "", $7); print $7}' | head -1 || true)
+    if [[ -n "$port_pid" && "$port_pid" =~ ^[0-9]+$ ]]; then
+      pids_set+=" $port_pid"
+    fi
+  done
+  
   # De-duplicate PIDs
   local all_pids
   # shellcheck disable=SC2206
   all_pids=($(echo "$pids_set" | tr ' ' '\n' | grep -E '^[0-9]+$' 2>/dev/null | sort -u | tr '\n' ' ' || true))
+  
   if [[ ${#all_pids[@]} -gt 0 ]]; then
     echo "Stopping PIDs: ${all_pids[*]}"
-    for pid in "${all_pids[@]}"; do
-      kill -INT "$pid" 2>/dev/null || true
-    done
-    sleep 0.4
+    
+    # First, try graceful shutdown (SIGINT)
     for pid in "${all_pids[@]}"; do
       if kill -0 "$pid" 2>/dev/null; then
+        kill -INT "$pid" 2>/dev/null || true
+      fi
+    done
+    
+    # Wait for graceful shutdown with timeout
+    local timeout=5
+    local waited=0
+    while (( waited < timeout )); do
+      local any_alive=false
+      for pid in "${all_pids[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+          any_alive=true
+          break
+        fi
+      done
+      if [[ "$any_alive" == "false" ]]; then
+        echo "All processes stopped gracefully"
+        return 0
+      fi
+      sleep 0.2
+      waited=$((waited + 1))
+    done
+    
+    # Force kill any remaining processes
+    echo "Force killing remaining processes..."
+    for pid in "${all_pids[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        echo "Force killing PID $pid"
         kill -9 "$pid" 2>/dev/null || true
       fi
     done
@@ -201,20 +240,26 @@ list_procs() {
 }
 
 wait_for_port() {
-  local port="$1"; local timeout="${2:-5}"
+  local port="$1"; local timeout="${2:-10}"
   local waited=0
+  echo "Waiting for port $port to be available..."
   while (( waited < timeout )); do
     if ss -ltn | awk '{print $4}' | grep -q ":$port$"; then
+      echo "Port $port is ready"
       return 0
     fi
-    sleep 0.2; waited=$((waited+1))
+    sleep 0.5; waited=$((waited + 1))
   done
+  echo "Timeout waiting for port $port after ${timeout} seconds"
   # Final check
   ss -ltn | awk '{print $4}' | grep -q ":$port$"
 }
 
 # Detect a terminal emulator and open a new window running a command
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Track background processes for cleanup
+declare -a BACKGROUND_PIDS=()
 
 open_term() {
   local title="$1"; shift
@@ -236,6 +281,22 @@ open_term() {
   else
     echo "No supported terminal emulator found; running in background: $cmd"
     bash -lc "$cmd" &
+    local bg_pid=$!
+    BACKGROUND_PIDS+=("$bg_pid")
+    echo "Started background process PID: $bg_pid"
+  fi
+}
+
+# Cleanup function for background processes
+cleanup_background() {
+  if [[ ${#BACKGROUND_PIDS[@]} -gt 0 ]]; then
+    echo "Cleaning up background processes: ${BACKGROUND_PIDS[*]}"
+    for pid in "${BACKGROUND_PIDS[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -INT "$pid" 2>/dev/null || true
+      fi
+    done
+    BACKGROUND_PIDS=()
   fi
 }
 
@@ -563,6 +624,7 @@ rebuild() {
 run() {
   local target="${1:-}"; shift || true
   if [[ -z "$target" ]]; then echo "run requires a target"; exit 1; fi
+  
   # Map target names to executable paths
   local exe=""
   case "$target" in
@@ -572,18 +634,45 @@ run() {
     mapping_ui)        exe="${ROOT_DIR}/mapping_ui/mapping_ui" ;;
     *) echo "Unknown target: $target"; exit 1 ;;
   esac
+  
   if [[ ! -x "$exe" ]]; then
     echo "Executable not found: $exe" >&2
     echo "Hint: run './dev.sh build' first." >&2
     exit 2
   fi
+  
   # Allow passing args after --
   if [[ "${1:-}" == "--" ]]; then shift; fi
   
-  # Show usage hint for UI applications
-  if [[ "$target" == "camera_ui" || "$target" == "mapping_ui" ]] && [[ $# -eq 0 ]]; then
-    echo "Note: $target requires --protocol parameter (tcp or udp)"
-    echo "Example: ./dev.sh run $target --protocol tcp"
+  # Validate UI application arguments
+  if [[ "$target" == "camera_ui" || "$target" == "mapping_ui" ]]; then
+    if [[ $# -eq 0 ]]; then
+      echo "Error: $target requires --protocol parameter (tcp or udp)" >&2
+      echo "Example: ./dev.sh run $target --protocol tcp" >&2
+      echo "         ./dev.sh run $target --protocol udp" >&2
+      exit 1
+    fi
+    
+    # Check for protocol argument
+    local has_protocol=false
+    for arg in "$@"; do
+      if [[ "$arg" == "tcp" || "$arg" == "udp" ]]; then
+        has_protocol=true
+        break
+      fi
+    done
+    
+    if [[ "$has_protocol" == "false" ]]; then
+      echo "Warning: $target typically requires --protocol tcp or --protocol udp" >&2
+    fi
+  fi
+  
+  # Validate UAV simulator arguments
+  if [[ "$target" == "uav_sim" && $# -eq 0 ]]; then
+    echo "Error: uav_sim requires a UAV name (e.g., UAV_1, UAV_2, UAV_3)" >&2
+    echo "Example: ./dev.sh run uav_sim UAV_1" >&2
+    echo "         ./dev.sh run uav_sim UAV_1 --protocol tcp" >&2
+    exit 1
   fi
   
   echo "Running: $exe $*"

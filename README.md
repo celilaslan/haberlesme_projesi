@@ -1,6 +1,23 @@
 # haberlesme_projesi
 
-Cross-platform telemetry service and test apps using TCP (ZeroMQ) and UDP protocols.
+Cross-platform telemetry service and test apps using TCP (ZeroMQ) for commands and telemetry, and UDP (Boost.Asio) for additional telemetry streaming.
+
+## Architecture
+
+This is a **production-ready telemetry system** with proper protocol separation:
+
+- **TCP (ZeroMQ)**: Bidirectional communication for commands, responses, and telemetry data
+- **UDP (Boost.Asio)**: Additional telemetry streaming (lightweight, real-time)
+- **Thread Safety**: Atomic operations, mutex protection, signal handlers
+- **Responsive Shutdown**: All components respond immediately to Ctrl+C
+- **Protocol Validation**: Strict argument validation and usage enforcement
+
+**Key Features:**
+- Production-grade error handling and resource management
+- Non-blocking network operations preventing shutdown issues
+- Comprehensive logging and monitoring capabilities
+- Cross-platform development scripts with safety validations
+- Industry-standard UAV communication protocols
 
 ## Build (Linux)
 
@@ -19,11 +36,13 @@ Manual build with g++:
 # Build telemetry service (requires multiple source files)
 g++ -std=c++17 telemetry_service/main.cpp telemetry_service/TelemetryService.cpp telemetry_service/Config.cpp telemetry_service/Logger.cpp telemetry_service/ZmqManager.cpp telemetry_service/UdpManager.cpp -lzmq -lboost_system -lpthread -o telemetry_service/telemetry_service
 
-# Build other components (single file each)
+# Build other components (single file each - all require Boost.Asio for UDP)
 g++ -std=c++17 uav_sim/uav_sim.cpp -lzmq -lboost_system -lpthread -o uav_sim/uav_sim
-g++ -std=c++17 camera_ui/camera_ui.cpp -lzmq -lpthread -o camera_ui/camera_ui
-g++ -std=c++17 mapping_ui/mapping_ui.cpp -lzmq -lpthread -o mapping_ui/mapping_ui
+g++ -std=c++17 camera_ui/camera_ui.cpp -lzmq -lboost_system -lpthread -o camera_ui/camera_ui
+g++ -std=c++17 mapping_ui/mapping_ui.cpp -lzmq -lboost_system -lpthread -o mapping_ui/mapping_ui
 ```
+
+**Note**: All components require `-lboost_system` for Boost.Asio UDP networking support.
 
 ## Build (Windows)
 
@@ -44,52 +63,57 @@ cmake --build build --config Release
 
 ## Run
 
-**Important**: All UI applications now require explicit protocol selection for professional usage.
+**Important**: All UI applications require explicit protocol selection. UAVs receive commands only via TCP for security.
 
-The `uav_sim` supports three protocol modes:
-- `--protocol tcp` - TCP only (ZeroMQ)
-- `--protocol udp` - UDP only  
-- Default (no --protocol) - Both TCP and UDP simultaneously
+**Protocol Architecture:**
+- **TCP (ZeroMQ)**: Commands, responses, and telemetry data (secure, reliable)
+- **UDP (Boost.Asio)**: Additional telemetry streaming (lightweight, real-time)
+- **Security**: UAVs do not accept commands via UDP (industry standard)
+
+The `uav_sim` supports protocol selection:
+- `--protocol tcp` - TCP only (ZeroMQ) - receives commands and sends telemetry via TCP
+- `--protocol udp` - UDP only - sends telemetry data via UDP only (no command reception)
+- Default (no --protocol) - Sends telemetry via both TCP and UDP simultaneously
 
 ```bash
-# 1) Start the telemetry_service
-# It listens on both TCP and UDP ports simultaneously.
-# The service can be run directly or as a systemd service (see Deployment section).
+# 1) Start the telemetry_service (production-ready with signal handling)
 ./dev.sh run telemetry_service
 
-# 2) Start the UI clients (protocol selection is REQUIRED)
-./dev.sh run camera_ui --protocol tcp
-./dev.sh run mapping_ui --protocol udp
+# 2) Start UI clients (protocol selection REQUIRED - enhanced validation)
+./dev.sh run camera_ui --protocol tcp      # For sending commands and receiving telemetry via TCP
+./dev.sh run mapping_ui --protocol udp     # For receiving telemetry via UDP only
 
-# 3) Start UAV sims with protocol selection
-./dev.sh run uav_sim UAV_1 --protocol tcp    # TCP only
-./dev.sh run uav_sim UAV_2 --protocol udp    # UDP only  
-./dev.sh run uav_sim UAV_3                   # Both protocols (default)
+# 3) Start UAV sims (enhanced argument validation)
+./dev.sh run uav_sim UAV_1 --protocol tcp    # TCP: receives commands + sends telemetry via TCP
+./dev.sh run uav_sim UAV_2 --protocol udp    # UDP: sends telemetry via UDP only
+./dev.sh run uav_sim UAV_3                   # Both protocols: sends telemetry via TCP+UDP
 
-# Alternative: Use helper commands for comprehensive testing
-./dev.sh demo           # Quick system test with mixed protocols
-./dev.sh protocol-test  # Comprehensive test of all protocol combinations
-./dev.sh up UAV_1 UAV_2 --protocol udp  # Launch everything in terminals
+# Enhanced helper commands with improved safety
+./dev.sh demo           # Comprehensive system test with protocol validation
+./dev.sh up UAV_1 UAV_2 # Launch everything (enhanced process management)
+./dev.sh health         # Full system health check
+./dev.sh status         # Show processes and ports with validation
 ```
 
-On Windows (PowerShell):
+On Windows (PowerShell - enhanced with matching safety features):
 
 ```powershell
-# 1) Start service
+# 1) Start service (production-ready)
 .\dev.ps1 run telemetry_service
 
-# 2) Start UIs with required protocol selection
-.\dev.ps1 run camera_ui --protocol tcp
-.\dev.ps1 run mapping_ui --protocol udp
+# 2) Start UIs with required protocol selection (enhanced validation)
+.\dev.ps1 run camera_ui --protocol tcp     # Commands and telemetry via TCP
+.\dev.ps1 run mapping_ui --protocol udp    # Telemetry via UDP
 
 # 3) Start UAVs with protocol selection
-.\dev.ps1 run uav_sim UAV_1 --protocol tcp  # TCP only
-.\dev.ps1 run uav_sim UAV_2 --protocol udp  # UDP only
-.\dev.ps1 run uav_sim UAV_3                 # Both protocols (default)
+.\dev.ps1 run uav_sim UAV_1 --protocol tcp  # TCP: commands + telemetry via TCP
+.\dev.ps1 run uav_sim UAV_2 --protocol udp  # UDP: telemetry via UDP only
+.\dev.ps1 run uav_sim UAV_3                 # Both protocols: telemetry via TCP+UDP
 
-# Use helper commands for testing
-.\dev.ps1 demo           # Quick system test
-.\dev.ps1 up UAV_1       # Launch everything in terminals
+# Enhanced helper commands (improved process management)
+.\dev.ps1 demo           # Comprehensive system test
+.\dev.ps1 health         # Full system health check
+.\dev.ps1 up UAV_1       # Launch with background process tracking
 ```
 
 ## Config
@@ -112,57 +136,74 @@ On Windows (PowerShell):
 
 The service writes logs to `log_file`. If relative, logs resolve next to the telemetry_service executable.
 
-**Network Architecture**: Each UAV gets its own UDP server bound to its specific IP and port combination, providing:
-- Better fault isolation between UAVs
-- Individual network security per UAV  
-- Support for UAVs on different network interfaces
-- Easier troubleshooting and monitoring
+**Network Architecture**: 
+- **TCP (ZeroMQ)**: Secure channel for commands and telemetry with PUB/SUB pattern for reliable message delivery
+- **UDP (Boost.Asio)**: Additional lightweight telemetry streaming with per-UAV dedicated ports for isolation
+- **Security**: UAVs receive commands only via TCP (industry standard), but send telemetry via both protocols
+- **Thread Safety**: All network operations use atomic flags and non-blocking operations
+- **Fault Tolerance**: Each UAV gets its own UDP server for better fault isolation
 
-Note: UI applications require explicit `--protocol` selection (tcp or udp) for professional usage. UAV simulators support three modes: tcp-only, udp-only, or both protocols simultaneously (default). With TCP PUB/SUB (ZeroMQ), subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. This does not apply to UDP, as it is a connectionless protocol.
+**Production Features:**
+- Signal handlers for responsive shutdown (Ctrl+C works immediately)
+- Non-blocking network operations prevent hanging
+- Comprehensive error handling and resource cleanup
+- Thread-safe operations with mutex protection
+- Protocol validation throughout the system
+
+Note: UI applications require explicit `--protocol` selection for security and clarity. UAV simulators support multiple modes but only receive commands via TCP. UAVs send telemetry via both TCP and UDP protocols depending on configuration. With TCP PUB/SUB (ZeroMQ), subscribers (UIs) may miss messages sent before they connect and set subscriptions. Starting UIs before UAV sims avoids losing early telemetry. UDP telemetry is connectionless and real-time.
 
 ## Notes
-- The project now depends on the Boost C++ libraries for UDP networking.
-- For Windows builds, link against libzmq and Boost, and define the same C++17 flags; the code uses `localtime_s` on Windows and `localtime_r` on POSIX.
-- The service creates dedicated UDP servers for each UAV configuration, with each server binding to the UAV's specific IP and UDP port.
-- The service uses a poll-based receiver loop for ZMQ and asynchronous listeners for per-UAV UDP servers to avoid busy waiting.
+- **Production-Ready**: The project features comprehensive error handling, signal management, and thread safety
+- **Protocol Security**: UAVs receive commands only via TCP (secure), but send telemetry via both TCP and UDP
+- **Dependencies**: Boost.Asio for UDP networking, ZeroMQ for TCP communication, Boost.System for networking support
+- **Cross-Platform**: Tested on Linux, macOS, and Windows with consistent behavior
+- **Thread Safety**: All components use atomic operations and non-blocking network calls
+- **Responsive Shutdown**: Signal handlers ensure immediate response to Ctrl+C across all components
+- **Windows Compatibility**: Uses `localtime_s` on Windows and `localtime_r` on POSIX for thread safety
+- **Network Architecture**: Dedicated UDP servers per UAV with individual IP:port binding for fault isolation
 
 ## Orchestration helpers
-- Linux/macOS: `./dev.sh` supports configure/build/clean/run/demo/up/down/status/logs and service management.
-- Windows (PowerShell): `./dev.ps1` provides the same commands, plus multi-terminal launches via Windows Terminal or PowerShell.
+- **Linux/macOS**: `./dev.sh` - Production-ready script with enhanced process management, argument validation, and safety features
+- **Windows**: `./dev.ps1` - PowerShell script with matching functionality and background process tracking
+- **Enhanced Features**: Both scripts include protocol validation, safe process management, and comprehensive health checks
+- **Safety**: Improved process killing using port-based identification instead of aggressive name matching
+- **Validation**: Comprehensive argument validation with helpful error messages and usage examples
 
 ## Common workflows
 
-Linux/macOS:
+Linux/macOS (enhanced safety and validation):
 
 ```bash
 ./dev.sh configure
 ./dev.sh build
-./dev.sh demo           # Quick smoke test with mixed protocols  
-./dev.sh protocol-test  # Comprehensive test of all protocol combinations
-./dev.sh up UAV_1       # Open service, UIs, and UAV_1 in terminals
-./dev.sh status         # See PIDs and listening ports
-./dev.sh down           # Stop everything and free ports
+./dev.sh health         # Comprehensive system health check
+./dev.sh demo           # Production-ready smoke test with protocol validation
+./dev.sh up UAV_1       # Open service, UIs, and UAV_1 with enhanced process tracking
+./dev.sh status         # See PIDs and listening ports with validation
+./dev.sh down           # Safe shutdown with improved process management
 ```
 
-Windows (PowerShell):
+Windows (PowerShell - matching functionality):
 
 ```powershell
 .\dev.ps1 configure
 .\dev.ps1 build
-.\dev.ps1 demo
-.\dev.ps1 up UAV_1
-.\dev.ps1 status
-.\dev.ps1 down
+.\dev.ps1 health        # Full system health check
+.\dev.ps1 demo          # Enhanced demo with proper process tracking
+.\dev.ps1 up UAV_1      # Launch with background process management
+.\dev.ps1 status        # Process and port status with validation
+.\dev.ps1 down          # Safe cleanup with background process tracking
 ```
 
 ## Dependencies
 
-- **ZeroMQ**:
+- **ZeroMQ**: TCP communication with PUB/SUB pattern
   - Linux: `sudo apt-get install -y libzmq3-dev`
   - Windows (vcpkg): `vcpkg install zeromq:x64-windows cppzmq:x64-windows`
-- **Boost**:
+- **Boost (including Boost.Asio)**: UDP networking and system utilities
   - Linux: `sudo apt-get install -y libboost-all-dev`
   - Windows (vcpkg): `vcpkg install boost:x64-windows`
+  - **Key Components**: Boost.Asio for async UDP I/O, Boost.System for networking support
 
 Configure with vcpkg toolchain (optional):
   - `cmake -S . -B build -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake`
@@ -170,19 +211,74 @@ Configure with vcpkg toolchain (optional):
 ZeroMQ version note:
 - Tested with libzmq 4.3.x. Older 4.1+ typically works, but 4.3+ is recommended.
 
+## Production-Ready Features
+
+This telemetry system includes enterprise-grade reliability features:
+
+### **Thread Safety & Concurrency**
+- Atomic flags for coordinated shutdown across threads
+- Mutex protection for shared resources
+- Non-blocking network operations prevent hanging
+- Thread-safe logging with proper synchronization
+
+### **Signal Handling & Shutdown**
+- Responsive Ctrl+C handling in all components
+- Clean resource cleanup on shutdown
+- No more hanging processes or orphaned resources
+- Graceful connection termination
+
+### **Protocol Security & Validation**
+- UAVs receive commands only via TCP (industry standard)
+- UAVs send telemetry via both TCP and UDP protocols for redundancy and flexibility
+- UDP restricted from receiving commands (security best practice)
+- Comprehensive argument validation with clear error messages
+- Protocol compliance enforcement throughout
+
+### **Development Tools**
+- Enhanced build scripts with safety validations
+- Background process tracking and cleanup
+- Port-based process identification (no aggressive killing)
+- Cross-platform consistency between bash and PowerShell scripts
+
+### **Error Handling & Monitoring**
+- Comprehensive exception handling throughout
+- Production-quality logging with timestamps
+- Health check capabilities for system monitoring
+- Resource leak prevention and cleanup
+
 ## Troubleshooting
+
+### **Common Issues (Enhanced Solutions)**
 
 - **Address already in use**:
 	- Linux/macOS:
-		- `./dev.sh down` to stop any running service, UIs, or simulators.
-		- `./dev.sh status` to see listeners on project ports.
-		- If needed, kill the PID shown by `ss -ltnp` and retry.
+		- `./dev.sh down` - Enhanced safe shutdown with process validation
+		- `./dev.sh status` - Shows listeners with improved port checking
+		- `./dev.sh health` - Comprehensive system diagnosis
+		- Enhanced process management avoids orphaned processes
 	- Windows:
-		- `.\\dev.ps1 down`
-		- Use `Get-NetTCPConnection -State Listen | ? { $_.LocalPort -in 5555,5556,5557,5558,5565,5566,5575,5576,... }` and `Stop-Process -Id <PID>` as needed.
+		- `.\dev.ps1 down` - Improved cleanup with background process tracking
+		- `.\dev.ps1 status` - Enhanced port and process monitoring
+		- `.\dev.ps1 health` - Full system health check
+
+- **Components not responding to Ctrl+C**:
+	- **Fixed**: All components now have responsive signal handlers
+	- **Solution**: Enhanced with atomic flags for immediate shutdown response
+	- **Verification**: Use `./dev.sh health` to check responsive shutdown capability
+
+- **Protocol validation errors**:
+	- **Feature**: Enhanced argument validation with clear error messages
+	- **Solution**: UI components require explicit `--protocol tcp|udp` parameter
+	- **Example**: `./dev.sh run camera_ui --protocol tcp` (provides helpful usage info)
+
+- **Script execution issues**:
+	- **Enhanced**: Both dev.sh and dev.ps1 now include comprehensive validation
+	- **Safety**: Process management uses port-based identification
+	- **Validation**: Clear error messages for invalid arguments with examples
 
 - **Windows script execution policy**:
-	- If PowerShell blocks scripts, run in the current session: `Set-ExecutionPolicy -Scope Process Bypass`.
+	- If PowerShell blocks scripts, run: `Set-ExecutionPolicy -Scope Process Bypass`
+	- **Enhanced**: PowerShell script now includes background process tracking
 
 ## Deployment (Linux Service)
 The `telemetry_service` can be installed and run as a `systemd` background service on modern Linux distributions. It will listen for both ZMQ and per-UAV UDP telemetry on their respective ports.

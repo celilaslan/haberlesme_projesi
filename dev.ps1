@@ -54,6 +54,32 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Global variables for process tracking
+$global:BackgroundProcesses = @()
+
+# Cleanup function for background processes
+function Cleanup-Background {
+    if ($global:BackgroundProcesses.Count -gt 0) {
+        Write-Host "Cleaning up background processes..." -ForegroundColor Yellow
+        foreach ($proc in $global:BackgroundProcesses) {
+            try {
+                if (-not $proc.HasExited) {
+                    $proc.CloseMainWindow()
+                    if (-not $proc.WaitForExit(2000)) {
+                        $proc.Kill()
+                    }
+                }
+            } catch {
+                # Process may have already exited
+            }
+        }
+        $global:BackgroundProcesses = @()
+    }
+}
+
+# Register cleanup on script exit
+Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action { Cleanup-Background }
+
 # --- Helpers ---
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoRoot
@@ -92,8 +118,37 @@ function Get-CmakePath {
 
 function Kill-Procs {
     param([string[]] $names = @('telemetry_service','uav_sim','camera_ui','mapping_ui'))
+    
+    # Get project-specific ports to identify our processes more safely
+    $projectPorts = @(5555,5556,5557,5558,5559,5565,5569,5575,5579)
+    $projectPids = @()
+    
+    try {
+        $connections = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | 
+                      Where-Object { $projectPorts -contains $_.LocalPort }
+        $projectPids = $connections | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique
+    } catch {
+        # Fallback to process name matching if network query fails
+        Write-Verbose "Cannot query network connections, using process name matching"
+    }
+    
     foreach ($n in $names) {
-        try { Get-Process -Name $n -ErrorAction Stop | Stop-Process -Force } catch { }
+        try { 
+            $processes = Get-Process -Name $n -ErrorAction Stop
+            foreach ($proc in $processes) {
+                # If we have port information, prefer processes that match our ports
+                if ($projectPids -and $projectPids -contains $proc.Id) {
+                    Write-Host "Stopping project process: $($proc.Name) (PID: $($proc.Id))" -ForegroundColor Yellow
+                    $proc | Stop-Process -Force
+                } elseif (-not $projectPids) {
+                    # Fallback: stop all processes with matching names
+                    Write-Host "Stopping process: $($proc.Name) (PID: $($proc.Id))" -ForegroundColor Yellow
+                    $proc | Stop-Process -Force
+                }
+            }
+        } catch { 
+            # Process not found or already stopped
+        }
     }
 }
 
@@ -116,13 +171,32 @@ function List-Ports {
 function Wait-ForPort {
     param([int] $Port, [int] $TimeoutSec = 10)
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $attempt = 0
+    
+    Write-Host "Waiting for port $Port to become available..." -ForegroundColor Gray
+    
     while ((Get-Date) -lt $deadline) {
+        $attempt++
         try {
             $conn = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop
-            if ($conn) { return $true }
-        } catch { }
+            if ($conn) { 
+                Write-Host "✓ Port $Port is listening" -ForegroundColor Green
+                return $true 
+            }
+        } catch { 
+            # Port not yet listening
+        }
+        
+        # Show progress every few attempts
+        if ($attempt % 10 -eq 0) {
+            $remaining = [Math]::Max(0, [Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds))
+            Write-Host "  Still waiting... (${remaining}s remaining)" -ForegroundColor Gray
+        }
+        
         Start-Sleep -Milliseconds 200
     }
+    
+    Write-Host "✗ Timeout waiting for port $Port" -ForegroundColor Red
     return $false
 }
 
@@ -510,39 +584,38 @@ function Invoke-DemoTest {
     # Stop any existing processes
     Kill-Procs
     
+    # Clear background process tracking
+    $global:BackgroundProcesses = @()
+    
     Write-Host "Starting telemetry service..." -ForegroundColor Green
     $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
     $serviceProcess = Start-Process -FilePath (Get-ExePath 'telemetry_service/telemetry_service') -PassThru -NoNewWindow
+    $global:BackgroundProcesses += $serviceProcess
     
     Start-Sleep -Seconds 2
     
     if ($serviceProcess.HasExited) {
         Write-Error "Service failed to start"
+        Cleanup-Background
         return
     }
     
     Write-Host "Starting UIs briefly (with required protocols)..." -ForegroundColor Green
     $cameraProcess = Start-Process -FilePath (Get-ExePath 'camera_ui/camera_ui') -ArgumentList '--protocol', 'tcp' -PassThru -NoNewWindow
     $mappingProcess = Start-Process -FilePath (Get-ExePath 'mapping_ui/mapping_ui') -ArgumentList '--protocol', 'udp' -PassThru -NoNewWindow
+    $global:BackgroundProcesses += $cameraProcess, $mappingProcess
     
     Start-Sleep -Milliseconds 500
     
     Write-Host "Starting UAV simulator briefly..." -ForegroundColor Green
     $uavProcess = Start-Process -FilePath (Get-ExePath 'uav_sim/uav_sim') -ArgumentList 'UAV_1' -PassThru -NoNewWindow
+    $global:BackgroundProcesses += $uavProcess
     
     Start-Sleep -Seconds 3
     
-    # Stop all processes
+    # Stop all processes using our cleanup function
     Write-Host "Stopping test processes..." -ForegroundColor Yellow
-    @($uavProcess, $cameraProcess, $mappingProcess) | Where-Object { $_ -and !$_.HasExited } | ForEach-Object {
-        $_.CloseMainWindow()
-        if (!$_.WaitForExit(2000)) { $_.Kill() }
-    }
-    
-    if (!$serviceProcess.HasExited) {
-        $serviceProcess.CloseMainWindow()
-        if (!$serviceProcess.WaitForExit(2000)) { $serviceProcess.Kill() }
-    }
+    Cleanup-Background
     
     # Show log tail
     $logPath = Join-Path $RepoRoot 'telemetry_service/telemetry_log.txt'
@@ -572,10 +645,41 @@ function Run-One {
     param([string] $name, [string[]] $arguments = @())
     $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
     
-    # Show usage hint for UI applications if no arguments provided
-    if (($name -eq "camera_ui" -or $name -eq "mapping_ui") -and $arguments.Count -eq 0) {
-        Write-Host "Note: $name requires --protocol parameter (tcp or udp)" -ForegroundColor Yellow
-        Write-Host "Example: .\dev.ps1 run $name --protocol tcp" -ForegroundColor Gray
+    # Validate UI component arguments
+    if ($name -eq "camera_ui" -or $name -eq "mapping_ui") {
+        if ($arguments.Count -eq 0 -or $arguments -notcontains "--protocol") {
+            Write-Host "Error: $name requires --protocol parameter" -ForegroundColor Red
+            Write-Host "Usage: .\dev.ps1 run $name --protocol <tcp|udp>" -ForegroundColor Yellow
+            Write-Host "Examples:" -ForegroundColor Gray
+            Write-Host "  .\dev.ps1 run camera_ui --protocol tcp" -ForegroundColor Gray
+            Write-Host "  .\dev.ps1 run mapping_ui --protocol udp" -ForegroundColor Gray
+            return
+        }
+        
+        # Find protocol value
+        $protocolIndex = [Array]::IndexOf($arguments, "--protocol")
+        if ($protocolIndex -ge 0 -and $protocolIndex + 1 -lt $arguments.Count) {
+            $protocol = $arguments[$protocolIndex + 1]
+            if ($protocol -notin @("tcp", "udp")) {
+                Write-Host "Error: Invalid protocol '$protocol'. Must be 'tcp' or 'udp'" -ForegroundColor Red
+                return
+            }
+        } else {
+            Write-Host "Error: --protocol parameter requires a value (tcp or udp)" -ForegroundColor Red
+            return
+        }
+    }
+    
+    # Validate UAV simulator arguments
+    if ($name -eq "uav_sim") {
+        if ($arguments.Count -eq 0) {
+            Write-Host "Error: uav_sim requires UAV identifier" -ForegroundColor Red
+            Write-Host "Usage: .\dev.ps1 run uav_sim <UAV_ID> [--protocol <protocol>]" -ForegroundColor Yellow
+            Write-Host "Examples:" -ForegroundColor Gray
+            Write-Host "  .\dev.ps1 run uav_sim UAV_1" -ForegroundColor Gray
+            Write-Host "  .\dev.ps1 run uav_sim UAV_2 --protocol tcp" -ForegroundColor Gray
+            return
+        }
     }
     
     switch ($name) {
