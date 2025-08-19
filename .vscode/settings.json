@@ -76,5 +76,26 @@
         "typeinfo": "cpp",
         "valarray": "cpp",
         "variant": "cpp"
+    },
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+    "C_Cpp.errorSquiggles": "enabled",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureOnOpen": false,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.trimAutoWhitespace": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "files.exclude": {
+        "**/build": true,
+        "**/.git": true,
+        "**/node_modules": true
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/node_modules": true
     }
 }
