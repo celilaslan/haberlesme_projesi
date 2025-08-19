@@ -69,6 +69,48 @@
             },
             "detail": "Test UDP communication between service and simulator",
             "dependsOn": "build"
+        },
+        {
+            "type": "shell",
+            "label": "build (Windows)",
+            "command": "./dev.ps1",
+            "args": ["build"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": ["$msCompile"],
+            "detail": "Build all targets using PowerShell development script",
+            "windows": {
+                "command": "powershell",
+                "args": ["-File", "./dev.ps1", "build"]
+            }
+        },
+        {
+            "type": "shell",
+            "label": "run telemetry service (Windows)",
+            "command": "./dev.ps1",
+            "args": ["run", "telemetry_service"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "detail": "Run telemetry service using PowerShell development script",
+            "dependsOn": "build (Windows)",
+            "windows": {
+                "command": "powershell",
+                "args": ["-File", "./dev.ps1", "run", "telemetry_service"]
+            }
         }
     ],
     "version": "2.0.0"
