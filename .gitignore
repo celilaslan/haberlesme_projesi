@@ -62,7 +62,8 @@ compile_commands.json
 
 # ---- Logs & runtime output ----
 *.log
-telemetry_service/telemetry_log.txt
+telemetry_log.txt                    # Development logs (root level)
+telemetry_service/telemetry_log.txt  # Development logs (service dir)
 # Preserve sample / test input files
 telemetry_service/telemetry_test.txt
 

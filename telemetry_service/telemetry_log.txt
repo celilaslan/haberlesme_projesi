@@ -1,0 +1,56 @@
+[2025-08-19 09:56:33.035] INFO: [SERVICE] STARTING (Multi-UAV Telemetry Service v1.0)
+[2025-08-19 09:56:33.036] INFO: Config loaded successfully. Found 3 UAVs
+[2025-08-19 09:56:33.036] INFO: [TCP] UI Publisher bound (tcp://*:5557)
+[2025-08-19 09:56:33.036] INFO: [TCP] UI Command receiver bound (tcp://*:5558)
+[2025-08-19 09:56:33.036] INFO: [ZMQ] UAV UAV_1 configured (Telemetry: tcp://*:5555, Commands: tcp://*:5559)
+[2025-08-19 09:56:33.036] INFO: [ZMQ] UAV UAV_2 configured (Telemetry: tcp://*:5565, Commands: tcp://*:5569)
+[2025-08-19 09:56:33.036] INFO: [ZMQ] UAV UAV_3 configured (Telemetry: tcp://*:5575, Commands: tcp://*:5579)
+[2025-08-19 09:56:33.036] INFO: [UDP] Server bound for UAV_1 (localhost:5556)
+[2025-08-19 09:56:33.037] INFO: [UDP] Server bound for UAV_2 (localhost:5566)
+[2025-08-19 09:56:33.037] INFO: [UDP] Server bound for UAV_3 (localhost:5576)
+[2025-08-19 09:56:33.037] INFO: [UDP] UI Camera Publisher socket created (Port: 5570)
+[2025-08-19 09:56:33.037] INFO: [UDP] UI Mapping Publisher socket created (Port: 5571)
+[2025-08-19 09:56:33.037] INFO: === SERVICE STARTUP COMPLETE ===
+[2025-08-19 09:56:33.037] INFO: Configuration Summary:
+[2025-08-19 09:56:33.037] INFO:   UAVs configured: 3
+[2025-08-19 09:56:33.037] INFO:   TCP ports: 5555, 5559, 5565, 5569, 5575, 5579, 5557, 5558
+[2025-08-19 09:56:33.037] INFO:   UDP ports: 5556, 5566, 5576
+[2025-08-19 09:56:33.037] INFO: Service ready for connections.
+[2025-08-19 09:56:34.037] INFO: Received from UDP:UAV_1: UAV_1  1001
+[2025-08-19 09:56:34.037] INFO: UDP Published to [mapping_UAV_1]: UAV_1  1001
+[2025-08-19 09:56:34.038] INFO: Received from TCP:UAV_1: UAV_1  1001
+[2025-08-19 09:56:34.038] INFO: Published to [mapping_UAV_1]: UAV_1  1001
+[2025-08-19 09:56:34.138] INFO: Received from UDP:UAV_1: UAV_1  2001
+[2025-08-19 09:56:34.138] INFO: UDP Published to [camera_UAV_1]: UAV_1  2001
+[2025-08-19 09:56:34.138] INFO: Received from TCP:UAV_1: UAV_1  2001
+[2025-08-19 09:56:34.138] INFO: Published to [camera_UAV_1]: UAV_1  2001
+[2025-08-19 09:56:34.639] INFO: Received from UDP:UAV_1: UAV_1  1002
+[2025-08-19 09:56:34.639] INFO: UDP Published to [mapping_UAV_1]: UAV_1  1002
+[2025-08-19 09:56:34.639] INFO: Received from TCP:UAV_1: UAV_1  1002
+[2025-08-19 09:56:34.639] INFO: Published to [mapping_UAV_1]: UAV_1  1002
+[2025-08-19 09:56:34.740] INFO: Received from UDP:UAV_1: UAV_1  2002
+[2025-08-19 09:56:34.740] INFO: UDP Published to [camera_UAV_1]: UAV_1  2002
+[2025-08-19 09:56:34.740] INFO: Received from TCP:UAV_1: UAV_1  2002
+[2025-08-19 09:56:34.740] INFO: Published to [camera_UAV_1]: UAV_1  2002
+[2025-08-19 09:56:35.241] INFO: Received from UDP:UAV_1: UAV_1  1003
+[2025-08-19 09:56:35.241] INFO: UDP Published to [mapping_UAV_1]: UAV_1  1003
+[2025-08-19 09:56:35.241] INFO: Received from TCP:UAV_1: UAV_1  1003
+[2025-08-19 09:56:35.241] INFO: Published to [mapping_UAV_1]: UAV_1  1003
+[2025-08-19 09:56:35.346] INFO: Received from UDP:UAV_1: UAV_1  2003
+[2025-08-19 09:56:35.346] INFO: UDP Published to [camera_UAV_1]: UAV_1  2003
+[2025-08-19 09:56:35.346] INFO: Received from TCP:UAV_1: UAV_1  2003
+[2025-08-19 09:56:35.346] INFO: Published to [camera_UAV_1]: UAV_1  2003
+[2025-08-19 09:56:35.847] INFO: Received from UDP:UAV_1: UAV_1  1004
+[2025-08-19 09:56:35.848] INFO: UDP Published to [mapping_UAV_1]: UAV_1  1004
+[2025-08-19 09:56:35.848] INFO: Received from TCP:UAV_1: UAV_1  1004
+[2025-08-19 09:56:35.848] INFO: Published to [mapping_UAV_1]: UAV_1  1004
+[2025-08-19 09:56:35.948] INFO: Received from UDP:UAV_1: UAV_1  2004
+[2025-08-19 09:56:35.949] INFO: UDP Published to [camera_UAV_1]: UAV_1  2004
+[2025-08-19 09:56:35.951] INFO: Received from TCP:UAV_1: UAV_1  2004
+[2025-08-19 09:56:35.951] INFO: Published to [camera_UAV_1]: UAV_1  2004
+[2025-08-19 09:56:36.077] INFO: [SERVICE] SHUTTING DOWN (Signal received)
+[2025-08-19 09:56:36.077] INFO: [UDP] STOPPING (Shutting down UDP services)
+[2025-08-19 09:56:36.077] INFO: [TCP] STOPPING (Shutting down TCP services)
+[2025-08-19 09:56:36.082] INFO: [ZMQ] Forwarder thread stopped
+[2025-08-19 09:56:36.151] INFO: [ZMQ] Receiver thread stopped
+[2025-08-19 09:56:36.151] INFO: [SERVICE] SHUTDOWN COMPLETE (All services stopped gracefully)
