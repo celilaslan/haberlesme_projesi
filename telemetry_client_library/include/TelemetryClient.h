@@ -54,6 +54,18 @@ enum class DataType {
 };
 
 /**
+ * @enum ClientState
+ * @brief Client lifecycle states for robust state management
+ */
+enum class ClientState {
+    IDLE,         ///< Client created but not initialized
+    INITIALIZED,  ///< Client initialized, ready to start receiving
+    RUNNING,      ///< Client actively receiving telemetry data
+    STOPPED,      ///< Client stopped, can be restarted
+    ERROR         ///< Client in error state, requires reinitialization
+};
+
+/**
  * @struct TelemetryData
  * @brief Structure representing received telemetry data
  */
@@ -201,6 +213,24 @@ public:
      * @return true if actively receiving, false otherwise
      */
     bool isReceiving() const;
+
+    /**
+     * @brief Get current client state
+     * @return Current lifecycle state of the client
+     */
+    ClientState getCurrentState() const;
+
+    /**
+     * @brief Get human-readable description of current state
+     * @return String describing the current client state
+     */
+    std::string getStateDescription() const;
+
+    /**
+     * @brief Reset client to IDLE state (for error recovery)
+     * @return true if reset successful, false otherwise
+     */
+    bool resetClient();
 
     /**
      * @brief Get list of available UAVs from the service configuration

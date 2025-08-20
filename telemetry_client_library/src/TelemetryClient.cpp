@@ -41,24 +41,39 @@ public:
     }
 
     bool initialize(const std::string& service_host, const std::string& config_file) {
+        // State validation (fail-fast design)
+        if (client_state_ != ClientState::IDLE && client_state_ != ClientState::ERROR) {
+            last_error_ = "Client must be in IDLE or ERROR state to initialize (current: " + getStateDescription() + ")";
+            return false;
+        }
+
         try {
             service_host_ = service_host;
 
             // Load configuration
             if (!loadConfiguration(config_file)) {
                 last_error_ = "Failed to load service configuration";
+                client_state_ = ClientState::ERROR;
                 return false;
             }
 
             last_error_.clear();
+            client_state_ = ClientState::INITIALIZED;
             return true;
         } catch (const std::exception& e) {
             last_error_ = "Initialization error: " + std::string(e.what());
+            client_state_ = ClientState::ERROR;
             return false;
         }
     }
 
     bool startReceiving(Protocol protocol, TelemetryCallback callback, ErrorCallback error_callback) {
+        // State validation
+        if (client_state_ != ClientState::INITIALIZED && client_state_ != ClientState::STOPPED) {
+            last_error_ = "Client must be INITIALIZED or STOPPED to start receiving (current: " + getStateDescription() + ")";
+            return false;
+        }
+
         if (running_) {
             last_error_ = "Client is already receiving data";
             return false;
@@ -85,9 +100,11 @@ public:
             }
 
             last_error_.clear();
+            client_state_ = ClientState::RUNNING;
             return true;
         } catch (const std::exception& e) {
             running_ = false;
+            client_state_ = ClientState::ERROR;
             last_error_ = "Failed to start receiving: " + std::string(e.what());
             return false;
         }
@@ -259,6 +276,12 @@ public:
     void stopReceiving() {
         running_ = false;
 
+        // Wait for any active callbacks to complete (thread safety)
+        {
+            std::lock_guard<std::mutex> callback_lock(callback_mutex_);
+            // This ensures no callbacks are executing when we proceed
+        }
+
         // Wait for threads to complete
         if (tcp_thread_.joinable()) {
             tcp_thread_.join();
@@ -286,10 +309,37 @@ public:
                 std::cerr << "[TelemetryClient] Cleanup error: " << e.what() << std::endl;
             }
         }
+
+        client_state_ = ClientState::STOPPED;
     }
 
     bool isReceiving() const {
         return running_;
+    }
+
+    ClientState getCurrentState() const {
+        return client_state_;
+    }
+
+    std::string getStateDescription() const {
+        switch (client_state_) {
+            case ClientState::IDLE: return "IDLE";
+            case ClientState::INITIALIZED: return "INITIALIZED";
+            case ClientState::RUNNING: return "RUNNING";
+            case ClientState::STOPPED: return "STOPPED";
+            case ClientState::ERROR: return "ERROR";
+            default: return "UNKNOWN";
+        }
+    }
+
+    bool resetClient() {
+        if (running_) {
+            stopReceiving();
+        }
+
+        client_state_ = ClientState::IDLE;
+        last_error_.clear();
+        return true;
     }
 
     std::vector<std::string> getAvailableUAVs() const {
@@ -340,6 +390,9 @@ private:
     TelemetryCallback telemetry_callback_;
     ErrorCallback error_callback_;
 
+    // State management (fail-fast design)
+    std::atomic<ClientState> client_state_{ClientState::IDLE};
+
     // Threading and synchronization
     std::atomic<bool> running_;
     std::atomic<bool> debug_mode_;
@@ -350,6 +403,9 @@ private:
     std::mutex filter_mutex_;
     std::unordered_set<std::string> uav_filters_;      // Exact topic matches (e.g., "mapping_UAV_1")
     std::unordered_set<std::string> data_type_filters_; // Prefix matches (e.g., "mapping")
+
+    // Callback protection (prevent race conditions during shutdown)
+    mutable std::mutex callback_mutex_;
 
     // Networking
     zmq::context_t zmq_context_;
@@ -566,6 +622,11 @@ private:
     }
 
     void processTelemetryData(const std::string& topic, const std::string& data, Protocol protocol) {
+        // Check if client is still running (thread safety improvement)
+        if (!running_) {
+            return;
+        }
+
         // Apply filters
         if (!shouldProcessTopic(topic)) {
             return;
@@ -595,8 +656,15 @@ private:
             std::cout << "[TelemetryClient] Received " << topic << ": " << data << std::endl;
         }
 
-        // Call user callback
+        // Call user callback with thread safety protection
         if (telemetry_callback_) {
+            std::lock_guard<std::mutex> callback_lock(callback_mutex_);
+
+            // Double-check client is still running after acquiring lock
+            if (!running_) {
+                return;
+            }
+
             try {
                 telemetry_callback_(telemetry_data);
             } catch (const std::exception& e) {
@@ -675,6 +743,18 @@ void TelemetryClient::stopReceiving() {
 
 bool TelemetryClient::isReceiving() const {
     return pImpl->isReceiving();
+}
+
+ClientState TelemetryClient::getCurrentState() const {
+    return pImpl->getCurrentState();
+}
+
+std::string TelemetryClient::getStateDescription() const {
+    return pImpl->getStateDescription();
+}
+
+bool TelemetryClient::resetClient() {
+    return pImpl->resetClient();
 }
 
 std::vector<std::string> TelemetryClient::getAvailableUAVs() const {

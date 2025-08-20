@@ -71,9 +71,23 @@ target_include_directories(subscription_demo
     PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../include
 )
 
+# State management demo - demonstrates fail-fast design and robust state management
+add_executable(state_management_demo
+    ${CMAKE_CURRENT_LIST_DIR}/state_management_demo.cpp
+)
+
+target_link_libraries(state_management_demo
+    PRIVATE telemetry_client
+)
+
+target_include_directories(state_management_demo
+    PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../include
+)
+
 # Place examples in their source directory
 set_target_to_source_dir(simple_receiver)
 set_target_to_source_dir(advanced_client)
 set_target_to_source_dir(command_sender)
 set_target_to_source_dir(advanced_telemetry_client)
 set_target_to_source_dir(subscription_demo)
+set_target_to_source_dir(state_management_demo)
