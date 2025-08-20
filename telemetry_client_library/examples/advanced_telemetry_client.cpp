@@ -157,63 +157,69 @@ void demonstrateMockUAV(TelemetryClientAdvanced& client) {
     config["data_rate_ms"] = "500";  // Send data every 500ms
     config["base_code"] = "9000";    // Use 9000-series codes
 
-    if (mock_uav->createMockUAV("MOCK_UAV_1", config)) {
-        std::cout << "✓ Mock UAV created successfully" << std::endl;
+    if (auto mock_ptr = mock_uav.lock()) {
+        if (mock_ptr->createMockUAV("MOCK_UAV_1", config)) {
+            std::cout << "✓ Mock UAV created successfully" << std::endl;
 
-        // Simulate some network conditions
-        mock_uav->simulateDataLoss(0.05);  // 5% packet loss
-        mock_uav->simulateLatency(50);     // 50ms additional latency
+            // Simulate some network conditions
+            mock_ptr->simulateDataLoss(0.05);  // 5% packet loss
+            mock_ptr->simulateLatency(50);     // 50ms additional latency
 
-        std::cout << "✓ Network simulation enabled (5% loss, +50ms latency)" << std::endl;
+            std::cout << "✓ Network simulation enabled (5% loss, +50ms latency)" << std::endl;
 
-        // Start mock UAV
-        if (mock_uav->start()) {
-            std::cout << "✓ Mock UAV started" << std::endl;
+            // Start mock UAV
+            if (mock_ptr->start()) {
+                std::cout << "✓ Mock UAV started" << std::endl;
 
-            // Let it run for a few seconds
-            std::this_thread::sleep_for(std::chrono::seconds(3));
+                // Let it run for a few seconds
+                std::this_thread::sleep_for(std::chrono::seconds(3));
 
-            // Inject some test data
-            mock_uav->injectTestData("MOCK_UAV_1  TEST_EMERGENCY_9999");
-            std::cout << "✓ Emergency test data injected" << std::endl;
+                // Inject some test data
+                mock_ptr->injectTestData("MOCK_UAV_1  TEST_EMERGENCY_9999");
+                std::cout << "✓ Emergency test data injected" << std::endl;
 
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+                std::this_thread::sleep_for(std::chrono::seconds(2));
 
-            // Stop mock UAV
-            mock_uav->stop();
-            std::cout << "✓ Mock UAV stopped" << std::endl;
+                // Stop mock UAV
+                mock_ptr->stop();
+                std::cout << "✓ Mock UAV stopped" << std::endl;
+            }
         }
+    } else {
+        std::cout << "✗ Failed to get Mock UAV instance" << std::endl;
     }
 }
 
 /**
  * @brief Demonstrate data recording and analysis
  */
-void demonstrateDataRecording(TelemetryClientAdvanced& client) {
-    std::cout << "\n=== DATA RECORDING DEMONSTRATION ===" << std::endl;
+void demonstrateDataRecording(TelemetryClientAdvanced& advanced_client) {
+    std::cout << "\n=== Data Recording Demo ===" << std::endl;
 
-    auto data_buffer = client.getDataBuffer();
+    auto data_buffer = advanced_client.getDataBuffer();
+    if (auto buffer_ptr = data_buffer.lock()) {
+        buffer_ptr->enableBuffering(10); // 10MB buffer
 
-    // Enable buffering
-    data_buffer->enableBuffering(10); // 10MB buffer
-    std::cout << "✓ Data buffering enabled (10MB)" << std::endl;
+        // Create a filename with timestamp
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << "telemetry_recording_" << time_t << ".json";
+        std::string filename = ss.str();
 
-    // Start recording
-    std::string filename = "telemetry_recording_" +
-        std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count()) + ".json";
+        if (buffer_ptr->startRecording(filename)) {
+            std::cout << "✓ Started recording to: " << filename << std::endl;
 
-    if (data_buffer->startRecording(filename)) {
-        std::cout << "✓ Recording started: " << filename << std::endl;
+            // Record for a few seconds
+            std::this_thread::sleep_for(std::chrono::seconds(5));
 
-        // Record for a few seconds
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-
-        // Stop recording
-        data_buffer->stopRecording();
-        std::cout << "✓ Recording stopped" << std::endl;
-        std::cout << "  Buffer usage: " << std::fixed << std::setprecision(1)
-                  << data_buffer->getBufferUsage() * 100 << "%" << std::endl;
+            buffer_ptr->stopRecording();
+            std::cout << "✓ Recording stopped" << std::endl;
+            std::cout << "  Buffer usage: "
+                      << buffer_ptr->getBufferUsage() * 100 << "%" << std::endl;
+        }
+    } else {
+        std::cout << "✗ Failed to get DataBuffer instance" << std::endl;
     }
 }
 
@@ -224,32 +230,35 @@ void demonstrateFleetManagement(TelemetryClientAdvanced& client) {
     std::cout << "\n=== FLEET MANAGEMENT DEMONSTRATION ===" << std::endl;
 
     auto fleet_manager = client.getFleetManager();
+    if (auto fleet_ptr = fleet_manager.lock()) {
+        // Add UAVs to fleet monitoring
+        fleet_ptr->addUAV("UAV_1");
+        fleet_ptr->addUAV("UAV_2");
+        fleet_ptr->addUAV("UAV_3");
+        std::cout << "✓ UAVs added to fleet monitoring" << std::endl;
 
-    // Add UAVs to fleet monitoring
-    fleet_manager->addUAV("UAV_1");
-    fleet_manager->addUAV("UAV_2");
-    fleet_manager->addUAV("UAV_3");
-    std::cout << "✓ UAVs added to fleet monitoring" << std::endl;
+        // Broadcast command to all UAVs
+        std::vector<std::string> all_uavs = {"UAV_1", "UAV_2", "UAV_3"};
+        if (fleet_ptr->broadcastCommand(all_uavs, "status_report")) {
+            std::cout << "✓ Status report command broadcasted to all UAVs" << std::endl;
+        }
 
-    // Broadcast command to all UAVs
-    std::vector<std::string> all_uavs = {"UAV_1", "UAV_2", "UAV_3"};
-    if (fleet_manager->broadcastCommand(all_uavs, "status_report")) {
-        std::cout << "✓ Status report command broadcasted to all UAVs" << std::endl;
+        // Execute coordinated commands
+        std::map<std::string, std::string> coordinated_commands;
+        coordinated_commands["UAV_1"] = "takeoff altitude=100";
+        coordinated_commands["UAV_2"] = "takeoff altitude=150";
+        coordinated_commands["UAV_3"] = "takeoff altitude=200";
+
+        if (fleet_ptr->executeCoordinatedCommand(coordinated_commands)) {
+            std::cout << "✓ Coordinated takeoff commands executed" << std::endl;
+        }
+
+        // Display fleet status
+        auto fleet_status = fleet_ptr->getFleetStatus();
+        displayFleetStatus(fleet_status);
+    } else {
+        std::cout << "✗ Failed to get FleetManager instance" << std::endl;
     }
-
-    // Execute coordinated commands
-    std::map<std::string, std::string> coordinated_commands;
-    coordinated_commands["UAV_1"] = "takeoff altitude=100";
-    coordinated_commands["UAV_2"] = "takeoff altitude=150";
-    coordinated_commands["UAV_3"] = "takeoff altitude=200";
-
-    if (fleet_manager->executeCoordinatedCommand(coordinated_commands)) {
-        std::cout << "✓ Coordinated takeoff commands executed" << std::endl;
-    }
-
-    // Display fleet status
-    auto fleet_status = fleet_manager->getFleetStatus();
-    displayFleetStatus(fleet_status);
 }
 
 int main(int argc, char* argv[]) {
@@ -356,16 +365,18 @@ int main(int argc, char* argv[]) {
             // Display data quality for UAV_1 every 2 loops (10 seconds)
             if (loop_counter % 2 == 0) {
                 auto data_analyzer = client.getDataAnalyzer();
-                auto quality = data_analyzer->getDataQuality("UAV_1");
-                displayDataQuality("UAV_1", quality);
+                if (auto analyzer_ptr = data_analyzer.lock()) {
+                    auto quality = analyzer_ptr->getDataQuality("UAV_1");
+                    displayDataQuality("UAV_1", quality);
 
-                // Display bandwidth usage
-                auto bandwidth = data_analyzer->getBandwidthUsage();
-                std::cout << "\n=== BANDWIDTH USAGE ===" << std::endl;
-                std::cout << "In: " << std::fixed << std::setprecision(2)
-                          << bandwidth.bytes_per_second_in << " B/s" << std::endl;
-                std::cout << "Out: " << bandwidth.bytes_per_second_out << " B/s" << std::endl;
-                std::cout << "Total Received: " << bandwidth.total_bytes_received << " bytes" << std::endl;
+                    // Display bandwidth usage
+                    auto bandwidth = analyzer_ptr->getBandwidthUsage();
+                    std::cout << "\n=== BANDWIDTH USAGE ===" << std::endl;
+                    std::cout << "In: " << std::fixed << std::setprecision(2)
+                              << bandwidth.bytes_per_second_in << " B/s" << std::endl;
+                    std::cout << "Out: " << bandwidth.bytes_per_second_out << " B/s" << std::endl;
+                    std::cout << "Total Received: " << bandwidth.total_bytes_received << " bytes" << std::endl;
+                }
             }
         }
 

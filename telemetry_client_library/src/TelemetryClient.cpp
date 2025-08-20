@@ -405,32 +405,57 @@ private:
                          << config_.udp_camera_port << " and " << config_.udp_mapping_port << std::endl;
             }
 
-            char buffer[2048];
+            // Buffers for async operations
+            auto camera_buffer = std::make_shared<std::array<char, 2048>>();
+            auto mapping_buffer = std::make_shared<std::array<char, 2048>>();
+            auto camera_endpoint = std::make_shared<udp::endpoint>();
+            auto mapping_endpoint = std::make_shared<udp::endpoint>();
 
+            // Lambda for camera data reception
+            std::function<void()> start_camera_receive = [this, &camera_socket, camera_buffer, camera_endpoint, &start_camera_receive]() {
+                camera_socket->async_receive_from(
+                    boost::asio::buffer(*camera_buffer),
+                    *camera_endpoint,
+                    [this, camera_buffer, &start_camera_receive](const boost::system::error_code& ec, std::size_t length) {
+                        if (!ec && length > 0 && running_) {
+                            std::string message(camera_buffer->data(), length);
+                            parseUdpMessage(message, Protocol::UDP_ONLY);
+                        }
+                        if (running_) {
+                            start_camera_receive(); // Continue receiving
+                        }
+                    }
+                );
+            };
+
+            // Lambda for mapping data reception
+            std::function<void()> start_mapping_receive = [this, &mapping_socket, mapping_buffer, mapping_endpoint, &start_mapping_receive]() {
+                mapping_socket->async_receive_from(
+                    boost::asio::buffer(*mapping_buffer),
+                    *mapping_endpoint,
+                    [this, mapping_buffer, &start_mapping_receive](const boost::system::error_code& ec, std::size_t length) {
+                        if (!ec && length > 0 && running_) {
+                            std::string message(mapping_buffer->data(), length);
+                            parseUdpMessage(message, Protocol::UDP_ONLY);
+                        }
+                        if (running_) {
+                            start_mapping_receive(); // Continue receiving
+                        }
+                    }
+                );
+            };
+
+            // Start async operations
+            start_camera_receive();
+            start_mapping_receive();
+
+            // Run the I/O context
             while (running_) {
-                // Check camera socket
-                udp::endpoint sender_endpoint;
-                boost::system::error_code ec;
-
-                camera_socket->non_blocking(true);
-                size_t length = camera_socket->receive_from(boost::asio::buffer(buffer), sender_endpoint, 0, ec);
-
-                if (!ec && length > 0) {
-                    std::string message(buffer, length);
-                    parseUdpMessage(message, Protocol::UDP_ONLY);
-                }
-
-                // Check mapping socket
-                mapping_socket->non_blocking(true);
-                length = mapping_socket->receive_from(boost::asio::buffer(buffer), sender_endpoint, 0, ec);
-
-                if (!ec && length > 0) {
-                    std::string message(buffer, length);
-                    parseUdpMessage(message, Protocol::UDP_ONLY);
-                }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                io_context_->run_for(std::chrono::milliseconds(100));
+                if (!running_) break;
+                io_context_->restart();
             }
+
         } catch (const std::exception& e) {
             if (error_callback_ && running_) {
                 error_callback_("UDP receiver error: " + std::string(e.what()));

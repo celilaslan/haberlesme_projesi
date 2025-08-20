@@ -988,27 +988,31 @@ public:
 
     /**
      * @brief Get data analyzer instance
-     * @return Pointer to data analyzer (ownership retained by client)
+     * @return Weak pointer to data analyzer (safe access, no ownership transfer)
+     * @warning Check if the pointer is valid before use: if (auto ptr = getDataAnalyzer().lock()) { ... }
      */
-    DataAnalyzer* getDataAnalyzer();
+    std::weak_ptr<DataAnalyzer> getDataAnalyzer();
 
     /**
      * @brief Get fleet manager instance
-     * @return Pointer to fleet manager (ownership retained by client)
+     * @return Weak pointer to fleet manager (safe access, no ownership transfer)
+     * @warning Check if the pointer is valid before use: if (auto ptr = getFleetManager().lock()) { ... }
      */
-    FleetManager* getFleetManager();
+    std::weak_ptr<FleetManager> getFleetManager();
 
     /**
      * @brief Get data buffer instance
-     * @return Pointer to data buffer (ownership retained by client)
+     * @return Weak pointer to data buffer (safe access, no ownership transfer)
+     * @warning Check if the pointer is valid before use: if (auto ptr = getDataBuffer().lock()) { ... }
      */
-    DataBuffer* getDataBuffer();
+    std::weak_ptr<DataBuffer> getDataBuffer();
 
     /**
      * @brief Get mock UAV instance for testing
-     * @return Pointer to mock UAV (ownership retained by client)
+     * @return Weak pointer to mock UAV (safe access, no ownership transfer)
+     * @warning Check if the pointer is valid before use: if (auto ptr = getMockUAV().lock()) { ... }
      */
-    MockUAV* getMockUAV();
+    std::weak_ptr<MockUAV> getMockUAV();
 
 private:
     class AdvancedImpl;

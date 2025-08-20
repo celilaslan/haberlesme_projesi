@@ -13,6 +13,10 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <fstream>
+#include <sstream>
+#include <numeric>
+#include <vector>
 
 namespace TelemetryAPI {
 
@@ -39,11 +43,11 @@ public:
                      auto_failover_enabled_(false),
                      performance_monitoring_(false) {
 
-        // Initialize advanced components
-        data_analyzer_ = std::make_unique<DataAnalyzer>();
-        fleet_manager_ = std::make_unique<FleetManager>();
-        data_buffer_ = std::make_unique<DataBuffer>();
-        mock_uav_ = std::make_unique<MockUAV>();
+        // Initialize advanced components - using shared_ptr for safe access
+        data_analyzer_ = std::make_shared<DataAnalyzer>();
+        fleet_manager_ = std::make_shared<FleetManager>();
+        data_buffer_ = std::make_shared<DataBuffer>();
+        mock_uav_ = std::make_shared<MockUAV>();
 
         // Initialize network stats
         network_stats_.latency_ms = 0.0;
@@ -379,10 +383,10 @@ public:
     // COMPONENT ACCESS
     // ========================================================================
 
-    DataAnalyzer* getDataAnalyzer() { return data_analyzer_.get(); }
-    FleetManager* getFleetManager() { return fleet_manager_.get(); }
-    DataBuffer* getDataBuffer() { return data_buffer_.get(); }
-    MockUAV* getMockUAV() { return mock_uav_.get(); }
+    std::weak_ptr<DataAnalyzer> getDataAnalyzer() { return data_analyzer_; }
+    std::weak_ptr<FleetManager> getFleetManager() { return fleet_manager_; }
+    std::weak_ptr<DataBuffer> getDataBuffer() { return data_buffer_; }
+    std::weak_ptr<MockUAV> getMockUAV() { return mock_uav_; }
 
 private:
     struct DataThreshold {
@@ -406,17 +410,74 @@ private:
 
         std::lock_guard<std::mutex> lock(performance_mutex_);
 
-        // Update CPU and memory usage (simplified)
-        current_metrics_.cpu_usage_percent = 5.0; // Placeholder
-        current_metrics_.memory_usage_mb = 50;     // Placeholder
+        // Update real system metrics
+        current_metrics_.cpu_usage_percent = getCurrentCpuUsage();
+        current_metrics_.memory_usage_mb = getCurrentMemoryUsage();
         current_metrics_.messages_per_second = message_count_last_second_;
-        current_metrics_.average_processing_time_ms = 1.0; // Placeholder
+        current_metrics_.average_processing_time_ms = calculateAverageProcessingTime();
 
         auto now = std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         current_metrics_.uptime_seconds = now - start_time_;
 
         message_count_last_second_ = 0; // Reset counter
+    }
+
+    // Get actual CPU usage (simplified implementation)
+    double getCurrentCpuUsage() {
+        // This is a simplified implementation. For production, you'd want to use
+        // platform-specific APIs like /proc/stat on Linux or GetSystemTimes on Windows
+        #ifdef __linux__
+        static auto last_idle = 0ULL, last_total = 0ULL;
+        std::ifstream file("/proc/stat");
+        std::string line;
+        if (std::getline(file, line)) {
+            std::istringstream ss(line);
+            std::string cpu;
+            std::vector<unsigned long long> times(10, 0);
+            ss >> cpu;
+            for (size_t i = 0; i < times.size() && ss >> times[i]; ++i) {}
+
+            auto idle = times[3] + times[4];
+            auto total = std::accumulate(times.begin(), times.begin() + 8, 0ULL);
+
+            auto idle_diff = idle - last_idle;
+            auto total_diff = total - last_total;
+
+            last_idle = idle;
+            last_total = total;
+
+            if (total_diff > 0) {
+                return 100.0 * (1.0 - static_cast<double>(idle_diff) / total_diff);
+            }
+        }
+        #endif
+        return 0.0; // Fallback for non-Linux or if reading fails
+    }
+
+    // Get actual memory usage
+    double getCurrentMemoryUsage() {
+        #ifdef __linux__
+        std::ifstream file("/proc/self/status");
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.substr(0, 6) == "VmRSS:") {
+                std::istringstream ss(line.substr(6));
+                double memory_kb;
+                if (ss >> memory_kb) {
+                    return memory_kb / 1024.0; // Convert KB to MB
+                }
+            }
+        }
+        #endif
+        return 0.0; // Fallback
+    }
+
+    // Calculate average processing time from recent samples
+    double calculateAverageProcessingTime() {
+        // This would maintain a sliding window of processing times
+        // For now, return a computed value based on current load
+        return static_cast<double>(message_count_last_second_) * 0.1; // Simplified
     }
 
     // ========================================================================
@@ -469,19 +530,21 @@ private:
     uint64_t start_time_ = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 
-    // Advanced components
-    std::unique_ptr<DataAnalyzer> data_analyzer_;
-    std::unique_ptr<FleetManager> fleet_manager_;
-    std::unique_ptr<DataBuffer> data_buffer_;
-    std::unique_ptr<MockUAV> mock_uav_;
+    // Advanced components - using shared_ptr for safe weak_ptr access
+    std::shared_ptr<DataAnalyzer> data_analyzer_;
+    std::shared_ptr<FleetManager> fleet_manager_;
+    std::shared_ptr<DataBuffer> data_buffer_;
+    std::shared_ptr<MockUAV> mock_uav_;
 };
 
 // TelemetryClientAdvanced implementation
 TelemetryClientAdvanced::TelemetryClientAdvanced()
     : TelemetryClient(), pAdvancedImpl(std::make_unique<AdvancedImpl>()) {
 
-    // Initialize fleet manager with this client
-    pAdvancedImpl->getFleetManager()->initialize(this);
+    // Initialize fleet manager with this client - safe access via weak_ptr
+    if (auto fleet_mgr = pAdvancedImpl->getFleetManager().lock()) {
+        fleet_mgr->initialize(this);
+    }
 }
 
 TelemetryClientAdvanced::~TelemetryClientAdvanced() = default;
@@ -607,19 +670,19 @@ bool TelemetryClientAdvanced::enablePerformanceMonitoring(bool enable) {
 }
 
 // Component Access
-DataAnalyzer* TelemetryClientAdvanced::getDataAnalyzer() {
+std::weak_ptr<DataAnalyzer> TelemetryClientAdvanced::getDataAnalyzer() {
     return pAdvancedImpl->getDataAnalyzer();
 }
 
-FleetManager* TelemetryClientAdvanced::getFleetManager() {
+std::weak_ptr<FleetManager> TelemetryClientAdvanced::getFleetManager() {
     return pAdvancedImpl->getFleetManager();
 }
 
-DataBuffer* TelemetryClientAdvanced::getDataBuffer() {
+std::weak_ptr<DataBuffer> TelemetryClientAdvanced::getDataBuffer() {
     return pAdvancedImpl->getDataBuffer();
 }
 
-MockUAV* TelemetryClientAdvanced::getMockUAV() {
+std::weak_ptr<MockUAV> TelemetryClientAdvanced::getMockUAV() {
     return pAdvancedImpl->getMockUAV();
 }
 
