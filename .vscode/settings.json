@@ -81,6 +81,8 @@
     "C_Cpp.default.cStandard": "c17",
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.autoAddFileAssociations": false,
+    "C_Cpp.configurationWarnings": "disabled",
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": false,
     "editor.tabSize": 2,
