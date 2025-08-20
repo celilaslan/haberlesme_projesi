@@ -1,9 +1,10 @@
 # Telemetry Client Library
 
-A simple C++ shared library (.so/.dll) that provides an easy-to-use API for communicating with the telemetry service. This library hides the complexity of ZeroMQ and Boost.Asio networking, allowing developers to focus on their application logic.
+A comprehensive C++ shared library (.so/.dll) that provides both basic and advanced APIs for communicating with the telemetry service. This library offers everything from simple telemetry reception to advanced fleet management, data analysis, and real-time monitoring capabilities.
 
 ## Features
 
+### Basic Features
 - **Simple API**: Clean, intuitive interface for telemetry communication
 - **Protocol Support**: TCP (ZeroMQ), UDP (Boost.Asio), or both simultaneously
 - **Filtering**: Subscribe to specific UAVs or data types (mapping/camera)
@@ -11,7 +12,18 @@ A simple C++ shared library (.so/.dll) that provides an easy-to-use API for comm
 - **Thread-Safe**: Safe to use from multiple threads
 - **Cross-Platform**: Works on Linux and Windows
 - **Error Handling**: Comprehensive error reporting and callbacks
-- **No External Dependencies**: All networking libraries are encapsulated
+
+### Advanced Features ✨
+- **Asynchronous Commands**: Send commands with response callbacks and timeout handling
+- **Fleet Management**: Multi-UAV coordination and status monitoring
+- **Data Analysis**: Real-time quality metrics, bandwidth monitoring, and historical data
+- **Event System**: Subscribe to UAV events (connection, disconnection, emergencies)
+- **Security**: Authentication, encryption, and permission-based access control
+- **Performance Monitoring**: CPU, memory, and throughput metrics
+- **Data Recording/Replay**: Record telemetry sessions and replay for analysis
+- **Mock UAV Simulation**: Built-in UAV simulator for testing and development
+- **Network Resilience**: Automatic failover, backup connections, and quality monitoring
+- **Advanced Configuration**: Operation modes, protocol optimization, and dynamic settings
 
 ## Quick Start
 
@@ -153,7 +165,38 @@ Dedicated command sending utility.
 ./telemetry_client_library/examples/command_sender
 ```
 
-## Configuration
+### advanced_telemetry_client ✨
+**NEW**: Comprehensive demonstration of all advanced features.
+```bash
+./telemetry_client_library/examples/advanced_telemetry_client [service_host]
+```
+
+This advanced example demonstrates:
+- **Fleet Management**: Multi-UAV coordination and status monitoring
+- **Asynchronous Commands**: Non-blocking command execution with callbacks
+- **Data Recording**: Automatic telemetry session recording
+- **Performance Monitoring**: Real-time metrics and network statistics
+- **Mock UAV Simulation**: Built-in test UAV with configurable network conditions
+- **Event Handling**: Real-time notifications for UAV events
+- **Data Quality Analysis**: Packet loss, latency, and freshness metrics
+
+Example output:
+```
+=== FLEET STATUS ===
+Active UAVs: 3/3
+Overall Health: 87.5%
+  UAV_1: ONLINE (Health: 92.3%)
+  UAV_2: ONLINE (Health: 85.1%)
+  UAV_3: OFFLINE (Health: 45.2%)
+
+=== PERFORMANCE METRICS ===
+CPU Usage: 5.2%
+Memory Usage: 84 MB
+Messages/sec: 156
+Avg Processing Time: 1.23 ms
+```
+
+## Advanced API Classes
 
 The library automatically loads configuration from:
 1. `SERVICE_CONFIG` environment variable
