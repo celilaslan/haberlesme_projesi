@@ -241,3 +241,16 @@ docs/latex/
 docs/_build/
 Doxyfile.bak
 *.tag
+
+# ---- Compiled executables (keep local only) ----
+# Main application executables
+camera_ui/camera_ui
+mapping_ui/mapping_ui
+telemetry_service/telemetry_service
+uav_sim/uav_sim
+
+# Example client executables
+telemetry_client_library/examples/simple_receiver
+telemetry_client_library/examples/advanced_client
+telemetry_client_library/examples/advanced_telemetry_client
+telemetry_client_library/examples/command_sender
