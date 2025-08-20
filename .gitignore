@@ -69,6 +69,7 @@ telemetry_service/telemetry_test.txt
 # ---- Development documentation (local only) ----
 DEVELOPER_LOG.md
 g*n_sonu_raporlar*.txt
+.specstory/
 
 # ---- Local config overrides (create locally if needed) ----
 service_config.local.json
