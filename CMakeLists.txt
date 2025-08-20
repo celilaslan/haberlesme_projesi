@@ -1,6 +1,6 @@
 # @file CMakeLists.txt
 # @brief Main CMake configuration for the telemetry communication project
-# 
+#
 # This file sets up the build system for a cross-platform telemetry service
 # and associated applications. It handles dependency management, compiler
 # configuration, and provides helper functions for consistent linking.
@@ -121,7 +121,7 @@ endif()
 
 # @brief Helper function to link a target with ZeroMQ and threading libraries
 # @param target The CMake target to link libraries to
-# 
+#
 # This function handles the various ways ZeroMQ might be packaged across
 # different platforms and package managers, providing a consistent interface.
 function(link_with_zmq target)
@@ -140,7 +140,7 @@ endfunction()
 
 # @brief Helper function to link a target with Boost libraries
 # @param target The CMake target to link libraries to
-# 
+#
 # Links the target with Boost system library and sets up include directories.
 # Used for UDP communication via Boost.Asio. Prefers modern CMake targets.
 function(link_with_boost target)
@@ -152,9 +152,9 @@ function(link_with_boost target)
     target_include_directories(${target} PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(${target} PRIVATE ${Boost_LIBRARIES})
   endif()
-  
+
   # Add compile definitions for Boost.Asio
-  target_compile_definitions(${target} PRIVATE 
+  target_compile_definitions(${target} PRIVATE
     BOOST_ASIO_STANDALONE
     BOOST_ASIO_DISABLE_DEPRECATED
   )
@@ -162,7 +162,7 @@ endfunction()
 
 # @brief Helper function to link a target with nlohmann/json library
 # @param target The CMake target to link libraries to
-# 
+#
 # Links the header-only JSON library. Uses the modern CMake interface
 # target if available.
 function(link_with_json target)
@@ -173,7 +173,7 @@ endfunction()
 
 # @brief Helper function to place executables in their source directories
 # @param target The CMake target to configure
-# 
+#
 # This function sets the runtime output directory to be the same as the
 # source directory, making it easier to run executables from their
 # component directories during development.
@@ -182,11 +182,11 @@ function(set_target_to_source_dir target)
   if(NOT srcs)
     return()
   endif()
-  
+
   # Get the directory of the first source file
   list(GET srcs 0 first_src)
   get_filename_component(src_dir ${first_src} DIRECTORY)
-  
+
   # Set output directory for all build configurations
   set_target_properties(${target} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${src_dir}
@@ -205,6 +205,7 @@ add_subdirectory(telemetry_service)  # Main telemetry service
 add_subdirectory(uav_sim)           # UAV simulator
 add_subdirectory(camera_ui)         # Camera UI application
 add_subdirectory(mapping_ui)        # Mapping UI application
+add_subdirectory(telemetry_client_library)  # Telemetry client shared library
 
 # === Installation Configuration ===
 
@@ -240,9 +241,10 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Multi-UAV Telemetry Service")
 set(CPACK_PACKAGE_VENDOR "Telemetry Project")
 
 # Configure package components
-set(CPACK_COMPONENTS_ALL Runtime Configuration SystemdService)
+set(CPACK_COMPONENTS_ALL Runtime Configuration SystemdService TelemetryClientLibrary)
 set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Telemetry Service Executables")
 set(CPACK_COMPONENT_CONFIGURATION_DISPLAY_NAME "Configuration Files")
 set(CPACK_COMPONENT_SYSTEMDSERVICE_DISPLAY_NAME "SystemD Service Files")
+set(CPACK_COMPONENT_TELEMETRYCLIENTLIBRARY_DISPLAY_NAME "Telemetry Client Library")
 
 include(CPack)

@@ -1,21 +1,17 @@
-﻿/**
+/**
  * @file camera_ui.cpp
  * @brief Camera UI application for receiving and displaying camera telemetry data
- * 
- * This application connects to the telemetry service and subscribes to camera-related
- * telemetry data from UAVs. It supports both TCP and UDP protocols for receiving data.
- * It can also optionally send commands back to UAVs via the telemetry service.
+ *
+ * This application uses the TelemetryClient library to connect to the telemetry service
+ * and subscribe to camera-related telemetry data from UAVs. It supports both TCP and UDP
+ * protocols via the simplified library API and can send commands back to UAVs.
  */
 
-#include <zmq.hpp>
-#include <boost/asio.hpp>
-#include <nlohmann/json.hpp>
-#include <fstream>
+#include "TelemetryClient.h"
 #include <iostream>
 #include <chrono>
 #include <ctime>
 #include <sstream>
-#include <cstdlib>
 #include <memory>
 #include <thread>
 #include <string>
@@ -25,8 +21,7 @@
 #include <sys/select.h>
 #include <unistd.h>
 
-using boost::asio::ip::udp;
-using json = nlohmann::json;
+using namespace TelemetryAPI;
 
 // Global flag for graceful shutdown
 std::atomic<bool> g_running(true);
@@ -44,7 +39,7 @@ void signalHandler(int signal) {
 /**
  * @brief Generate a formatted timestamp string with millisecond precision
  * @return Timestamp string in format "YYYY-MM-DD HH:MM:SS.mmm"
- * 
+ *
  * Uses platform-specific time conversion functions for thread safety.
  * Used for logging telemetry data reception times.
  */
@@ -56,7 +51,7 @@ std::string GetTimestamp() {
 
     std::ostringstream oss;
     struct tm time_info;
-    
+
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
     localtime_s(&time_info, &time_t_now);
@@ -71,303 +66,201 @@ std::string GetTimestamp() {
 }
 
 /**
- * @brief Load configuration from service_config.json file
- * @param tcp_publish_port Reference to store TCP publish port
- * @param tcp_command_port Reference to store TCP command port
- * @param udp_camera_port Reference to store UDP camera port
- * @return true if configuration loaded successfully, false otherwise
+ * @brief Telemetry data callback function
+ * @param data Received telemetry data from the service
+ *
+ * This function is called by the TelemetryClient whenever camera telemetry
+ * data is received. It filters for camera data and displays it with timestamps.
  */
-bool loadConfig(int& tcp_publish_port, int& tcp_command_port, int& udp_camera_port) {
-    std::ifstream file("service_config.json");
-    if (!file.is_open()) {
-        std::cerr << "Warning: Could not open service_config.json, using default ports\n";
-        tcp_publish_port = 5557;
-        tcp_command_port = 5558;
-        udp_camera_port = 5570;
-        return false;
-    }
+void onTelemetryReceived(const TelemetryData& data) {
+    // Only display camera data (filtering is also done at subscription level)
+    if (data.data_type == DataType::CAMERA) {
+        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY) ? "TCP" :
+                                  (data.received_via == Protocol::UDP_ONLY) ? "UDP" : "MIXED";
 
-    try {
-        json j;
-        file >> j;
-        file.close();
-
-        if (j.contains("ui_ports")) {
-            tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
-            tcp_command_port = j["ui_ports"]["tcp_command_port"];
-            udp_camera_port = j["ui_ports"]["udp_camera_port"];
-            return true;
-        } else {
-            std::cerr << "Warning: ui_ports section not found in config, using defaults\n";
-            tcp_publish_port = 5557;
-            tcp_command_port = 5558;
-            udp_camera_port = 5570;
-            return false;
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Error parsing config file: " << e.what() << ", using defaults\n";
-        tcp_publish_port = 5557;
-        tcp_command_port = 5558;
-        udp_camera_port = 5570;
-        return false;
+        std::cout << "[" << GetTimestamp() << "] "
+                  << "UAV: " << data.uav_name << " | "
+                  << "Type: CAMERA | "
+                  << "Protocol: " << protocol_str << " | "
+                  << "Data: " << data.raw_data << std::endl;
     }
 }
 
 /**
- * @brief Main entry point for the camera UI application
+ * @brief Error callback function for telemetry client
+ * @param error_message Description of the error that occurred
+ */
+void onTelemetryError(const std::string& error_message) {
+    std::cerr << "[Camera UI Error] " << error_message << std::endl;
+}
+
+/**
+ * @brief Main function - Camera UI application entry point
  * @param argc Number of command line arguments
  * @param argv Array of command line argument strings
- * @return Exit code (0 for success)
- * 
- * Usage:
- * ./camera_ui --protocol <tcp|udp> [--send UAV_NAME]
- * 
- * Required arguments:
- * --protocol tcp|udp : Communication protocol (TCP or UDP)
- * 
- * Optional arguments:
- * --send UAV_NAME    : Enable command sending to specified UAV
- * 
- * This function:
- * 1. Parses command line arguments to determine protocol and options
- * 2. Sets up TCP or UDP receiver based on protocol selection
- * 3. Optionally sets up a command sender if --send flag is provided
- * 4. Continuously receives and displays telemetry data
- * 5. Allows sending commands to UAVs via stdin input
+ * @return Exit code (0 for success, non-zero for error)
+ *
+ * Usage: ./camera_ui [--protocol tcp|udp|both] [--send UAV_NAME] [--uav UAV_NAME]
  */
 int main(int argc, char* argv[]) {
     // Set up signal handlers for graceful shutdown
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
-    
-    std::string protocol = "";  // No default - explicit choice required
-    std::string target = "UAV_1";
-    bool enableSender = false;
-    
-    // Load configuration from file
-    int tcp_publish_port, tcp_command_port, udp_camera_port;
-    loadConfig(tcp_publish_port, tcp_command_port, udp_camera_port);
-    
+
     // Parse command line arguments
+    std::string protocol = "both";  // Default to both protocols
+    bool enableSender = false;
+    std::string target;
+    std::string filter_uav;
+
     for (int i = 1; i < argc; i++) {
         if (std::string(argv[i]) == "--protocol" && i + 1 < argc) {
             protocol = argv[++i];
         } else if (std::string(argv[i]) == "--send" && i + 1 < argc) {
             enableSender = true;
             target = argv[++i];
+        } else if (std::string(argv[i]) == "--uav" && i + 1 < argc) {
+            filter_uav = argv[++i];
+        } else if (std::string(argv[i]) == "--help") {
+            std::cout << "Camera UI - Telemetry Client Library Demo\n";
+            std::cout << "Usage: " << argv[0] << " [options]\n";
+            std::cout << "Options:\n";
+            std::cout << "  --protocol tcp|udp|both : Communication protocol (default: both)\n";
+            std::cout << "  --send UAV_NAME         : Enable command sending to specified UAV\n";
+            std::cout << "  --uav UAV_NAME          : Filter telemetry to specific UAV only\n";
+            std::cout << "  --help                  : Show this help message\n";
+            return 0;
         }
     }
-    
-    // Validate required protocol argument
-    if (protocol.empty()) {
-        std::cerr << "Error: Protocol must be specified!\n";
-        std::cerr << "Usage: ./camera_ui --protocol <tcp|udp> [--send UAV_NAME]\n";
-        std::cerr << "  --protocol tcp|udp : Communication protocol (required)\n";
-        std::cerr << "  --send UAV_NAME    : Enable command sending to specified UAV\n";
-        return 1;
-    }
-    
-    if (protocol != "tcp" && protocol != "udp") {
-        std::cerr << "Error: Protocol must be 'tcp' or 'udp'\n";
-        return 1;
-    }
-    
-    if (protocol == "udp") {
-        // UDP-based telemetry reception (read-only)
-        std::cout << "[Camera UI] Using UDP protocol on port " << udp_camera_port << " (telemetry reception only)\n";
-        
-        if (enableSender) {
-            std::cerr << "Warning: Command sending is not supported via UDP protocol. UDP is for telemetry reception only.\n";
-            std::cerr << "Use TCP protocol (--protocol tcp) for bidirectional communication with command sending.\n";
-            enableSender = false;
-        }
-        
-        boost::asio::io_context io_context;
-        udp::socket socket(io_context, udp::endpoint(udp::v4(), udp_camera_port));
-        
-        // Main UDP telemetry reception loop (read-only)
-        std::cout << "Press Ctrl+C to stop the camera UI..." << std::endl;
-        while (g_running) {
-            char buffer[2048];  // Increased buffer size for safety
-            udp::endpoint sender_endpoint;
-            
-            try {
-                // Set socket to non-blocking mode for responsive shutdown
-                socket.non_blocking(true);
-                
-                size_t length = 0;
-                boost::system::error_code ec;
-                
-                // Non-blocking receive
-                length = socket.receive_from(boost::asio::buffer(buffer), sender_endpoint, 0, ec);
-                
-                if (ec) {
-                    if (ec == boost::asio::error::would_block) {
-                        // No data available, check for shutdown signal
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                        continue;
-                    } else {
-                        std::cerr << "UDP receive error: " << ec.message() << std::endl;
-                        continue;
-                    }
-                }
-                
-                if (length > 0 && length < sizeof(buffer)) {
-                    std::string message(buffer, length);
-                    
-                    // Parse message format: "topic|data"
-                    size_t separator = message.find('|');
-                    if (separator != std::string::npos) {
-                        std::string topic = message.substr(0, separator);
-                        std::string data = message.substr(separator + 1);
-                        
-                        // Only display camera-related topics
-                        if (topic.find("camera") == 0) {
-                            std::cout << "[" << GetTimestamp() << "] Topic: " << topic << " | Data: " << data << std::endl;
-                        }
-                    }
-                }
-            } catch (const std::exception& e) {
-                if (g_running) {
-                    std::cerr << "UDP receive error: " << e.what() << std::endl;
-                }
-            }
-        }
-        
-        // Cleanup UDP resources
-        try {
-            socket.close();
-        } catch (const std::exception&) {
-            // Ignore cleanup errors
-        }
-        
+
+    // Validate protocol argument
+    Protocol client_protocol;
+    if (protocol == "tcp") {
+        client_protocol = Protocol::TCP_ONLY;
+    } else if (protocol == "udp") {
+        client_protocol = Protocol::UDP_ONLY;
+    } else if (protocol == "both") {
+        client_protocol = Protocol::BOTH;
     } else {
-        // TCP-based telemetry reception (original implementation)
-        std::cout << "[Camera UI] Using TCP protocol\n";
-        
-        // Create ZeroMQ context with 1 I/O thread
-        zmq::context_t context(1);
-        
-        // Create subscriber socket to receive telemetry data
-        zmq::socket_t subscriber(context, zmq::socket_type::sub);
+        std::cerr << "Error: Protocol must be 'tcp', 'udp', or 'both'\n";
+        return 1;
+    }
 
-        // Connect to the telemetry service's publish port
-        subscriber.connect("tcp://localhost:" + std::to_string(tcp_publish_port));
-        
-        // Subscribe to all messages with "camera" topic prefix
-        // This will receive messages like "camera_UAV_1", "camera_UAV_2", etc.
-        subscriber.set(zmq::sockopt::subscribe, "camera");
+    std::cout << "=== Camera UI - Using TelemetryClient Library ===\n";
+    std::cout << "Protocol: " << protocol << "\n";
+    if (!filter_uav.empty()) {
+        std::cout << "Filtering UAV: " << filter_uav << "\n";
+    }
+    if (enableSender) {
+        std::cout << "Command target: " << target << "\n";
+    }
+    std::cout << "\n";
 
-        std::cout << "[Camera UI] Subscribed to 'camera' topic\n";
+    // Create and initialize telemetry client
+    TelemetryClient client;
 
-        // Optional command sender functionality
-        std::unique_ptr<zmq::socket_t> push;
-        std::thread senderThread;
-        
-        if (enableSender) {
-            // Create PUSH socket for sending commands to the service
-            push = std::make_unique<zmq::socket_t>(context, zmq::socket_type::push);
-            push->connect("tcp://localhost:" + std::to_string(tcp_command_port));  // Service command port
-            
-            // Start background thread to read commands from stdin
-            senderThread = std::thread([p = push.get(), target]() {
-                std::string line;
-                std::cout << "[Camera UI] Type commands for " << target << " (press Enter to send, Ctrl+C to exit):" << std::endl;
-                
-                while (g_running) {
-                    // Check if input is available without blocking
-                    fd_set readfds;
-                    FD_ZERO(&readfds);
-                    FD_SET(STDIN_FILENO, &readfds);
-                    
-                    struct timeval timeout;
-                    timeout.tv_sec = 0;
-                    timeout.tv_usec = 100000; // 100ms timeout
-                    
-                    int result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
-                    
-                    if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
-                        if (std::getline(std::cin, line)) {
-                            if (!g_running) break;
-                            try {
-                                // Format: "TARGET_UAV:[camera-ui] user_command"
-                                const std::string msg = target + ":[camera-ui] " + line;
-                                p->send(zmq::buffer(msg), zmq::send_flags::dontwait);
-                                std::cout << "[Camera UI] Sent command: " << line << std::endl;
-                            } catch (const zmq::error_t& e) {
-                                if (g_running && e.num() != EAGAIN) {
-                                    std::cerr << "TCP send error: " << e.what() << std::endl;
-                                }
-                            }
-                        } else {
-                            break; // EOF or error
-                        }
-                    } else if (result < 0) {
-                        break; // Error in select
-                    }
-                    // If result == 0, timeout occurred, loop continues and checks g_running
-                }
-            });
-            
-            std::cout << "[Camera UI] TCP Sender enabled to " << target << " via port " << tcp_command_port << "\n";
+    if (!client.initialize("localhost")) {
+        std::cerr << "Failed to initialize telemetry client\n";
+        return 1;
+    }
+
+    std::cout << "✓ Telemetry client initialized\n";
+    std::cout << "Available UAVs: ";
+    auto uavs = client.getAvailableUAVs();
+    if (uavs.empty()) {
+        std::cout << "None found (using defaults)\n";
+    } else {
+        for (size_t i = 0; i < uavs.size(); ++i) {
+            std::cout << uavs[i];
+            if (i < uavs.size() - 1) std::cout << ", ";
         }
+        std::cout << "\n";
+    }
 
-        // Main TCP telemetry reception loop
-        std::cout << "Press Ctrl+C to stop the camera UI..." << std::endl;
-        while (g_running) {
-            zmq::message_t topic, data;
-            
-            try {
-                // Use non-blocking receive to allow periodic checks of g_running
-                if (!subscriber.recv(topic, zmq::recv_flags::dontwait)) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
-                
-                // Receive data (second frame of multipart message)
-                if (!subscriber.recv(data, zmq::recv_flags::dontwait)) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
+    // Start receiving telemetry data
+    if (!client.startReceiving(client_protocol, onTelemetryReceived, onTelemetryError)) {
+        std::cerr << "Failed to start receiving telemetry data\n";
+        return 1;
+    }
 
-                // Convert TCP messages to strings
-                std::string msg(static_cast<char*>(data.data()), data.size());
-                std::string topic_str(static_cast<char*>(topic.data()), topic.size());
+    std::cout << "✓ Started receiving telemetry data\n";
 
-                // Display received telemetry data with timestamp
-                std::cout << "[" << GetTimestamp() << "] Topic: " << topic_str << " | Data: " << msg << std::endl;
-                
-            } catch (const zmq::error_t& e) {
-                if (g_running && e.num() != EAGAIN) {
-                    std::cerr << "TCP receive error: " << e.what() << std::endl;
-                }
-            }
-        }
-        
-        // Cleanup TCP resources
-        if (senderThread.joinable()) {
-            senderThread.join();
-        }
-        if (push) {
-            try {
-                push->close();
-            } catch (const zmq::error_t&) {
-                // Ignore cleanup errors
-            }
-        }
-        try {
-            subscriber.close();
-        } catch (const zmq::error_t&) {
-            // Ignore cleanup errors
+    // Subscribe to camera data only
+    if (!client.subscribeToDataType(DataType::CAMERA)) {
+        std::cerr << "Warning: Failed to subscribe to camera data type\n";
+    }
+
+    // If filtering by specific UAV, subscribe to it
+    if (!filter_uav.empty()) {
+        if (!client.subscribeToUAV(filter_uav, DataType::CAMERA)) {
+            std::cerr << "Warning: Failed to subscribe to UAV " << filter_uav << "\n";
+        } else {
+            std::cout << "✓ Filtering camera data from " << filter_uav << "\n";
         }
     }
-    
+
+    std::cout << client.getConnectionStatus() << "\n\n";
+
+    // Start command sender thread if enabled
+    std::thread senderThread;
+    if (enableSender) {
+        senderThread = std::thread([&client, target]() {
+            std::string line;
+            std::cout << "[Camera UI] Type commands for " << target << " (press Enter to send, Ctrl+C to exit):\n";
+
+            while (g_running) {
+                // Check if input is available without blocking
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(STDIN_FILENO, &readfds);
+
+                struct timeval timeout;
+                timeout.tv_sec = 0;
+                timeout.tv_usec = 100000; // 100ms timeout
+
+                int result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
+
+                if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
+                    if (std::getline(std::cin, line)) {
+                        if (!g_running) break;
+
+                        if (client.sendCommand(target, line, "camera-ui")) {
+                            std::cout << "[Camera UI] Sent command: " << line << std::endl;
+                        } else {
+                            std::cerr << "[Camera UI] Failed to send command: " << line << std::endl;
+                        }
+                    }
+                } else if (result < 0) {
+                    break; // Error occurred
+                }
+            }
+        });
+    }
+
+    std::cout << "Listening for camera telemetry data... (Press Ctrl+C to stop)\n";
+    std::cout << "============================================\n";
+
+    // Main loop - just wait for shutdown signal
+    while (g_running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    std::cout << "\nShutting down...\n";
+
+    // Stop the telemetry client
+    client.stopReceiving();
+
+    // Wait for sender thread to finish
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
+
     // Log shutdown reason if caused by signal
     int signal_num = g_signal_received.load();
     if (signal_num > 0) {
         std::cout << "Camera UI shutdown initiated by signal: " << signal_num << std::endl;
     }
-    
-    std::cout << "Camera UI stopped." << std::endl;
+
+    std::cout << "Camera UI stopped.\n";
     return 0;
 }
