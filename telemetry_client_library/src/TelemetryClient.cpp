@@ -138,6 +138,94 @@ public:
         return true;
     }
 
+    bool unsubscribeFromUAV(const std::string& uav_name, DataType data_type) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+
+        if (data_type == DataType::UNKNOWN) {
+            // Unsubscribe from both mapping and camera data for this UAV
+            std::string mapping_topic = "mapping_" + uav_name;
+            std::string camera_topic = "camera_" + uav_name;
+
+            uav_filters_.erase(mapping_topic);
+            uav_filters_.erase(camera_topic);
+
+            // Use ZeroMQ unsubscription for both types
+            if (tcp_socket_) {
+                tcp_socket_->set(zmq::sockopt::unsubscribe, mapping_topic);
+                tcp_socket_->set(zmq::sockopt::unsubscribe, camera_topic);
+            }
+        } else {
+            std::string topic_prefix = (data_type == DataType::MAPPING) ? "mapping_" : "camera_";
+            std::string full_topic = topic_prefix + uav_name;
+            uav_filters_.erase(full_topic);
+
+            // Use ZeroMQ unsubscription for specific topic
+            if (tcp_socket_) {
+                tcp_socket_->set(zmq::sockopt::unsubscribe, full_topic);
+            }
+        }
+
+        if (debug_mode_) {
+            std::cout << "[TelemetryClient] Unsubscribed from UAV: " << uav_name
+                     << " (type: " << static_cast<int>(data_type) << ")" << std::endl;
+        }
+
+        return true;
+    }
+
+    bool unsubscribeFromDataType(DataType data_type) {
+        if (data_type == DataType::UNKNOWN) {
+            last_error_ = "Cannot unsubscribe from UNKNOWN data type";
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        std::string prefix = (data_type == DataType::MAPPING) ? "mapping" : "camera";
+        data_type_filters_.erase(prefix);
+
+        // Use ZeroMQ unsubscription
+        if (tcp_socket_) {
+            tcp_socket_->set(zmq::sockopt::unsubscribe, prefix);
+        }
+
+        if (debug_mode_) {
+            std::cout << "[TelemetryClient] Unsubscribed from data type: " << prefix << std::endl;
+        }
+
+        return true;
+    }
+
+    bool clearAllSubscriptions() {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+
+        // Clear all filters
+        auto all_filters = uav_filters_;
+        auto all_type_filters = data_type_filters_;
+
+        uav_filters_.clear();
+        data_type_filters_.clear();
+
+        // Remove all ZeroMQ subscriptions
+        if (tcp_socket_) {
+            // Unsubscribe from all UAV-specific topics
+            for (const auto& topic : all_filters) {
+                tcp_socket_->set(zmq::sockopt::unsubscribe, topic);
+            }
+
+            // Unsubscribe from all data type filters
+            for (const auto& prefix : all_type_filters) {
+                tcp_socket_->set(zmq::sockopt::unsubscribe, prefix);
+            }
+        }
+
+        if (debug_mode_) {
+            std::cout << "[TelemetryClient] Cleared all subscriptions ("
+                     << all_filters.size() + all_type_filters.size() << " total)" << std::endl;
+        }
+
+        return true;
+    }
+
     bool sendCommand(const std::string& uav_name, const std::string& command, const std::string& client_name) {
         try {
             // Lazy initialization of command sender
@@ -563,6 +651,18 @@ bool TelemetryClient::subscribeToUAV(const std::string& uav_name, DataType data_
 
 bool TelemetryClient::subscribeToDataType(DataType data_type) {
     return pImpl->subscribeToDataType(data_type);
+}
+
+bool TelemetryClient::unsubscribeFromUAV(const std::string& uav_name, DataType data_type) {
+    return pImpl->unsubscribeFromUAV(uav_name, data_type);
+}
+
+bool TelemetryClient::unsubscribeFromDataType(DataType data_type) {
+    return pImpl->unsubscribeFromDataType(data_type);
+}
+
+bool TelemetryClient::clearAllSubscriptions() {
+    return pImpl->clearAllSubscriptions();
 }
 
 bool TelemetryClient::sendCommand(const std::string& uav_name, const std::string& command, const std::string& client_name) {

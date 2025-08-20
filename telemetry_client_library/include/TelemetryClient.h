@@ -147,6 +147,34 @@ public:
     bool subscribeToDataType(DataType data_type);
 
     /**
+     * @brief Unsubscribe from specific UAV data
+     * @param uav_name Name of the UAV to unsubscribe from (e.g., "UAV_1")
+     * @param data_type Type of data to stop receiving (MAPPING, CAMERA, or both if not specified)
+     * @return true if unsubscription succeeded, false otherwise
+     *
+     * This method removes subscriptions for the specified UAV and data type,
+     * reducing network traffic and processing overhead.
+     */
+    bool unsubscribeFromUAV(const std::string& uav_name, DataType data_type = DataType::UNKNOWN);
+
+    /**
+     * @brief Unsubscribe from specific data type from all UAVs
+     * @param data_type Type of data to stop receiving (MAPPING or CAMERA)
+     * @return true if unsubscription succeeded, false otherwise
+     */
+    bool unsubscribeFromDataType(DataType data_type);
+
+    /**
+     * @brief Clear all subscriptions
+     * @return true if successful
+     *
+     * This method removes all active subscriptions, effectively stopping
+     * all filtered data reception. The client will still receive data
+     * but no filtering will be applied.
+     */
+    bool clearAllSubscriptions();
+
+    /**
      * @brief Send a command to a specific UAV
      * @param uav_name Target UAV name (e.g., "UAV_1")
      * @param command Command string to send
