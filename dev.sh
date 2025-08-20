@@ -9,7 +9,7 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 #   ./dev.sh <command> [options]
 #
 # Build Commands:
-#   configure [build_dir] [build_type] [--warnings] [--debug] [--werror] 
+#   configure [build_dir] [build_type] [--warnings] [--debug] [--werror]
 #                           - Run CMake to configure the project (Debug/Release).
 #                             --warnings: Enable compiler warnings
 #                             --debug: Enable debug information
@@ -86,13 +86,13 @@ validate_config() {
     echo "Error: Configuration file not found: $config_file" >&2
     return 1
   fi
-  
+
   # Basic JSON syntax check
   if ! python3 -m json.tool "$config_file" >/dev/null 2>&1; then
     echo "Error: Invalid JSON in configuration file: $config_file" >&2
     return 1
   fi
-  
+
   echo "Configuration file validated: $config_file"
   return 0
 }
@@ -101,17 +101,17 @@ validate_config() {
 check_dependencies() {
   local missing=()
   local optional_missing=()
-  
+
   # Required dependencies
   if ! have cmake; then missing+=("cmake"); fi
-  if ! have g++; then 
+  if ! have g++; then
     if ! have clang++; then missing+=("g++ or clang++"); fi
   fi
-  
+
   # Optional but recommended
   if ! have python3; then optional_missing+=("python3 (for config validation)"); fi
   if ! have ninja; then optional_missing+=("ninja (faster builds)"); fi
-  
+
   # Check for required libraries (more robust check)
   local zmq_found=false
   if pkg-config --exists libzmq 2>/dev/null; then
@@ -121,11 +121,11 @@ check_dependencies() {
   elif [[ -f /usr/include/zmq.h ]] || [[ -f /usr/local/include/zmq.h ]]; then
     zmq_found=true
   fi
-  
+
   if [[ "$zmq_found" == "false" ]]; then
     missing+=("libzmq3-dev (install with: sudo apt-get install libzmq3-dev)")
   fi
-  
+
   # Check for Boost libraries
   local boost_found=false
   if pkg-config --exists boost-system 2>/dev/null; then
@@ -135,22 +135,22 @@ check_dependencies() {
   elif [[ -d /usr/include/boost ]] || [[ -d /usr/local/include/boost ]]; then
     boost_found=true
   fi
-  
+
   if [[ "$boost_found" == "false" ]]; then
     missing+=("libboost-dev (install with: sudo apt-get install libboost-all-dev)")
   fi
-  
+
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo "Error: Missing required dependencies:" >&2
     printf "  - %s\n" "${missing[@]}" >&2
     return 1
   fi
-  
+
   if [[ ${#optional_missing[@]} -gt 0 ]]; then
     echo "Warning: Missing optional dependencies:" >&2
     printf "  - %s\n" "${optional_missing[@]}" >&2
   fi
-  
+
   echo "Dependencies check passed"
   return 0
 }
@@ -165,7 +165,7 @@ kill_existing_procs() {
   )
   local names=("telemetry_service" "uav_sim" "camera_ui" "mapping_ui")
   local pids_set=""
-  
+
   # Collect by absolute and relative command patterns
   for exe in "${targets[@]}"; do
     for pat in "${ROOT_DIR}/${exe}" "./${exe}" "${exe}"; do
@@ -174,14 +174,14 @@ kill_existing_procs() {
       if [[ -n "$found" ]]; then pids_set+=" $found"; fi
     done
   done
-  
+
   # Collect by process names (using -f to avoid 15-char limit)
   for name in "${names[@]}"; do
     local foundn
     foundn=$(pgrep -f "$name" || true)
     if [[ -n "$foundn" ]]; then pids_set+=" $foundn"; fi
   done
-  
+
   # Only collect PIDs from PROJECT-SPECIFIC ports, not all ports
   local project_ports=(5555 5556 5557 5558 5559 5565 5566 5569 5570 5571 5572 5575 5579)
   for port in "${project_ports[@]}"; do
@@ -191,22 +191,22 @@ kill_existing_procs() {
       pids_set+=" $port_pid"
     fi
   done
-  
+
   # De-duplicate PIDs
   local all_pids
   # shellcheck disable=SC2206
   all_pids=($(echo "$pids_set" | tr ' ' '\n' | grep -E '^[0-9]+$' 2>/dev/null | sort -u | tr '\n' ' ' || true))
-  
+
   if [[ ${#all_pids[@]} -gt 0 ]]; then
     echo "Stopping PIDs: ${all_pids[*]}"
-    
+
     # First, try graceful shutdown (SIGINT)
     for pid in "${all_pids[@]}"; do
       if kill -0 "$pid" 2>/dev/null; then
         kill -INT "$pid" 2>/dev/null || true
       fi
     done
-    
+
     # Wait for graceful shutdown with timeout
     local timeout=5
     local waited=0
@@ -225,7 +225,7 @@ kill_existing_procs() {
       sleep 0.2
       waited=$((waited + 1))
     done
-    
+
     # Force kill any remaining processes
     echo "Force killing remaining processes..."
     for pid in "${all_pids[@]}"; do
@@ -310,12 +310,12 @@ configure() {
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
   local build_type="${2:-Release}"
   shift 2 2>/dev/null || shift $# 2>/dev/null || true
-  
+
   # Parse additional options
   local enable_warnings="OFF"
   local debug_info="OFF"
   local warnings_as_errors="OFF"
-  
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --warnings) enable_warnings="ON"; shift ;;
@@ -324,25 +324,25 @@ configure() {
       *) echo "Unknown configure option: $1" >&2; return 1 ;;
     esac
   done
-  
+
   ensure_build_dir "$build_dir"
-  
+
   echo "Configuring project (Build Type: $build_type)..."
   if [[ "$enable_warnings" == "ON" ]]; then echo "  - Compiler warnings enabled"; fi
   if [[ "$debug_info" == "ON" ]]; then echo "  - Debug information enabled"; fi
   if [[ "$warnings_as_errors" == "ON" ]]; then echo "  - Treating warnings as errors"; fi
-  
+
   local cmake_args=("-S" "$ROOT_DIR" "-B" "$build_dir" "-DCMAKE_BUILD_TYPE=$build_type")
   cmake_args+=("-DENABLE_WARNINGS=$enable_warnings")
   cmake_args+=("-DBUILD_WITH_DEBUG_INFO=$debug_info")
   cmake_args+=("-DTREAT_WARNINGS_AS_ERRORS=$warnings_as_errors")
-  
+
   # Use Ninja if available for faster builds
   if have ninja; then
     cmake_args+=("-G" "Ninja")
     echo "Using Ninja generator for faster builds"
   fi
-  
+
   cmake "${cmake_args[@]}"
 }
 
@@ -381,6 +381,8 @@ clean() {
   find "${ROOT_DIR}/uav_sim" -maxdepth 1 -type f -name "uav_sim" -executable -delete
   find "${ROOT_DIR}/camera_ui" -maxdepth 1 -type f -name "camera_ui" -executable -delete
   find "${ROOT_DIR}/mapping_ui" -maxdepth 1 -type f -name "mapping_ui" -executable -delete
+  # Remove example executables
+  find "${ROOT_DIR}/telemetry_client_library/examples" -maxdepth 1 -type f -executable -not -name "*.sh" -not -name "*.ps1" -delete
   echo "Clean complete."
 }
 
@@ -388,7 +390,7 @@ install_project() {
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
   local prefix="${2:-/usr/local}"
   ensure_build_dir "$build_dir"
-  
+
   echo "Installing project to: $prefix"
   if [[ "$prefix" == "/usr/local" ]] || [[ "$prefix" == "/usr" ]] || [[ "$prefix" =~ ^/opt/.* ]]; then
     sudo cmake --install "$build_dir" --prefix "$prefix"
@@ -400,12 +402,12 @@ install_project() {
 package_project() {
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
   ensure_build_dir "$build_dir"
-  
+
   echo "Creating distribution packages..."
   cd "$build_dir"
   cpack
   cd "$ROOT_DIR"
-  
+
   echo "Packages created in: $build_dir"
   ls -la "$build_dir"/*.tar.gz "$build_dir"/*.deb 2>/dev/null || echo "No packages found"
 }
@@ -417,7 +419,7 @@ test_project() {
     echo "Build directory not found. Run './dev.sh configure' first." >&2
     return 1
   fi
-  
+
   echo "Running tests..."
   if [[ -f "$build_dir/CTestTestfile.cmake" ]]; then
     cd "$build_dir" && ctest --output-on-failure
@@ -431,7 +433,7 @@ test_project() {
 # Comprehensive health check
 health_check() {
   echo "=== System Health Check ==="
-  
+
   # Check dependencies
   echo "Checking dependencies..."
   if check_dependencies; then
@@ -439,7 +441,7 @@ health_check() {
   else
     echo "✗ Dependencies issues found"
   fi
-  
+
   # Check configuration
   echo "Checking configuration..."
   if validate_config; then
@@ -447,7 +449,7 @@ health_check() {
   else
     echo "✗ Configuration issues found"
   fi
-  
+
   # Check build status
   echo "Checking build status..."
   local missing_exes=()
@@ -456,14 +458,14 @@ health_check() {
       missing_exes+=("$exe")
     fi
   done
-  
+
   if [[ ${#missing_exes[@]} -eq 0 ]]; then
     echo "✓ All executables built"
   else
     echo "✗ Missing executables: ${missing_exes[*]}"
     echo "  Run './dev.sh build' to build them"
   fi
-  
+
   # Check running processes
   echo "Checking running processes..."
   if list_procs | grep -q .; then
@@ -472,7 +474,7 @@ health_check() {
   else
     echo "ℹ No project processes currently running"
   fi
-  
+
   # Check listening ports
   echo "Checking network ports..."
   if list_ports | tail -n +2 | grep -q .; then
@@ -481,7 +483,7 @@ health_check() {
   else
     echo "ℹ No project ports currently in use"
   fi
-  
+
   echo "=== Health Check Complete ==="
 }
 
@@ -491,17 +493,17 @@ watch_mode() {
     echo "Error: inotify-tools not installed. Install with: sudo apt-get install inotify-tools" >&2
     return 1
   fi
-  
+
   local build_dir="${1:-$DEFAULT_BUILD_DIR}"
   echo "Starting watch mode. Press Ctrl+C to stop."
   echo "Watching for changes in: $ROOT_DIR"
-  
+
   while true; do
     # Watch for changes in source files
     inotifywait -r -e modify,create,delete \
       --include '\.(cpp|h|hpp|c|cc|cxx)$' \
       "$ROOT_DIR" 2>/dev/null || break
-    
+
     echo "Files changed, rebuilding..."
     if build "$build_dir"; then
       echo "Build successful at $(date)"
@@ -546,54 +548,54 @@ show_info() {
 demo_test() {
   set -euo pipefail
   trap 'kill_existing_procs || true' EXIT
-  
+
   # Ensure executables exist
   for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
-    if [[ ! -x "$ROOT_DIR/$exe" ]]; then 
-      echo "Missing $exe. Run './dev.sh build' first."; 
-      exit 2; 
+    if [[ ! -x "$ROOT_DIR/$exe" ]]; then
+      echo "Missing $exe. Run './dev.sh build' first.";
+      exit 2;
     fi
   done
-  
+
   # Stop any existing service/UIs/sims to avoid address-in-use
   kill_existing_procs
-  
+
   # Show current listeners for visibility
   ss -ltnp | awk 'NR==1 || $4 ~ /:(5555|5557|5558|5559|5565|5569|5575|5579)$/' || true
-  
+
   # Start service
   "$ROOT_DIR/telemetry_service/telemetry_service" &
   svc=$!
   sleep 0.6
-  
+
   if ! kill -0 "$svc" 2>/dev/null; then
     echo "Service failed to start (likely port in use). Current listeners:"
     ss -ltnp | awk 'NR==1 || $4 ~ /:(5555|5557|5558|5559|5565|5569|5575|5579)$/' || true
     exit 1
   fi
-  
+
   # Start UIs (briefly) - Note: UIs now require explicit protocol selection
   (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp || true) &
   (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp || true) &
   sleep 0.2
-  
+
   # Start UAV_1 briefly
   SERVICE_CONFIG="$ROOT_DIR/service_config.json" timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_1 || true
   wait || true
-  
+
   # Stop service
   kill -INT $svc || true
   wait $svc || true
-  
+
   # Show log tail
   LOG="$ROOT_DIR/telemetry_service/telemetry_log.txt"
-  if [[ -f "$LOG" ]]; then 
+  if [[ -f "$LOG" ]]; then
     echo "--- LOG TAIL ---"
     tail -n 12 "$LOG"
-  else 
+  else
     echo "LOG_NOT_FOUND"
   fi
-  
+
   # Final cleanup of any leftover UIs/sims
   kill_existing_procs || true
 }
@@ -602,69 +604,69 @@ demo_test() {
 protocol_test() {
   set -euo pipefail
   trap 'kill_existing_procs || true' EXIT
-  
+
   echo "=== Comprehensive Protocol Testing ==="
-  
+
   # Ensure executables exist
   for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
-    if [[ ! -x "$ROOT_DIR/$exe" ]]; then 
-      echo "Missing $exe. Run './dev.sh build' first."; 
-      exit 2; 
+    if [[ ! -x "$ROOT_DIR/$exe" ]]; then
+      echo "Missing $exe. Run './dev.sh build' first.";
+      exit 2;
     fi
   done
-  
+
   # Stop any existing processes
   kill_existing_procs
-  
+
   # Start service
   echo "Starting telemetry service..."
   "$ROOT_DIR/telemetry_service/telemetry_service" &
   svc=$!
   sleep 1
-  
+
   if ! kill -0 "$svc" 2>/dev/null; then
     echo "Service failed to start"
     exit 1
   fi
-  
+
   echo "Testing TCP Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_1 --protocol tcp || true
   sleep 0.5
-  
+
   echo "Testing UDP Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_2 --protocol udp || true
   sleep 0.5
-  
+
   echo "Testing Default (Both) Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_3 || true
   sleep 0.5
-  
+
   echo "Testing UI Applications..."
   (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp || true) &
   (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp || true) &
   wait || true
-  
+
   # Stop service
   kill -INT $svc || true
   wait $svc || true
-  
+
   echo "=== Protocol Testing Complete ==="
-  
+
   # Show test summary
   echo "✅ Tests Completed:"
   echo "   - TCP Protocol (UAV_1)"
-  echo "   - UDP Protocol (UAV_2)" 
+  echo "   - UDP Protocol (UAV_2)"
   echo "   - Default Both Protocols (UAV_3)"
   echo "   - Camera UI with TCP"
   echo "   - Mapping UI with UDP"
-  
+
   # Show log summary
   LOG="$ROOT_DIR/telemetry_service/telemetry_log.txt"
-  if [[ -f "$LOG" ]]; then 
+  if [[ -f "$LOG" ]]; then
     echo "--- Recent Log Entries ---"
     tail -n 15 "$LOG" | grep -E "(TCP|UDP|UAV_[1-3])" || true
   fi
-  
+
   # Final cleanup
   kill_existing_procs || true
 }
@@ -679,7 +681,7 @@ rebuild() {
 run() {
   local target="${1:-}"; shift || true
   if [[ -z "$target" ]]; then echo "run requires a target"; exit 1; fi
-  
+
   # Map target names to executable paths
   local exe=""
   case "$target" in
@@ -689,16 +691,16 @@ run() {
     mapping_ui)        exe="${ROOT_DIR}/mapping_ui/mapping_ui" ;;
     *) echo "Unknown target: $target"; exit 1 ;;
   esac
-  
+
   if [[ ! -x "$exe" ]]; then
     echo "Executable not found: $exe" >&2
     echo "Hint: run './dev.sh build' first." >&2
     exit 2
   fi
-  
+
   # Allow passing args after --
   if [[ "${1:-}" == "--" ]]; then shift; fi
-  
+
   # Validate UI application arguments
   if [[ "$target" == "camera_ui" || "$target" == "mapping_ui" ]]; then
     if [[ $# -eq 0 ]]; then
@@ -707,7 +709,7 @@ run() {
       echo "         ./dev.sh run $target --protocol udp" >&2
       exit 1
     fi
-    
+
     # Check for protocol argument
     local has_protocol=false
     for arg in "$@"; do
@@ -716,12 +718,12 @@ run() {
         break
       fi
     done
-    
+
     if [[ "$has_protocol" == "false" ]]; then
       echo "Warning: $target typically requires --protocol tcp or --protocol udp" >&2
     fi
   fi
-  
+
   # Validate UAV simulator arguments
   if [[ "$target" == "uav_sim" && $# -eq 0 ]]; then
     echo "Error: uav_sim requires a UAV name (e.g., UAV_1, UAV_2, UAV_3)" >&2
@@ -729,7 +731,7 @@ run() {
     echo "         ./dev.sh run uav_sim UAV_1 --protocol tcp" >&2
     exit 1
   fi
-  
+
   echo "Running: $exe $*"
   "$exe" "$@"
 }
@@ -777,7 +779,7 @@ case "$cmd" in
     sleep 0.2
     open_term "camera_ui (TCP)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp"
     open_term "mapping_ui (UDP)" "$ROOT_DIR/mapping_ui/mapping_ui --protocol udp"
-    
+
     # Separate UAV names from other arguments
     local uav_names=()
     local uav_args=()
