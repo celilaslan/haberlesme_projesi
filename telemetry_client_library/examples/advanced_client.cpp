@@ -17,6 +17,8 @@
 #include <chrono>
 #include <string>
 #include <sstream>
+#include <poll.h>
+#include <unistd.h>
 
 using namespace TelemetryAPI;
 
@@ -154,22 +156,27 @@ int main(int argc, char* argv[]) {
 
     // Interactive command loop
     std::cout << "Enter commands (type 'help' for options, 'quit' to exit):" << std::endl;
+    std::cout << "> ";
+    std::cout.flush();
 
     std::string line;
     while (g_running && client.isReceiving()) {
-        std::cout << "> ";
-        std::cout.flush();
+        // Use poll to check if input is available without blocking
+        struct pollfd pfd;
+        pfd.fd = STDIN_FILENO;
+        pfd.events = POLLIN;
 
-        // Check if input is available (simple polling)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        int poll_result = poll(&pfd, 1, 100); // 100ms timeout
 
-        if (std::getline(std::cin, line)) {
-            if (!g_running) break;
+        if (poll_result > 0 && (pfd.revents & POLLIN)) {
+            // Input is available, read it
+            if (std::getline(std::cin, line)) {
+                if (!g_running) break;
 
-            // Parse command
-            std::istringstream iss(line);
-            std::string command;
-            iss >> command;
+                // Parse command
+                std::istringstream iss(line);
+                std::string command;
+                iss >> command;
 
             if (command == "quit" || command == "exit") {
                 break;
@@ -255,8 +262,22 @@ int main(int argc, char* argv[]) {
             } else if (!command.empty()) {
                 std::cout << "Unknown command: " << command << " (type 'help' for options)" << std::endl;
             }
+
+            // Show prompt for next command
+            std::cout << "> ";
+            std::cout.flush();
+            } else {
+                // EOF or error
+                break;
+            }
+        } else if (poll_result == 0) {
+            // Timeout - continue loop to check g_running (don't print prompt)
+            continue;
         } else {
-            // EOF or error
+            // Poll error
+            if (g_running) {
+                std::cerr << "Input polling error" << std::endl;
+            }
             break;
         }
     }
