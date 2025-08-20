@@ -1,7 +1,7 @@
 /**
  * @file Logger.h
  * @brief Thread-safe logging system for the telemetry service
- * 
+ *
  * This file defines a simple singleton-style logging system that provides
  * thread-safe logging with automatic timestamps. The logger writes to both
  * console and file outputs.
@@ -10,10 +10,10 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <string>
 #include <fstream>
-#include <mutex>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <vector>
 
 /**
@@ -30,62 +30,62 @@ enum class LogLevel {
 /**
  * @class Logger
  * @brief Static logging utility class with enhanced structured logging
- * 
+ *
  * Provides thread-safe logging functionality with automatic timestamping,
  * log levels, and structured output for both console and systemd journald.
  * All methods are static, making it easy to use from anywhere in the application.
  */
 class Logger {
-public:
+   public:
     /**
      * @brief Initialize the logging system with a log file
      * @param logFilePath Path to the log file where messages will be written
      * @param level Minimum log level to output (default: INFO)
-     * 
+     *
      * This must be called before using any other logging methods.
      * Creates or opens the specified log file for writing.
      */
     static void init(const std::string& logFilePath, LogLevel level = LogLevel::INFO);
-    
+
     /**
      * @brief Set the minimum log level
      * @param level New minimum log level
      */
     static void setLevel(LogLevel level);
-    
+
     /**
      * @brief Log a debug message
      * @param msg The debug message to log
      */
     static void debug(const std::string& msg);
-    
+
     /**
      * @brief Log an informational message
      * @param msg The message to log
-     * 
+     *
      * Writes an INFO level message with timestamp to both console and log file.
      * Thread-safe and can be called from multiple threads simultaneously.
      */
     static void info(const std::string& msg);
-    
+
     /**
      * @brief Log a warning message
      * @param msg The warning message to log
-     * 
+     *
      * Writes a WARNING level message with timestamp to both console (stderr) and log file.
      * Thread-safe and can be called from multiple threads simultaneously.
      */
     static void warn(const std::string& msg);
-    
+
     /**
      * @brief Log an error message
      * @param msg The error message to log
-     * 
+     *
      * Writes an ERROR level message with timestamp to both console (stderr) and log file.
      * Thread-safe and can be called from multiple threads simultaneously.
      */
     static void error(const std::string& msg);
-    
+
     /**
      * @brief Log a structured service status message
      * @param component Component name (e.g., "TCP", "UDP", "Service")
@@ -93,7 +93,7 @@ public:
      * @param details Optional additional details
      */
     static void status(const std::string& component, const std::string& status, const std::string& details = "");
-    
+
     /**
      * @brief Log a performance metric
      * @param metric Metric name
@@ -101,7 +101,7 @@ public:
      * @param unit Optional unit (e.g., "msg/s", "bytes")
      */
     static void metric(const std::string& metric, double value, const std::string& unit = "");
-    
+
     /**
      * @brief Log service startup completion with summary
      * @param uavCount Number of UAVs configured
@@ -109,41 +109,41 @@ public:
      * @param udpPorts List of UDP ports in use
      */
     static void serviceStarted(int uavCount, const std::vector<int>& tcpPorts, const std::vector<int>& udpPorts);
-    
+
     /**
      * @brief Check if the logger has been properly initialized
      * @return true if logger is initialized and ready to use
      */
     static bool isInitialized();
-    
+
     /**
      * @brief Flush and close the log file (cleanup)
-     * 
+     *
      * Ensures all pending log data is written to file and properly closed.
      * Thread-safe and can be called multiple times safely.
      */
     static void shutdown();
 
-private:
+   private:
     static std::unique_ptr<std::ofstream> logFile;  ///< Log file output stream
     static std::mutex mtx;                          ///< Mutex for thread-safe access
     static LogLevel currentLevel;                   ///< Current minimum log level
-    
+
     /**
      * @brief Generate a timestamp string for log entries
      * @return Formatted timestamp string with millisecond precision
-     * 
+     *
      * Creates timestamps in format: "YYYY-MM-DD HH:MM:SS.mmm"
      */
     static std::string getTimestamp();
-    
+
     /**
      * @brief Convert log level to string
      * @param level Log level to convert
      * @return String representation of the log level
      */
     static std::string levelToString(LogLevel level);
-    
+
     /**
      * @brief Internal logging method with level support
      * @param level Log level
@@ -153,4 +153,4 @@ private:
     static void log(LogLevel level, const std::string& msg, bool useStderr = false);
 };
 
-#endif // LOGGER_H
+#endif  // LOGGER_H

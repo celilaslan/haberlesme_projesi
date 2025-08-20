@@ -1,19 +1,21 @@
 ﻿/**
  * @file main.cpp
  * @brief Main entry point for the telemetry service application
- * 
+ *
  * This file contains the main function that initializes and runs the telemetry service.
  * The service acts as a central hub for UAV telemetry data, supporting both ZeroMQ and UDP protocols.
  */
 
-#include "TelemetryService.h"
-#include "Logger.h"
-#include <iostream>
-#include <csignal>
-#include <atomic>
-#include <mutex>
 #include <unistd.h>
+
+#include <atomic>
+#include <csignal>
 #include <cstring>
+#include <iostream>
+#include <mutex>
+
+#include "Logger.h"
+#include "TelemetryService.h"
 
 // Global flag to control the main application loop
 // This is set to false when a shutdown signal is received
@@ -24,7 +26,7 @@ std::mutex g_signal_mutex;
 /**
  * @brief Signal handler for graceful shutdown
  * @param signum The signal number received (SIGINT, SIGTERM, etc.)
- * 
+ *
  * This function is called when the application receives a shutdown signal.
  * It safely sets the global flags using async-signal-safe operations only.
  */
@@ -32,17 +34,17 @@ void signalHandler(int signum) {
     // Only use async-signal-safe functions in signal handlers
     g_signal_received.store(signum);
     g_running.store(false);
-    
+
     // Use write() instead of std::cout (async-signal-safe)
     const char* msg = "Signal received. Shutting down...\n";
     ssize_t result = write(STDERR_FILENO, msg, strlen(msg));
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
 }
 
 /**
  * @brief Main entry point of the telemetry service application
  * @return Exit code (0 for success, 1 for error)
- * 
+ *
  * This function:
  * 1. Initializes the logger system
  * 2. Sets up comprehensive signal handlers for graceful shutdown
@@ -53,7 +55,7 @@ void signalHandler(int signum) {
 int main() {
     // Initialize logger first for consistent logging throughout
     Logger::init("telemetry_log.txt");
-    
+
     try {
         // Register signal handlers for graceful shutdown
         // SIGINT: Ctrl+C interrupt signal
@@ -78,17 +80,17 @@ int main() {
         }
 
         Logger::info("=== TELEMETRY SERVICE STARTING ===");
-        
+
         // Create and start the telemetry service
         TelemetryService service;
         service.run(g_running);
-        
+
         // Log which signal caused shutdown
         int signal_num = g_signal_received.load();
         if (signal_num > 0) {
             Logger::info("Service stopped by signal: " + std::to_string(signal_num));
         }
-        
+
     } catch (const std::exception& e) {
         // Log any fatal errors that cause the service to crash
         Logger::error("A fatal error occurred: " + std::string(e.what()));
@@ -103,7 +105,7 @@ int main() {
 
     Logger::info("=== APPLICATION TERMINATED GRACEFULLY ===");
     std::cout << "Application terminated gracefully." << std::endl;
-    
+
     // Ensure logger cleanup
     Logger::shutdown();
     return 0;

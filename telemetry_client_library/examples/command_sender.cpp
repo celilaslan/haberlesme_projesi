@@ -6,11 +6,12 @@
  * to send commands to UAVs via the telemetry service.
  */
 
-#include "TelemetryClient.h"
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <sstream>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -35,8 +36,8 @@ void showUsage(const char* program_name) {
 /**
  * @brief Send a single command and exit
  */
-bool sendSingleCommand(TelemetryClient& client, const std::string& uav_name,
-                      const std::string& command, const std::string& client_name) {
+bool sendSingleCommand(TelemetryClient& client, const std::string& uav_name, const std::string& command,
+                       const std::string& client_name) {
     std::cout << "Sending command to " << uav_name << ": " << command << std::endl;
 
     if (client.sendCommand(uav_name, command, client_name)) {
@@ -80,13 +81,13 @@ void interactiveMode(TelemetryClient& client, const std::string& client_name) {
         std::cout.flush();
 
         if (!std::getline(std::cin, line)) {
-            break; // EOF
+            break;  // EOF
         }
 
         // Trim whitespace
         size_t start = line.find_first_not_of(" \t");
         if (start == std::string::npos) {
-            continue; // Empty line
+            continue;  // Empty line
         }
         line = line.substr(start);
 
@@ -174,7 +175,7 @@ int main(int argc, char* argv[]) {
         if (choice != 'y' && choice != 'Y') {
             return 1;
         }
-        std::cin.ignore(); // Clear input buffer
+        std::cin.ignore();  // Clear input buffer
     } else {
         std::cout << "✓ Service connection test passed." << std::endl;
     }

@@ -6,10 +6,11 @@
  * incorrect API usage and provides clear error messages.
  */
 
-#include "TelemetryClient.h"
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -17,14 +18,11 @@ void onTelemetryReceived(const TelemetryData& data) {
     std::cout << "[DATA] " << data.uav_name << ": " << data.raw_data << std::endl;
 }
 
-void onError(const std::string& error_message) {
-    std::cout << "[ERROR] " << error_message << std::endl;
-}
+void onError(const std::string& error_message) { std::cout << "[ERROR] " << error_message << std::endl; }
 
 void printClientState(const TelemetryClient& client) {
     std::cout << "Client State: " << client.getStateDescription()
-              << " (Receiving: " << (client.isReceiving() ? "Yes" : "No") << ")"
-              << std::endl;
+              << " (Receiving: " << (client.isReceiving() ? "Yes" : "No") << ")" << std::endl;
 }
 
 int main() {

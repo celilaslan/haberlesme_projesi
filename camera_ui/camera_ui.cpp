@@ -7,19 +7,21 @@
  * protocols via the simplified library API and can send commands back to UAVs.
  */
 
-#include "TelemetryClient.h"
-#include <iostream>
-#include <chrono>
-#include <ctime>
-#include <sstream>
-#include <memory>
-#include <thread>
-#include <string>
-#include <atomic>
-#include <csignal>
-#include <iomanip>
 #include <sys/select.h>
 #include <unistd.h>
+
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <thread>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -75,14 +77,12 @@ std::string GetTimestamp() {
 void onTelemetryReceived(const TelemetryData& data) {
     // Only display camera data (filtering is also done at subscription level)
     if (data.data_type == DataType::CAMERA) {
-        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY) ? "TCP" :
-                                  (data.received_via == Protocol::UDP_ONLY) ? "UDP" : "MIXED";
+        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY)   ? "TCP"
+                                   : (data.received_via == Protocol::UDP_ONLY) ? "UDP"
+                                                                               : "MIXED";
 
-        std::cout << "[" << GetTimestamp() << "] "
-                  << "UAV: " << data.uav_name << " | "
-                  << "Type: CAMERA | "
-                  << "Protocol: " << protocol_str << " | "
-                  << "Data: " << data.raw_data << std::endl;
+        std::cout << "[" << GetTimestamp() << "] " << "UAV: " << data.uav_name << " | " << "Type: CAMERA | "
+                  << "Protocol: " << protocol_str << " | " << "Data: " << data.raw_data << std::endl;
     }
 }
 
@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
 
                 struct timeval timeout;
                 timeout.tv_sec = 0;
-                timeout.tv_usec = 100000; // 100ms timeout
+                timeout.tv_usec = 100000;  // 100ms timeout
 
                 int result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
 
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 } else if (result < 0) {
-                    break; // Error occurred
+                    break;  // Error occurred
                 }
             }
         });

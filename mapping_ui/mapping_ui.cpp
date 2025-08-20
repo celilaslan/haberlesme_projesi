@@ -1,25 +1,27 @@
 /**
  * @file mapping_ui.cpp
  * @brief Mapping UI application for receiving and displaying mapping telemetry data
- * 
+ *
  * This application uses the TelemetryClient library to connect to the telemetry service
  * and subscribe to mapping-related telemetry data from UAVs. It supports both TCP and UDP
  * protocols via the simplified library API and can send commands back to UAVs.
  */
 
-#include "TelemetryClient.h"
-#include <iostream>
-#include <chrono>
-#include <ctime>
-#include <sstream>
-#include <memory>
-#include <thread>
-#include <string>
-#include <atomic>
-#include <csignal>
-#include <iomanip>
 #include <sys/select.h>
 #include <unistd.h>
+
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <thread>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -39,7 +41,7 @@ void signalHandler(int signal) {
 /**
  * @brief Generate a formatted timestamp string with millisecond precision
  * @return Timestamp string in format "YYYY-MM-DD HH:MM:SS.mmm"
- * 
+ *
  * Uses platform-specific time conversion functions for thread safety.
  * Used for logging telemetry data reception times.
  */
@@ -51,7 +53,7 @@ std::string GetTimestamp() {
 
     std::ostringstream oss;
     struct tm time_info;
-    
+
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
     localtime_s(&time_info, &time_t_now);
@@ -68,21 +70,19 @@ std::string GetTimestamp() {
 /**
  * @brief Telemetry data callback function
  * @param data Received telemetry data from the service
- * 
+ *
  * This function is called by the TelemetryClient whenever mapping telemetry
  * data is received. It filters for mapping data and displays it with timestamps.
  */
 void onTelemetryReceived(const TelemetryData& data) {
     // Only display mapping data (filtering is also done at subscription level)
     if (data.data_type == DataType::MAPPING) {
-        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY) ? "TCP" : 
-                                  (data.received_via == Protocol::UDP_ONLY) ? "UDP" : "MIXED";
-        
-        std::cout << "[" << GetTimestamp() << "] "
-                  << "UAV: " << data.uav_name << " | "
-                  << "Type: MAPPING | "
-                  << "Protocol: " << protocol_str << " | "
-                  << "Data: " << data.raw_data << std::endl;
+        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY)   ? "TCP"
+                                   : (data.received_via == Protocol::UDP_ONLY) ? "UDP"
+                                                                               : "MIXED";
+
+        std::cout << "[" << GetTimestamp() << "] " << "UAV: " << data.uav_name << " | " << "Type: MAPPING | "
+                  << "Protocol: " << protocol_str << " | " << "Data: " << data.raw_data << std::endl;
     }
 }
 
@@ -99,7 +99,7 @@ void onTelemetryError(const std::string& error_message) {
  * @param argc Number of command line arguments
  * @param argv Array of command line argument strings
  * @return Exit code (0 for success, non-zero for error)
- * 
+ *
  * Usage: ./mapping_ui [--protocol tcp|udp|both] [--send UAV_NAME] [--uav UAV_NAME]
  */
 int main(int argc, char* argv[]) {
@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
 
     // Create and initialize telemetry client
     TelemetryClient client;
-    
+
     if (!client.initialize("localhost")) {
         std::cerr << "Failed to initialize telemetry client\n";
         return 1;
@@ -207,23 +207,23 @@ int main(int argc, char* argv[]) {
         senderThread = std::thread([&client, target]() {
             std::string line;
             std::cout << "[Mapping UI] Type commands for " << target << " (press Enter to send, Ctrl+C to exit):\n";
-            
+
             while (g_running) {
                 // Check if input is available without blocking
                 fd_set readfds;
                 FD_ZERO(&readfds);
                 FD_SET(STDIN_FILENO, &readfds);
-                
+
                 struct timeval timeout;
                 timeout.tv_sec = 0;
-                timeout.tv_usec = 100000; // 100ms timeout
-                
+                timeout.tv_usec = 100000;  // 100ms timeout
+
                 int result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
-                
+
                 if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
                     if (std::getline(std::cin, line)) {
                         if (!g_running) break;
-                        
+
                         if (client.sendCommand(target, line, "mapping-ui")) {
                             std::cout << "[Mapping UI] Sent command: " << line << std::endl;
                         } else {
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 } else if (result < 0) {
-                    break; // Error occurred
+                    break;  // Error occurred
                 }
             }
         });

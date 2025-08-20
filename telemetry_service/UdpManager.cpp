@@ -1,13 +1,14 @@
 /**
  * @file UdpManager.cpp
  * @brief Implementation of UDP communication management
- * 
+ *
  * This file contains the implementation of UDP-based telemetry communication,
  * providing an alternative to ZeroMQ for UAVs that require lower latency
  * or have simpler networking requirements.
  */
 
 #include "UdpManager.h"
+
 #include "Logger.h"
 
 // --- UdpServer Implementation ---
@@ -19,26 +20,25 @@
  * @param port UDP port number to listen on
  * @param uav_name Identifier for the UAV this server handles
  * @param callback Function to call when messages are received
- * 
+ *
  * Sets up a UDP socket bound to the specified address and port,
  * then starts the asynchronous receive loop.
  */
-UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& ip, short port, 
+UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& ip, short port,
                      const std::string& uav_name, UdpMessageCallback callback)
     : socket_(io_context), uav_name_(uav_name), messageCallback_(std::move(callback)) {
-    
     try {
         // Resolve the IP address and port to a UDP endpoint
         udp::resolver resolver(io_context);
         udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), ip, std::to_string(port));
         udp::endpoint bind_endpoint = *endpoints.begin();
-        
+
         // Create and bind the UDP socket
         socket_.open(udp::v4());
         socket_.bind(bind_endpoint);
-        
+
         Logger::status("UDP", "Server bound for " + uav_name, ip + ":" + std::to_string(port));
-        
+
         // Start the asynchronous receive loop
         do_receive();
     } catch (const std::exception& e) {
@@ -49,7 +49,7 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& ip,
 
 /**
  * @brief Start asynchronous receive operation
- * 
+ *
  * Sets up an async_receive_from operation that continuously listens for
  * incoming UDP packets. When a packet is received, it processes the data
  * and automatically sets up the next receive operation.
@@ -63,7 +63,7 @@ void UdpServer::do_receive() {
                     // Process received data if no error occurred
                     std::string received_data(data_, bytes_recvd);
                     std::string source_desc = "UDP:" + uav_name_;
-                    
+
                     // Call the registered callback with the received data
                     if (messageCallback_) {
                         messageCallback_(source_desc, received_data);
@@ -74,7 +74,7 @@ void UdpServer::do_receive() {
             } else if (ec && ec != boost::asio::error::operation_aborted) {
                 Logger::error("UDP receive error for " + uav_name_ + ": " + ec.message());
             }
-            
+
             // Continue the receive loop only if no critical error
             if (!ec || ec == boost::asio::error::message_size) {
                 do_receive();
@@ -98,7 +98,7 @@ UdpManager::UdpManager(const Config& config, UdpMessageCallback callback)
 UdpManager::~UdpManager() {
     stop();
     join();
-    
+
     // Explicit socket cleanup
     std::lock_guard<std::mutex> lock(socketMutex_);
     try {
@@ -118,7 +118,7 @@ UdpManager::~UdpManager() {
 
 /**
  * @brief Start UDP communication system
- * 
+ *
  * This method:
  * 1. Creates UDP servers for all UAVs with valid UDP ports
  * 2. Sets up UDP publishing socket for UI communication
@@ -127,16 +127,15 @@ UdpManager::~UdpManager() {
  */
 void UdpManager::start() {
     running_ = true;
-    
+
     try {
         std::lock_guard<std::mutex> lock(socketMutex_);
-        
+
         // Create UDP servers for each UAV with UDP telemetry enabled
         for (const auto& uav : config_.getUAVs()) {
             if (uav.udp_telemetry_port > 0 && uav.udp_telemetry_port <= 65535) {
-                servers_.push_back(std::make_unique<UdpServer>(
-                    io_context_, uav.ip, uav.udp_telemetry_port, uav.name, messageCallback_
-                ));
+                servers_.push_back(std::make_unique<UdpServer>(io_context_, uav.ip, uav.udp_telemetry_port, uav.name,
+                                                               messageCallback_));
             } else if (uav.udp_telemetry_port > 0) {
                 Logger::warn("Invalid UDP port for " + uav.name + ": " + std::to_string(uav.udp_telemetry_port));
             }
@@ -145,10 +144,14 @@ void UdpManager::start() {
         // Set up UDP publishing sockets for UI communication
         cameraPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
         mappingPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
-        cameraEndpoint_ = udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_camera_port);
-        mappingEndpoint_ = udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_mapping_port);
-        Logger::status("UDP", "UI Camera Publisher socket created", "Port: " + std::to_string(config_.getUiPorts().udp_camera_port));
-        Logger::status("UDP", "UI Mapping Publisher socket created", "Port: " + std::to_string(config_.getUiPorts().udp_mapping_port));
+        cameraEndpoint_ =
+            udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_camera_port);
+        mappingEndpoint_ =
+            udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_mapping_port);
+        Logger::status("UDP", "UI Camera Publisher socket created",
+                       "Port: " + std::to_string(config_.getUiPorts().udp_camera_port));
+        Logger::status("UDP", "UI Mapping Publisher socket created",
+                       "Port: " + std::to_string(config_.getUiPorts().udp_mapping_port));
     } catch (const std::exception& e) {
         Logger::error("UDP setup failed: " + std::string(e.what()));
         running_ = false;
@@ -162,7 +165,7 @@ void UdpManager::start() {
                 try {
                     // Run the I/O context to process async operations
                     io_context_.run();
-                    
+
                     // If run() returned and we're still supposed to be running,
                     // it means all handlers completed, so restart the context
                     if (running_) {
@@ -184,7 +187,7 @@ void UdpManager::start() {
 
 /**
  * @brief Stop UDP communication system
- * 
+ *
  * Sets the running flag to false and stops the I/O context,
  * which will cause all async operations to complete and the
  * background thread to exit.
@@ -196,7 +199,7 @@ void UdpManager::stop() {
 
 /**
  * @brief Wait for background thread to complete
- * 
+ *
  * Blocks until the I/O service thread has finished execution.
  * Should be called after stop().
  */
@@ -210,18 +213,18 @@ void UdpManager::join() {
  * @brief Publish telemetry data to UI components via UDP
  * @param topic The topic to publish on (e.g., "camera_UAV_1")
  * @param data The telemetry data to send
- * 
+ *
  * Sends telemetry data to UI components using UDP. Routes camera topics
  * to camera port and mapping topics to mapping port. Thread-safe.
  */
 void UdpManager::publishTelemetry(const std::string& topic, const std::string& data) {
     try {
         std::lock_guard<std::mutex> lock(socketMutex_);
-        
+
         // Determine which socket to use based on topic
         udp::socket* socketPtr = nullptr;
         udp::endpoint* endpointPtr = nullptr;
-        
+
         if (topic.find("camera") == 0) {
             socketPtr = cameraPublishSocket_.get();
             endpointPtr = &cameraEndpoint_;
@@ -232,21 +235,21 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::string& d
             Logger::error("Unknown topic type for UDP publish: " + topic);
             return;
         }
-        
+
         if (!socketPtr || !socketPtr->is_open()) {
             Logger::error("UDP publish socket not available for topic: " + topic);
             return;
         }
-        
+
         // Format message as "topic|data" for easy parsing by UI components
         // Use more efficient string construction
         std::string message;
         message.reserve(topic.size() + data.size() + 1);
         message = topic + "|" + data;
-        
+
         socketPtr->send_to(boost::asio::buffer(message), *endpointPtr);
         Logger::info("UDP Published to [" + topic + "]: " + data);
-        
+
     } catch (const std::exception& e) {
         Logger::error("UDP publish error: " + std::string(e.what()));
     }

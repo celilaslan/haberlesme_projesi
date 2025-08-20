@@ -1,30 +1,30 @@
 ﻿/**
  * @file uav_sim.cpp
  * @brief UAV simulator for testing telemetry communication
- * 
+ *
  * This file contains a UAV simulator that generates and sends telemetry data
  * to the telemetry service. It supports both TCP and UDP protocols
  * and can also receive commands from UI components via TCP.
  */
 
-#include <zmq.hpp>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <string>
-#include <iomanip>
-#include <ctime>
-#include <sstream>
 #include <atomic>
-#include <csignal>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <cstdlib>
 #include <boost/asio.hpp>
-#include <filesystem>
-#include <vector>
-#include <system_error>
+#include <chrono>
+#include <csignal>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <nlohmann/json.hpp>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <thread>
+#include <vector>
+#include <zmq.hpp>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -45,27 +45,27 @@ namespace {
     constexpr int BASE_SLEEP_INTERVAL_MS = 500;
     constexpr int DATA_SEND_INTERVAL_MS = 100;
     constexpr int COMMAND_POLL_INTERVAL_MS = 10;
-}
+}  // namespace
 
 /**
  * @struct UAVConfig
  * @brief Configuration data for a single UAV simulator
- * 
+ *
  * Contains all the network configuration needed for the UAV simulator to
  * connect to the telemetry service using either TCP or UDP protocols.
  */
 struct UAVConfig {
-    std::string name;               ///< UAV identifier (e.g., "UAV_1")
-    std::string ip;                 ///< IP address of the telemetry service
-    int tcp_telemetry_port;         ///< TCP port for sending telemetry data
-    int tcp_command_port;           ///< TCP port for receiving commands
-    int udp_telemetry_port;         ///< UDP port for sending telemetry data (service-side port)
+    std::string name;        ///< UAV identifier (e.g., "UAV_1")
+    std::string ip;          ///< IP address of the telemetry service
+    int tcp_telemetry_port;  ///< TCP port for sending telemetry data
+    int tcp_command_port;    ///< TCP port for receiving commands
+    int udp_telemetry_port;  ///< UDP port for sending telemetry data (service-side port)
 };
 
 /**
  * @brief Generate a formatted timestamp string with millisecond precision
  * @return Timestamp string in format "YYYY-MM-DD HH:MM:SS.mmm"
- * 
+ *
  * Uses platform-specific time conversion functions for thread safety.
  * Used for logging and debugging output.
  */
@@ -77,7 +77,7 @@ std::string GetTimestamp() {
 
     std::ostringstream oss;
     struct tm time_info;
-    
+
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
     localtime_s(&time_info, &time_t_now);
@@ -94,7 +94,7 @@ std::string GetTimestamp() {
 /**
  * @brief Signal handler for graceful shutdown
  * @param signum The signal number received
- * 
+ *
  * Sets the global running flag to false, which causes all threads
  * to exit their main loops and terminate gracefully.
  * Uses only async-signal-safe operations.
@@ -102,11 +102,11 @@ std::string GetTimestamp() {
 void signalHandler(int signum) {
     g_signal_received.store(signum);
     g_running.store(false);
-    
+
     // Use async-signal-safe write instead of std::cout
     const char* msg = "Signal received. Shutting down...\n";
     ssize_t result = write(STDERR_FILENO, msg, strlen(msg));
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
 }
 
 /**
@@ -114,14 +114,14 @@ void signalHandler(int signum) {
  * @param config_file Path to the JSON configuration file
  * @param uav_name Name of the UAV to load configuration for
  * @return UAVConfig structure with the loaded configuration
- * 
+ *
  * Parses the JSON configuration file and extracts settings for the
  * specified UAV. Throws exceptions for file access or parsing errors.
  */
 UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_name) {
     std::ifstream file(config_file);
     if (!file.is_open()) {
-        throw std::runtime_error("Cannot open config file: " + config_file + 
+        throw std::runtime_error("Cannot open config file: " + config_file +
                                  "\nMake sure the file exists in the project root directory!");
     }
 
@@ -144,24 +144,23 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
 
     for (const auto& uav_json : j["uavs"]) {
         if (!uav_json.contains("name") || !uav_json["name"].is_string()) {
-            continue; // Skip invalid entries
+            continue;  // Skip invalid entries
         }
-        
+
         if (uav_json["name"] == uav_name) {
             try {
                 config.name = uav_json["name"];
                 config.ip = uav_json.value("ip", "localhost");
-                
+
                 // Extract TCP port configuration with validation
                 config.tcp_telemetry_port = uav_json.at("tcp_telemetry_port");
                 config.tcp_command_port = uav_json.at("tcp_command_port");
                 config.udp_telemetry_port = uav_json.at("udp_telemetry_port");
-                
+
                 uav_found = true;
                 break;
             } catch (const json::exception& e) {
-                throw std::runtime_error("Invalid configuration for UAV '" + uav_name + 
-                                       "': " + std::string(e.what()));
+                throw std::runtime_error("Invalid configuration for UAV '" + uav_name + "': " + std::string(e.what()));
             }
         }
     }
@@ -176,7 +175,7 @@ UAVConfig LoadUAVConfig(const std::string& config_file, const std::string& uav_n
 /**
  * @brief Print a list of available UAVs from the configuration file
  * @param config_file Path to the JSON configuration file
- * 
+ *
  * Used to help users identify valid UAV names when they don't provide
  * command line arguments or specify an invalid UAV name.
  */
@@ -200,16 +199,15 @@ void PrintAvailableUAVs(const std::string& config_file) {
         std::cout << "Available UAVs in " << config_file << ":" << std::endl;
         for (const auto& uav_json : j["uavs"]) {
             if (!uav_json.contains("name")) continue;
-            
+
             try {
                 int tcp_telemetry_port = uav_json.at("tcp_telemetry_port");
                 int tcp_command_port = uav_json.at("tcp_command_port");
                 int udp_telemetry_port = uav_json.at("udp_telemetry_port");
-                
-                std::cout << "  - " << uav_json["name"]
-                    << " (TCP Telemetry: " << tcp_telemetry_port
-                    << ", TCP Commands: " << tcp_command_port
-                    << ", UDP Telemetry: " << udp_telemetry_port << ")" << std::endl;
+
+                std::cout << "  - " << uav_json["name"] << " (TCP Telemetry: " << tcp_telemetry_port
+                          << ", TCP Commands: " << tcp_command_port << ", UDP Telemetry: " << udp_telemetry_port << ")"
+                          << std::endl;
             } catch (const json::exception&) {
                 std::cout << "  - " << uav_json["name"] << " (invalid configuration)" << std::endl;
             }
@@ -224,9 +222,9 @@ void PrintAvailableUAVs(const std::string& config_file) {
  * @param argc Number of command line arguments
  * @param argv Array of command line argument strings
  * @return Exit code (0 for success, 1 for error)
- * 
+ *
  * Usage: ./uav_sim <UAV_NAME> --protocol <tcp|udp>
- * 
+ *
  * This function:
  * 1. Parses command line arguments (UAV name and protocol - both required)
  * 2. Loads configuration for the specified UAV
@@ -259,11 +257,11 @@ int main(int argc, char* argv[]) {
     // Parse command line arguments
     std::string uav_name = argv[1];
     std::string protocol = "both";  // Default to both protocols
-    
+
     if (argc >= 4 && std::string(argv[2]) == "--protocol") {
         protocol = argv[3];
     }
-    
+
     if (protocol != "tcp" && protocol != "udp" && protocol != "both") {
         std::cerr << "Error: Protocol must be 'tcp', 'udp', or 'both'" << std::endl;
         return 1;
@@ -272,7 +270,7 @@ int main(int argc, char* argv[]) {
     /**
      * @brief Lambda function to get the directory containing the executable
      * @return Path to the executable directory
-     * 
+     *
      * Platform-specific implementation for finding the executable path.
      */
     auto getExecutableDir = []() -> std::string {
@@ -297,7 +295,7 @@ int main(int argc, char* argv[]) {
     /**
      * @brief Lambda function to resolve the configuration file path
      * @return Full path to the configuration file
-     * 
+     *
      * Checks multiple locations for the config file:
      * 1. SERVICE_CONFIG environment variable
      * 2. Current directory
@@ -311,17 +309,17 @@ int main(int argc, char* argv[]) {
                 std::error_code ec;
                 if (std::filesystem::exists(env, ec) && !ec) return std::string(env);
             }
-            
+
             // Try multiple candidate locations
             std::vector<std::filesystem::path> candidates;
             candidates.emplace_back("service_config.json");
-            
+
             std::filesystem::path exeDir = getExecutableDir();
             candidates.push_back(exeDir / "service_config.json");
             candidates.push_back(exeDir.parent_path() / "service_config.json");
-            
-            for (auto &p : candidates) {
-                std::error_code ec; 
+
+            for (auto& p : candidates) {
+                std::error_code ec;
                 if (std::filesystem::exists(p, ec) && !ec) return p.string();
             }
         } catch (const std::exception&) {
@@ -335,8 +333,7 @@ int main(int argc, char* argv[]) {
     UAVConfig config;
     try {
         config = LoadUAVConfig(config_path, uav_name);
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::cerr << "Failed to load config: " << e.what() << std::endl;
         return 1;
     }
@@ -361,7 +358,7 @@ int main(int argc, char* argv[]) {
 
     /**
      * @brief Telemetry generation and transmission thread
-     * 
+     *
      * This thread:
      * 1. Determines base telemetry codes for this UAV
      * 2. Sets up communication sockets (UDP or TCP)
@@ -387,8 +384,10 @@ int main(int argc, char* argv[]) {
             int sleep_interval = BASE_SLEEP_INTERVAL_MS;
 
             // Different UAVs send data at different rates to simulate varying workloads
-            if (config.name == "UAV_2") sleep_interval = 750;
-            else if (config.name == "UAV_3") sleep_interval = 1000;
+            if (config.name == "UAV_2")
+                sleep_interval = 750;
+            else if (config.name == "UAV_3")
+                sleep_interval = 1000;
 
             // Set up communication sockets based on selected protocol
             if (protocol == "udp") {
@@ -398,7 +397,8 @@ int main(int argc, char* argv[]) {
 
                 // Resolve the service hostname to get an IP address
                 udp::resolver resolver(io_context);
-                udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), config.ip, std::to_string(config.udp_telemetry_port));
+                udp::resolver::results_type endpoints =
+                    resolver.resolve(udp::v4(), config.ip, std::to_string(config.udp_telemetry_port));
                 udp::endpoint remote_endpoint = *endpoints.begin();
 
                 // Send telemetry data for configured iterations
@@ -408,9 +408,9 @@ int main(int argc, char* argv[]) {
                     socket.send_to(boost::asio::buffer(msg1), remote_endpoint);
                     std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (UDP): " << msg1 << std::endl;
                     std::this_thread::sleep_for(std::chrono::milliseconds(DATA_SEND_INTERVAL_MS));
-                    
+
                     if (!g_running) break;
-                    
+
                     // Send camera data
                     std::string msg2 = config.name + "  " + std::to_string(camera + i);
                     socket.send_to(boost::asio::buffer(msg2), remote_endpoint);
@@ -421,48 +421,52 @@ int main(int argc, char* argv[]) {
                 // TCP only implementation with proper resource management
                 zmq::context_t context(1);
                 zmq::socket_t push_to_service(context, zmq::socket_type::push);
-                
+
                 // Set socket options for better responsiveness
-                int linger = 0; // Don't wait on close
+                int linger = 0;  // Don't wait on close
                 push_to_service.set(zmq::sockopt::linger, linger);
-                
+
                 std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_telemetry_port);
                 push_to_service.connect(telemetry_addr);
-                
+
                 // Small delay to allow connection establishment
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
                 // Send telemetry data for configured iterations
                 for (int i = 0; i < DEFAULT_TELEMETRY_ITERATIONS && g_running; ++i) {
                     if (!g_running) break;
-                    
+
                     // Send mapping data
                     std::string msg1 = config.name + "  " + std::to_string(mapping + i);
                     try {
                         push_to_service.send(zmq::buffer(msg1), zmq::send_flags::dontwait);
-                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg1 << std::endl;
+                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg1
+                                  << std::endl;
                     } catch (const zmq::error_t& e) {
-                        if (e.num() != EAGAIN) { // EAGAIN is normal for non-blocking
-                            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] TCP send error: " << e.what() << std::endl;
+                        if (e.num() != EAGAIN) {  // EAGAIN is normal for non-blocking
+                            std::cerr << "[" << GetTimestamp() << "] [" << config.name
+                                      << "] TCP send error: " << e.what() << std::endl;
                         }
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(DATA_SEND_INTERVAL_MS));
-                    
+
                     if (!g_running) break;
-                    
+
                     // Send camera data
                     std::string msg2 = config.name + "  " + std::to_string(camera + i);
                     try {
                         push_to_service.send(zmq::buffer(msg2), zmq::send_flags::dontwait);
-                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg2 << std::endl;
+                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP): " << msg2
+                                  << std::endl;
                     } catch (const zmq::error_t& e) {
                         if (e.num() != EAGAIN) {
-                            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] TCP send error: " << e.what() << std::endl;
+                            std::cerr << "[" << GetTimestamp() << "] [" << config.name
+                                      << "] TCP send error: " << e.what() << std::endl;
                         }
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
                 }
-                
+
                 // Explicit cleanup
                 push_to_service.close();
             } else if (protocol == "both") {
@@ -472,86 +476,94 @@ int main(int argc, char* argv[]) {
 
                 // Set up UDP endpoint
                 udp::resolver resolver(io_context);
-                udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), config.ip, std::to_string(config.udp_telemetry_port));
+                udp::resolver::results_type endpoints =
+                    resolver.resolve(udp::v4(), config.ip, std::to_string(config.udp_telemetry_port));
                 udp::endpoint remote_endpoint = *endpoints.begin();
 
                 // Set up TCP connection
                 zmq::context_t context(1);
                 zmq::socket_t push_to_service(context, zmq::socket_type::push);
-                
+
                 // Set socket options for better responsiveness
                 int linger = 0;
                 push_to_service.set(zmq::sockopt::linger, linger);
-                
+
                 std::string telemetry_addr = "tcp://" + config.ip + ":" + std::to_string(config.tcp_telemetry_port);
                 push_to_service.connect(telemetry_addr);
-                
+
                 // Small delay to allow connection establishment
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
                 // Send telemetry data for configured iterations to both protocols
                 for (int i = 0; i < DEFAULT_TELEMETRY_ITERATIONS && g_running; ++i) {
                     if (!g_running) break;
-                    
+
                     // Send mapping data via both protocols
                     std::string msg1 = config.name + "  " + std::to_string(mapping + i);
-                    
+
                     // UDP send (this should be fast)
                     try {
                         udp_socket.send_to(boost::asio::buffer(msg1), remote_endpoint);
                     } catch (const std::exception& e) {
-                        std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] UDP send error: " << e.what() << std::endl;
+                        std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] UDP send error: " << e.what()
+                                  << std::endl;
                     }
-                    
+
                     // TCP send (non-blocking)
                     try {
                         push_to_service.send(zmq::buffer(msg1), zmq::send_flags::dontwait);
                     } catch (const zmq::error_t& e) {
                         if (e.num() != EAGAIN) {
-                            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] TCP send error: " << e.what() << std::endl;
+                            std::cerr << "[" << GetTimestamp() << "] [" << config.name
+                                      << "] TCP send error: " << e.what() << std::endl;
                         }
                     }
-                    
-                    std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg1 << std::endl;
+
+                    std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg1
+                              << std::endl;
                     std::this_thread::sleep_for(std::chrono::milliseconds(DATA_SEND_INTERVAL_MS));
-                    
+
                     if (!g_running) break;
-                    
+
                     // Send camera data via both protocols
                     std::string msg2 = config.name + "  " + std::to_string(camera + i);
-                    
+
                     // UDP send
                     try {
                         udp_socket.send_to(boost::asio::buffer(msg2), remote_endpoint);
                     } catch (const std::exception& e) {
-                        std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] UDP send error: " << e.what() << std::endl;
+                        std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] UDP send error: " << e.what()
+                                  << std::endl;
                     }
-                    
+
                     // TCP send (non-blocking)
                     try {
                         push_to_service.send(zmq::buffer(msg2), zmq::send_flags::dontwait);
                     } catch (const zmq::error_t& e) {
                         if (e.num() != EAGAIN) {
-                            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] TCP send error: " << e.what() << std::endl;
+                            std::cerr << "[" << GetTimestamp() << "] [" << config.name
+                                      << "] TCP send error: " << e.what() << std::endl;
                         }
                     }
-                    
-                    std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg2 << std::endl;
+
+                    std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Sent (TCP+UDP): " << msg2
+                              << std::endl;
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
                 }
-                
+
                 // Explicit cleanup
                 push_to_service.close();
             }
         } catch (const std::exception& e) {
-            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] Telemetry sender error: " << e.what() << std::endl;
+            std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] Telemetry sender error: " << e.what()
+                      << std::endl;
         }
         std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Telemetry sending completed." << std::endl;
     });
 
     /**
      * @brief Command receiver thread (TCP only)
-     * 
+     *
      * This thread listens for commands from UI components via the telemetry service.
      * Commands are only supported when using TCP protocol (tcp or both modes).
      * UDP is unidirectional in this implementation.
@@ -574,7 +586,8 @@ int main(int argc, char* argv[]) {
                         // Display received command with visual emphasis
                         std::cout << std::endl;
                         std::cout << "============================================" << std::endl;
-                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] 🚁 UI MESSAGE: " << cmd << " 🚁" << std::endl;
+                        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] 🚁 UI MESSAGE: " << cmd
+                                  << " 🚁" << std::endl;
                         std::cout << "============================================" << std::endl;
                         std::cout << std::endl;
 
@@ -583,11 +596,12 @@ int main(int argc, char* argv[]) {
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(COMMAND_POLL_INTERVAL_MS));
                 }
-                
+
                 // Explicit cleanup
                 pull_commands.close();
             } catch (const std::exception& e) {
-                std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] Command receiver error: " << e.what() << std::endl;
+                std::cerr << "[" << GetTimestamp() << "] [" << config.name << "] Command receiver error: " << e.what()
+                          << std::endl;
             }
             std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Command receiver stopped." << std::endl;
         });
@@ -595,20 +609,21 @@ int main(int argc, char* argv[]) {
 
     // Wait for all threads to complete with responsive shutdown
     std::cout << "Press Ctrl+C to stop the simulator..." << std::endl;
-    
+
     // Wait for threads to complete, but check for shutdown signals
     while ((telemetry_sender.joinable() || command_receiver.joinable()) && g_running.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
+
     // Ensure threads are properly joined
     if (telemetry_sender.joinable()) telemetry_sender.join();
     if (command_receiver.joinable()) command_receiver.join();
-    
+
     // Log shutdown reason if caused by signal
     int signal_num = g_signal_received.load();
     if (signal_num > 0) {
-        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Shutdown initiated by signal: " << signal_num << std::endl;
+        std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Shutdown initiated by signal: " << signal_num
+                  << std::endl;
     }
 
     std::cout << "[" << GetTimestamp() << "] [" << config.name << "] Simulator stopped." << std::endl;

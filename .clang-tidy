@@ -1,0 +1,22 @@
+Checks: >
+  -*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  -readability-braces-around-statements,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -modernize-use-trailing-return-type
+
+WarningsAsErrors: false
+HeaderFilterRegex: '.*'
+CheckOptions:
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase

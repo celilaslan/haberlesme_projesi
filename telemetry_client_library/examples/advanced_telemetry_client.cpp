@@ -11,13 +11,14 @@
  * - Mock UAV simulation
  */
 
-#include "TelemetryClient.h"
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <iomanip>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <iomanip>
-#include <csignal>
-#include <atomic>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -37,12 +38,11 @@ void signalHandler(int signal) {
  */
 void displayPerformanceMetrics(const PerformanceMetrics& metrics) {
     std::cout << "\n=== PERFORMANCE METRICS ===" << std::endl;
-    std::cout << "CPU Usage: " << std::fixed << std::setprecision(1)
-              << metrics.cpu_usage_percent << "%" << std::endl;
+    std::cout << "CPU Usage: " << std::fixed << std::setprecision(1) << metrics.cpu_usage_percent << "%" << std::endl;
     std::cout << "Memory Usage: " << metrics.memory_usage_mb << " MB" << std::endl;
     std::cout << "Messages/sec: " << metrics.messages_per_second << std::endl;
-    std::cout << "Avg Processing Time: " << std::fixed << std::setprecision(2)
-              << metrics.average_processing_time_ms << " ms" << std::endl;
+    std::cout << "Avg Processing Time: " << std::fixed << std::setprecision(2) << metrics.average_processing_time_ms
+              << " ms" << std::endl;
     std::cout << "Uptime: " << metrics.uptime_seconds << " seconds" << std::endl;
 }
 
@@ -52,14 +52,13 @@ void displayPerformanceMetrics(const PerformanceMetrics& metrics) {
 void displayFleetStatus(const FleetStatus& status) {
     std::cout << "\n=== FLEET STATUS ===" << std::endl;
     std::cout << "Active UAVs: " << status.active_uavs << "/" << status.total_uavs << std::endl;
-    std::cout << "Overall Health: " << std::fixed << std::setprecision(1)
-              << status.overall_health_score * 100 << "%" << std::endl;
+    std::cout << "Overall Health: " << std::fixed << std::setprecision(1) << status.overall_health_score * 100 << "%"
+              << std::endl;
 
     for (const auto& [uav_name, uav_status] : status.uav_statuses) {
-        std::cout << "  " << uav_name << ": "
-                  << (uav_status.connected ? "ONLINE" : "OFFLINE")
-                  << " (Health: " << std::fixed << std::setprecision(1)
-                  << uav_status.health_score * 100 << "%)" << std::endl;
+        std::cout << "  " << uav_name << ": " << (uav_status.connected ? "ONLINE" : "OFFLINE")
+                  << " (Health: " << std::fixed << std::setprecision(1) << uav_status.health_score * 100 << "%)"
+                  << std::endl;
     }
 }
 
@@ -68,12 +67,12 @@ void displayFleetStatus(const FleetStatus& status) {
  */
 void displayDataQuality(const std::string& uav_name, const DataQuality& quality) {
     std::cout << "\n=== DATA QUALITY: " << uav_name << " ===" << std::endl;
-    std::cout << "Packet Loss: " << std::fixed << std::setprecision(2)
-              << quality.packet_loss_rate * 100 << "%" << std::endl;
+    std::cout << "Packet Loss: " << std::fixed << std::setprecision(2) << quality.packet_loss_rate * 100 << "%"
+              << std::endl;
     std::cout << "Avg Latency: " << quality.average_latency_ms << " ms" << std::endl;
     std::cout << "Missing Sequences: " << quality.missing_sequences << std::endl;
-    std::cout << "Freshness Score: " << std::fixed << std::setprecision(2)
-              << quality.data_freshness_score * 100 << "%" << std::endl;
+    std::cout << "Freshness Score: " << std::fixed << std::setprecision(2) << quality.data_freshness_score * 100 << "%"
+              << std::endl;
 }
 
 /**
@@ -83,19 +82,16 @@ void onTelemetryReceived(const TelemetryData& data) {
     static int message_count = 0;
     message_count++;
 
-    if (message_count % 10 == 0) { // Print every 10th message to avoid spam
-        std::cout << "[" << message_count << "] " << data.uav_name
-                  << " (" << (data.data_type == DataType::MAPPING ? "MAP" : "CAM")
-                  << "): " << data.raw_data << std::endl;
+    if (message_count % 10 == 0) {  // Print every 10th message to avoid spam
+        std::cout << "[" << message_count << "] " << data.uav_name << " ("
+                  << (data.data_type == DataType::MAPPING ? "MAP" : "CAM") << "): " << data.raw_data << std::endl;
     }
 }
 
 /**
  * @brief Error callback
  */
-void onError(const std::string& error_message) {
-    std::cout << "ERROR: " << error_message << std::endl;
-}
+void onError(const std::string& error_message) { std::cout << "ERROR: " << error_message << std::endl; }
 
 /**
  * @brief Event callback for telemetry events
@@ -130,8 +126,7 @@ void onTelemetryEvent(TelemetryEvent event, const std::string& details) {
  * @brief Command response callback
  */
 void onCommandResponse(const CommandResponse& response) {
-    std::cout << "Command " << response.command_id
-              << " status: " << static_cast<int>(response.status);
+    std::cout << "Command " << response.command_id << " status: " << static_cast<int>(response.status);
 
     if (!response.response_data.empty()) {
         std::cout << " - Response: " << response.response_data;
@@ -198,7 +193,7 @@ void demonstrateDataRecording(TelemetryClientAdvanced& advanced_client) {
 
     auto data_buffer = advanced_client.getDataBuffer();
     if (auto buffer_ptr = data_buffer.lock()) {
-        buffer_ptr->enableBuffering(10); // 10MB buffer
+        buffer_ptr->enableBuffering(10);  // 10MB buffer
 
         // Create a filename with timestamp
         auto now = std::chrono::system_clock::now();
@@ -215,8 +210,7 @@ void demonstrateDataRecording(TelemetryClientAdvanced& advanced_client) {
 
             buffer_ptr->stopRecording();
             std::cout << "✓ Recording stopped" << std::endl;
-            std::cout << "  Buffer usage: "
-                      << buffer_ptr->getBufferUsage() * 100 << "%" << std::endl;
+            std::cout << "  Buffer usage: " << buffer_ptr->getBufferUsage() * 100 << "%" << std::endl;
         }
     } else {
         std::cout << "✗ Failed to get DataBuffer instance" << std::endl;
@@ -302,8 +296,8 @@ int main(int argc, char* argv[]) {
         std::cout << "✓ Event subscriptions configured" << std::endl;
 
         // Set up data thresholds
-        client.setDataThreshold("UAV_1", "altitude", 500.0,
-            [](const std::string& uav, const std::string& param, double value) {
+        client.setDataThreshold(
+            "UAV_1", "altitude", 500.0, [](const std::string& uav, const std::string& param, double value) {
                 std::cout << "ALERT: " << uav << " " << param << " exceeded threshold: " << value << std::endl;
             });
 
@@ -372,8 +366,8 @@ int main(int argc, char* argv[]) {
                     // Display bandwidth usage
                     auto bandwidth = analyzer_ptr->getBandwidthUsage();
                     std::cout << "\n=== BANDWIDTH USAGE ===" << std::endl;
-                    std::cout << "In: " << std::fixed << std::setprecision(2)
-                              << bandwidth.bytes_per_second_in << " B/s" << std::endl;
+                    std::cout << "In: " << std::fixed << std::setprecision(2) << bandwidth.bytes_per_second_in << " B/s"
+                              << std::endl;
                     std::cout << "Out: " << bandwidth.bytes_per_second_out << " B/s" << std::endl;
                     std::cout << "Total Received: " << bandwidth.total_bytes_received << " bytes" << std::endl;
                 }

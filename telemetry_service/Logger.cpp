@@ -1,16 +1,17 @@
 /**
  * @file Logger.cpp
  * @brief Implementation of the thread-safe logging system
- * 
+ *
  * This file contains the implementation of the Logger class, providing
  * thread-safe logging functionality with timestamps and dual output
  * (console and file).
  */
 
 #include "Logger.h"
-#include <iostream>
+
 #include <chrono>
 #include <iomanip>
+#include <iostream>
 
 // Static member definitions
 std::unique_ptr<std::ofstream> Logger::logFile = nullptr;
@@ -21,7 +22,7 @@ LogLevel Logger::currentLevel = LogLevel::INFO;
  * @brief Initialize the logging system
  * @param logFilePath Path to the log file
  * @param level Minimum log level to output
- * 
+ *
  * Creates or opens the specified log file for writing. If the file cannot
  * be opened, an error message is printed to stderr. This method is thread-safe
  * and can be called multiple times (subsequent calls are ignored).
@@ -41,7 +42,7 @@ void Logger::init(const std::string& logFilePath, LogLevel level) {
 /**
  * @brief Generate a formatted timestamp string
  * @return Timestamp string with millisecond precision
- * 
+ *
  * Creates a timestamp in the format "YYYY-MM-DD HH:MM:SS.mmm".
  * Uses platform-specific time conversion functions for thread safety.
  */
@@ -54,7 +55,7 @@ std::string Logger::getTimestamp() {
 
     std::ostringstream oss;
     struct tm time_info;
-    
+
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
     localtime_s(&time_info, &time_t_now);  // Windows thread-safe version
@@ -71,21 +72,17 @@ std::string Logger::getTimestamp() {
 /**
  * @brief Log an informational message
  * @param msg The message to log
- * 
+ *
  * Writes the message with timestamp to both stdout and the log file.
  * Thread-safe through mutex protection.
  */
-void Logger::info(const std::string& msg) {
-    log(LogLevel::INFO, msg, false);
-}
+void Logger::info(const std::string& msg) { log(LogLevel::INFO, msg, false); }
 
 /**
  * @brief Log a debug message
  * @param msg The debug message to log
  */
-void Logger::debug(const std::string& msg) {
-    log(LogLevel::DEBUG, msg, false);
-}
+void Logger::debug(const std::string& msg) { log(LogLevel::DEBUG, msg, false); }
 
 /**
  * @brief Log a warning message
@@ -98,13 +95,11 @@ void Logger::warn(const std::string& msg) {
 /**
  * @brief Log an error message
  * @param msg The error message to log
- * 
+ *
  * Writes the message with timestamp and "ERROR:" prefix to both stderr
  * and the log file. Thread-safe through mutex protection.
  */
-void Logger::error(const std::string& msg) {
-    log(LogLevel::ERROR, msg, true);
-}
+void Logger::error(const std::string& msg) { log(LogLevel::ERROR, msg, true); }
 
 /**
  * @brief Set the minimum log level
@@ -123,26 +118,26 @@ void Logger::setLevel(LogLevel level) {
  */
 void Logger::log(LogLevel level, const std::string& msg, bool useStderr) {
     std::lock_guard<std::mutex> lock(mtx);
-    
+
     // Check if this message should be logged based on current level
     if (level < currentLevel) {
         return;
     }
-    
+
     std::string levelStr = levelToString(level);
     std::string logMsg = "[" + getTimestamp() + "] " + levelStr + ": " + msg;
-    
+
     // Write to appropriate output stream
     if (useStderr) {
         std::cerr << logMsg << std::endl;
     } else {
         std::cout << logMsg << std::endl;
     }
-    
+
     // Write to log file if available and properly initialized
     if (logFile && logFile->is_open()) {
         *logFile << logMsg << std::endl;
-        logFile->flush(); // Ensure immediate write for important messages
+        logFile->flush();  // Ensure immediate write for important messages
     }
 }
 
@@ -153,11 +148,16 @@ void Logger::log(LogLevel level, const std::string& msg, bool useStderr) {
  */
 std::string Logger::levelToString(LogLevel level) {
     switch (level) {
-        case LogLevel::DEBUG: return "DEBUG";
-        case LogLevel::INFO:  return "INFO";
-        case LogLevel::WARN:  return "WARN";
-        case LogLevel::ERROR: return "ERROR";
-        default:              return "UNKNOWN";
+        case LogLevel::DEBUG:
+            return "DEBUG";
+        case LogLevel::INFO:
+            return "INFO";
+        case LogLevel::WARN:
+            return "WARN";
+        case LogLevel::ERROR:
+            return "ERROR";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -199,14 +199,14 @@ void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, cons
     info("=== SERVICE STARTUP COMPLETE ===");
     info("Configuration Summary:");
     info("  UAVs configured: " + std::to_string(uavCount));
-    
+
     std::string tcpPortsStr = "  TCP ports: ";
     for (size_t i = 0; i < tcpPorts.size(); ++i) {
         if (i > 0) tcpPortsStr += ", ";
         tcpPortsStr += std::to_string(tcpPorts[i]);
     }
     info(tcpPortsStr);
-    
+
     std::string udpPortsStr = "  UDP ports: ";
     for (size_t i = 0; i < udpPorts.size(); ++i) {
         if (i > 0) udpPortsStr += ", ";
@@ -227,7 +227,7 @@ bool Logger::isInitialized() {
 
 /**
  * @brief Flush and close the log file (cleanup)
- * 
+ *
  * Ensures all pending log data is written to file and properly closed.
  * Thread-safe and can be called multiple times safely.
  */

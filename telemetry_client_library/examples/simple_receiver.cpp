@@ -6,12 +6,13 @@
  * to receive telemetry data from UAVs via the telemetry service.
  */
 
-#include "TelemetryClient.h"
-#include <iostream>
-#include <csignal>
 #include <atomic>
-#include <thread>
 #include <chrono>
+#include <csignal>
+#include <iostream>
+#include <thread>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -31,22 +32,22 @@ void signalHandler(int signal) {
  * @param data The received telemetry data
  */
 void onTelemetryReceived(const TelemetryData& data) {
-    std::cout << "[" << data.timestamp_ms << "] "
-              << "UAV: " << data.uav_name << " | "
-              << "Type: " << (data.data_type == DataType::MAPPING ? "MAPPING" :
-                            data.data_type == DataType::CAMERA ? "CAMERA" : "UNKNOWN") << " | "
-              << "Protocol: " << (data.received_via == Protocol::TCP_ONLY ? "TCP" :
-                                 data.received_via == Protocol::UDP_ONLY ? "UDP" : "BOTH") << " | "
-              << "Data: " << data.raw_data << std::endl;
+    std::cout << "[" << data.timestamp_ms << "] " << "UAV: " << data.uav_name << " | " << "Type: "
+              << (data.data_type == DataType::MAPPING  ? "MAPPING"
+                  : data.data_type == DataType::CAMERA ? "CAMERA"
+                                                       : "UNKNOWN")
+              << " | " << "Protocol: "
+              << (data.received_via == Protocol::TCP_ONLY   ? "TCP"
+                  : data.received_via == Protocol::UDP_ONLY ? "UDP"
+                                                            : "BOTH")
+              << " | " << "Data: " << data.raw_data << std::endl;
 }
 
 /**
  * @brief Callback function to handle errors
  * @param error_message Description of the error
  */
-void onError(const std::string& error_message) {
-    std::cerr << "ERROR: " << error_message << std::endl;
-}
+void onError(const std::string& error_message) { std::cerr << "ERROR: " << error_message << std::endl; }
 
 int main(int argc, char* argv[]) {
     // Set up signal handler

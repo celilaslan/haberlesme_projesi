@@ -6,12 +6,13 @@
  * UAV data streams to optimize network traffic and processing.
  */
 
-#include "TelemetryClient.h"
+#include <atomic>
+#include <chrono>
+#include <csignal>
 #include <iostream>
 #include <thread>
-#include <chrono>
-#include <atomic>
-#include <csignal>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -23,14 +24,11 @@ void signalHandler(int signal) {
 }
 
 void onTelemetryReceived(const TelemetryData& data) {
-    std::cout << "[RECEIVED] " << data.uav_name
-              << " (" << (data.data_type == DataType::MAPPING ? "MAP" : "CAM")
+    std::cout << "[RECEIVED] " << data.uav_name << " (" << (data.data_type == DataType::MAPPING ? "MAP" : "CAM")
               << "): " << data.raw_data << std::endl;
 }
 
-void onError(const std::string& error_message) {
-    std::cout << "ERROR: " << error_message << std::endl;
-}
+void onError(const std::string& error_message) { std::cout << "ERROR: " << error_message << std::endl; }
 
 int main() {
     std::cout << "=== SUBSCRIPTION/UNSUBSCRIPTION DEMO ===" << std::endl;

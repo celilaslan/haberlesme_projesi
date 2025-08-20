@@ -9,16 +9,18 @@
  * - Error handling
  */
 
-#include "TelemetryClient.h"
-#include <iostream>
-#include <csignal>
-#include <atomic>
-#include <thread>
-#include <chrono>
-#include <string>
-#include <sstream>
 #include <poll.h>
 #include <unistd.h>
+
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <thread>
+
+#include "TelemetryClient.h"
 
 using namespace TelemetryAPI;
 
@@ -42,19 +44,19 @@ void onTelemetryReceived(const TelemetryData& data) {
     std::string uav_name_parsed;
     int numeric_code;
 
-    std::string data_type_str = (data.data_type == DataType::MAPPING ? "MAPPING" :
-                                data.data_type == DataType::CAMERA ? "CAMERA" : "UNKNOWN");
-    std::string protocol_str = (data.received_via == Protocol::TCP_ONLY ? "TCP" :
-                               data.received_via == Protocol::UDP_ONLY ? "UDP" : "BOTH");
+    std::string data_type_str = (data.data_type == DataType::MAPPING  ? "MAPPING"
+                                 : data.data_type == DataType::CAMERA ? "CAMERA"
+                                                                      : "UNKNOWN");
+    std::string protocol_str = (data.received_via == Protocol::TCP_ONLY   ? "TCP"
+                                : data.received_via == Protocol::UDP_ONLY ? "UDP"
+                                                                          : "BOTH");
 
     if (parseTelemetryMessage(data.raw_data, uav_name_parsed, numeric_code)) {
-        std::cout << "[" << data_type_str << "] " << data.uav_name
-                  << " -> Code: " << numeric_code
-                  << " (via " << protocol_str << ")" << std::endl;
+        std::cout << "[" << data_type_str << "] " << data.uav_name << " -> Code: " << numeric_code << " (via "
+                  << protocol_str << ")" << std::endl;
     } else {
-        std::cout << "[" << data_type_str << "] " << data.uav_name
-                  << " -> " << data.raw_data
-                  << " (via " << protocol_str << ")" << std::endl;
+        std::cout << "[" << data_type_str << "] " << data.uav_name << " -> " << data.raw_data << " (via "
+                  << protocol_str << ")" << std::endl;
     }
 }
 
@@ -62,9 +64,7 @@ void onTelemetryReceived(const TelemetryData& data) {
  * @brief Callback function to handle errors
  * @param error_message Description of the error
  */
-void onError(const std::string& error_message) {
-    std::cerr << "ERROR: " << error_message << std::endl;
-}
+void onError(const std::string& error_message) { std::cerr << "ERROR: " << error_message << std::endl; }
 
 /**
  * @brief Display help information
@@ -122,7 +122,7 @@ int main(int argc, char* argv[]) {
 
     // Create and initialize the client
     TelemetryClient client;
-    client.setDebugMode(false); // Start with debug off for cleaner output
+    client.setDebugMode(false);  // Start with debug off for cleaner output
 
     if (!client.initialize(service_host)) {
         std::cerr << "Failed to initialize client: " << client.getLastError() << std::endl;
@@ -166,7 +166,7 @@ int main(int argc, char* argv[]) {
         pfd.fd = STDIN_FILENO;
         pfd.events = POLLIN;
 
-        int poll_result = poll(&pfd, 1, 100); // 100ms timeout
+        int poll_result = poll(&pfd, 1, 100);  // 100ms timeout
 
         if (poll_result > 0 && (pfd.revents & POLLIN)) {
             // Input is available, read it
@@ -178,94 +178,94 @@ int main(int argc, char* argv[]) {
                 std::string command;
                 iss >> command;
 
-            if (command == "quit" || command == "exit") {
-                break;
-            } else if (command == "help") {
-                showHelp();
-            } else if (command == "status") {
-                std::cout << "Status: " << client.getConnectionStatus() << std::endl;
-                std::cout << "Receiving: " << (client.isReceiving() ? "Yes" : "No") << std::endl;
-                if (!client.getLastError().empty()) {
-                    std::cout << "Last Error: " << client.getLastError() << std::endl;
-                }
-            } else if (command == "filter") {
-                std::string filter_type;
-                iss >> filter_type;
+                if (command == "quit" || command == "exit") {
+                    break;
+                } else if (command == "help") {
+                    showHelp();
+                } else if (command == "status") {
+                    std::cout << "Status: " << client.getConnectionStatus() << std::endl;
+                    std::cout << "Receiving: " << (client.isReceiving() ? "Yes" : "No") << std::endl;
+                    if (!client.getLastError().empty()) {
+                        std::cout << "Last Error: " << client.getLastError() << std::endl;
+                    }
+                } else if (command == "filter") {
+                    std::string filter_type;
+                    iss >> filter_type;
 
-                if (filter_type == "uav") {
-                    std::string uav_name;
+                    if (filter_type == "uav") {
+                        std::string uav_name;
+                        iss >> uav_name;
+                        if (!uav_name.empty()) {
+                            if (client.subscribeToUAV(uav_name)) {
+                                std::cout << "✓ Now filtering for UAV: " << uav_name << std::endl;
+                            } else {
+                                std::cout << "✗ Failed to set UAV filter" << std::endl;
+                            }
+                        } else {
+                            std::cout << "Usage: filter uav <UAV_NAME>" << std::endl;
+                        }
+                    } else if (filter_type == "type") {
+                        std::string data_type_str;
+                        iss >> data_type_str;
+
+                        if (data_type_str == "mapping") {
+                            if (client.subscribeToDataType(DataType::MAPPING)) {
+                                std::cout << "✓ Now filtering for MAPPING data" << std::endl;
+                            } else {
+                                std::cout << "✗ Failed to set data type filter" << std::endl;
+                            }
+                        } else if (data_type_str == "camera") {
+                            if (client.subscribeToDataType(DataType::CAMERA)) {
+                                std::cout << "✓ Now filtering for CAMERA data" << std::endl;
+                            } else {
+                                std::cout << "✗ Failed to set data type filter" << std::endl;
+                            }
+                        } else {
+                            std::cout << "Usage: filter type <mapping|camera>" << std::endl;
+                        }
+                    } else {
+                        std::cout << "Usage: filter <uav|type> <value>" << std::endl;
+                    }
+                } else if (command == "send") {
+                    std::string uav_name, cmd_text;
                     iss >> uav_name;
-                    if (!uav_name.empty()) {
-                        if (client.subscribeToUAV(uav_name)) {
-                            std::cout << "✓ Now filtering for UAV: " << uav_name << std::endl;
+                    std::getline(iss, cmd_text);
+
+                    if (!uav_name.empty() && !cmd_text.empty()) {
+                        // Remove leading whitespace from command text
+                        size_t start = cmd_text.find_first_not_of(" \t");
+                        if (start != std::string::npos) {
+                            cmd_text = cmd_text.substr(start);
+                        }
+
+                        if (client.sendCommand(uav_name, cmd_text, "AdvancedClient")) {
+                            std::cout << "✓ Command sent to " << uav_name << ": " << cmd_text << std::endl;
                         } else {
-                            std::cout << "✗ Failed to set UAV filter" << std::endl;
+                            std::cout << "✗ Failed to send command: " << client.getLastError() << std::endl;
                         }
                     } else {
-                        std::cout << "Usage: filter uav <UAV_NAME>" << std::endl;
+                        std::cout << "Usage: send <UAV_NAME> <COMMAND>" << std::endl;
                     }
-                } else if (filter_type == "type") {
-                    std::string data_type_str;
-                    iss >> data_type_str;
+                } else if (command == "debug") {
+                    std::string debug_mode;
+                    iss >> debug_mode;
 
-                    if (data_type_str == "mapping") {
-                        if (client.subscribeToDataType(DataType::MAPPING)) {
-                            std::cout << "✓ Now filtering for MAPPING data" << std::endl;
-                        } else {
-                            std::cout << "✗ Failed to set data type filter" << std::endl;
-                        }
-                    } else if (data_type_str == "camera") {
-                        if (client.subscribeToDataType(DataType::CAMERA)) {
-                            std::cout << "✓ Now filtering for CAMERA data" << std::endl;
-                        } else {
-                            std::cout << "✗ Failed to set data type filter" << std::endl;
-                        }
+                    if (debug_mode == "on") {
+                        client.setDebugMode(true);
+                        std::cout << "✓ Debug mode enabled" << std::endl;
+                    } else if (debug_mode == "off") {
+                        client.setDebugMode(false);
+                        std::cout << "✓ Debug mode disabled" << std::endl;
                     } else {
-                        std::cout << "Usage: filter type <mapping|camera>" << std::endl;
+                        std::cout << "Usage: debug <on|off>" << std::endl;
                     }
-                } else {
-                    std::cout << "Usage: filter <uav|type> <value>" << std::endl;
+                } else if (!command.empty()) {
+                    std::cout << "Unknown command: " << command << " (type 'help' for options)" << std::endl;
                 }
-            } else if (command == "send") {
-                std::string uav_name, cmd_text;
-                iss >> uav_name;
-                std::getline(iss, cmd_text);
 
-                if (!uav_name.empty() && !cmd_text.empty()) {
-                    // Remove leading whitespace from command text
-                    size_t start = cmd_text.find_first_not_of(" \t");
-                    if (start != std::string::npos) {
-                        cmd_text = cmd_text.substr(start);
-                    }
-
-                    if (client.sendCommand(uav_name, cmd_text, "AdvancedClient")) {
-                        std::cout << "✓ Command sent to " << uav_name << ": " << cmd_text << std::endl;
-                    } else {
-                        std::cout << "✗ Failed to send command: " << client.getLastError() << std::endl;
-                    }
-                } else {
-                    std::cout << "Usage: send <UAV_NAME> <COMMAND>" << std::endl;
-                }
-            } else if (command == "debug") {
-                std::string debug_mode;
-                iss >> debug_mode;
-
-                if (debug_mode == "on") {
-                    client.setDebugMode(true);
-                    std::cout << "✓ Debug mode enabled" << std::endl;
-                } else if (debug_mode == "off") {
-                    client.setDebugMode(false);
-                    std::cout << "✓ Debug mode disabled" << std::endl;
-                } else {
-                    std::cout << "Usage: debug <on|off>" << std::endl;
-                }
-            } else if (!command.empty()) {
-                std::cout << "Unknown command: " << command << " (type 'help' for options)" << std::endl;
-            }
-
-            // Show prompt for next command
-            std::cout << "> ";
-            std::cout.flush();
+                // Show prompt for next command
+                std::cout << "> ";
+                std::cout.flush();
             } else {
                 // EOF or error
                 break;
