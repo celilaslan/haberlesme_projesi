@@ -73,32 +73,7 @@ install(TARGETS telemetry_client
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Install export targets for find_package support
-install(EXPORT TelemetryClientTargets
-    FILE TelemetryClientTargets.cmake
-    NAMESPACE TelemetryClient::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TelemetryClient
-)
-
-# Create config file for find_package
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    TelemetryClientConfigVersion.cmake
-    VERSION 1.0.0
-    COMPATIBILITY AnyNewerVersion
-)
-
-configure_package_config_file(
-    ${CMAKE_CURRENT_LIST_DIR}/TelemetryClientConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/TelemetryClientConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TelemetryClient
-)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/TelemetryClientConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/TelemetryClientConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TelemetryClient
-)
+# Note: Packaging removed - library used internally within same project
 
 # Build examples if requested
 option(BUILD_TELEMETRY_CLIENT_EXAMPLES "Build telemetry client examples" ON)
