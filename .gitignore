@@ -66,6 +66,10 @@ compile_commands.json
 # Preserve sample / test input files
 telemetry_service/telemetry_test.txt
 
+# ---- Telemetry runtime recordings ----
+telemetry_recording_*.json
+**/telemetry_recording_*.json
+
 # ---- Development documentation (local only) ----
 DEVELOPER_LOG.md
 g*n_sonu_raporlar*.txt
@@ -164,6 +168,10 @@ camera_ui/camera_ui
 mapping_ui/mapping_ui
 telemetry_service/telemetry_service
 uav_sim/uav_sim
+telemetry_client_library/examples/advanced_telemetry_client
+telemetry_client_library/examples/simple_receiver
+telemetry_client_library/examples/command_sender
+telemetry_client_library/examples/advanced_client
 
 
 # ---- Coverage & profiling ----
