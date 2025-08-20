@@ -1,0 +1,33 @@
+{
+  "uavs": [
+    {
+      "name": "UAV_1",
+      "ip": "localhost",
+      "tcp_telemetry_port": 5555,
+      "tcp_command_port": 5559,
+      "udp_telemetry_port": 5556
+    },
+    {
+      "name": "UAV_2",
+      "ip": "localhost",
+      "tcp_telemetry_port": 5565,
+      "tcp_command_port": 5569,
+      "udp_telemetry_port": 5566
+    },
+    {
+      "name": "UAV_3",
+      "ip": "localhost",
+      "tcp_telemetry_port": 5575,
+      "tcp_command_port": 5579,
+      "udp_telemetry_port": 5576
+    }
+  ],
+  "ui_ports": {
+    "tcp_command_port": 5558,
+    "tcp_publish_port": 5557,
+    "udp_camera_port": 5570,
+    "udp_mapping_port": 5571,
+    "udp_command_port": 5572
+  },
+  "log_file": "telemetry_log.txt"
+}

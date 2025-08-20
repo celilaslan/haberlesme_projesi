@@ -100,9 +100,21 @@ public:
             // Subscribe to both mapping and camera data for this UAV
             uav_filters_.insert("mapping_" + uav_name);
             uav_filters_.insert("camera_" + uav_name);
+
+            // Use ZeroMQ subscription for both types
+            if (tcp_socket_) {
+                tcp_socket_->set(zmq::sockopt::subscribe, "mapping_" + uav_name);
+                tcp_socket_->set(zmq::sockopt::subscribe, "camera_" + uav_name);
+            }
         } else {
             std::string topic_prefix = (data_type == DataType::MAPPING) ? "mapping_" : "camera_";
-            uav_filters_.insert(topic_prefix + uav_name);
+            std::string full_topic = topic_prefix + uav_name;
+            uav_filters_.insert(full_topic);
+
+            // Use ZeroMQ subscription for specific topic
+            if (tcp_socket_) {
+                tcp_socket_->set(zmq::sockopt::subscribe, full_topic);
+            }
         }
 
         return true;
@@ -117,6 +129,11 @@ public:
         std::lock_guard<std::mutex> lock(filter_mutex_);
         std::string prefix = (data_type == DataType::MAPPING) ? "mapping" : "camera";
         data_type_filters_.insert(prefix);
+
+        // ACTUALLY use ZeroMQ subscription filtering!
+        if (tcp_socket_) {
+            tcp_socket_->set(zmq::sockopt::subscribe, prefix);
+        }
 
         return true;
     }
@@ -317,8 +334,25 @@ private:
             std::string addr = "tcp://" + service_host_ + ":" + std::to_string(config_.tcp_publish_port);
             tcp_socket_->connect(addr);
 
-            // Subscribe to all topics initially
-            tcp_socket_->set(zmq::sockopt::subscribe, "");
+            // Don't subscribe to all topics - let user choose what they want
+            // tcp_socket_->set(zmq::sockopt::subscribe, "");  // OLD: receive everything
+
+            // Only subscribe if user has already set preferences
+            {
+                std::lock_guard<std::mutex> lock(filter_mutex_);
+                if (!data_type_filters_.empty() || !uav_filters_.empty()) {
+                    // User has set specific subscriptions - use them
+                    for (const auto& prefix : data_type_filters_) {
+                        tcp_socket_->set(zmq::sockopt::subscribe, prefix);
+                    }
+                    for (const auto& topic : uav_filters_) {
+                        tcp_socket_->set(zmq::sockopt::subscribe, topic);
+                    }
+                } else {
+                    // No specific subscriptions - subscribe to all (default behavior)
+                    tcp_socket_->set(zmq::sockopt::subscribe, "");
+                }
+            }
 
             if (debug_mode_) {
                 std::cout << "[TelemetryClient] TCP receiver connected to " << addr << std::endl;
