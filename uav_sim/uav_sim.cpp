@@ -346,9 +346,53 @@ int main(int argc, char* argv[]) {
         std::cout << "  " << args[0] << " UAV_1 --protocol both    # Both protocols (explicit)" << '\n';
         std::cout << '\n';
 
-        // Display available UAVs from configuration
-        const char* cfg_env = std::getenv("SERVICE_CONFIG");
-        std::string config_path = (cfg_env != nullptr) ? std::string(cfg_env) : std::string("service_config.json");
+        // Display available UAVs from configuration using proper path resolution
+        auto get_executable_dir_for_usage = []() -> std::string {
+            try {
+#if defined(_WIN32)
+                char path[MAX_PATH];
+                DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+                if (len == 0 || len == MAX_PATH) return std::filesystem::current_path().string();
+                return std::filesystem::path(path).parent_path().string();
+#else
+                std::array<char, 4096> buf{};
+                ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
+                if (len == -1) return std::filesystem::current_path().string();
+                buf.at(static_cast<size_t>(len)) = '\0';
+                return std::filesystem::path(buf.data()).parent_path().string();
+#endif
+            } catch (const std::exception&) {
+                return std::filesystem::current_path().string();
+            }
+        };
+
+        auto resolve_config_path_for_usage = [&]() -> std::string {
+            try {
+                // Check environment variable first
+                if (const char* env = std::getenv("SERVICE_CONFIG")) {
+                    std::error_code error_code;
+                    if (std::filesystem::exists(env, error_code) && !error_code) return {env};
+                }
+
+                // Try multiple candidate locations
+                std::vector<std::filesystem::path> candidates;
+                candidates.emplace_back("service_config.json");
+
+                std::filesystem::path exe_dir = get_executable_dir_for_usage();
+                candidates.push_back(exe_dir / "service_config.json");
+                candidates.push_back(exe_dir.parent_path() / "service_config.json");
+
+                for (auto& path : candidates) {
+                    std::error_code error_code;
+                    if (std::filesystem::exists(path, error_code) && !error_code) return path.string();
+                }
+            } catch (const std::exception&) {
+                // Fall through to default
+            }
+            return {"service_config.json"};
+        };
+
+        std::string config_path = resolve_config_path_for_usage();
         printAvailableUaVs(config_path);
         return 1;
     }
