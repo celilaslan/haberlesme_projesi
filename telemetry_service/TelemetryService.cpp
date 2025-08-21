@@ -193,10 +193,10 @@ void TelemetryService::onZmqMessage(const std::string& sourceDescription, const 
  * @param protocol The protocol used (TCP or UDP)
  *
  * This method:
- * 1. Logs the incoming message
+ * 1. Parses the binary packet header to determine target and type
  * 2. Extracts the UAV name from the source description
- * 3. Determines the topic based on the numeric code in the data
- * 4. Routes the data to UI components using the same protocol as the source
+ * 3. Creates appropriate topic names for flexible routing
+ * 4. Routes the complete binary packet to UI components
  */
 void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description,
                                                   const std::string& protocol) {
@@ -262,7 +262,7 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         }
 
     } catch (const std::exception& e) {
-        Logger::error("Error processing telemetry data '" + data + "': " + std::string(e.what()));
+        Logger::error("Error processing telemetry packet (" + std::to_string(data.size()) + " bytes): " + std::string(e.what()));
     }
 }
 
