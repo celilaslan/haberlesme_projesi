@@ -14,7 +14,7 @@
 #include <string>
 #include <thread>
 
-#include "../telemetry_packets.h"
+#include "TelemetryPackets.h"
 #include <vector>
 
 #include "Logger.h"
