@@ -250,7 +250,7 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::string& d
         message = topic + "|" + data;
 
         socket_ptr->send_to(boost::asio::buffer(message), *endpoint_ptr);
-        Logger::info("UDP Published to [" + topic + "]: " + data);
+        Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes");
 
     } catch (const std::exception& e) {
         Logger::error("UDP publish error: " + std::string(e.what()));

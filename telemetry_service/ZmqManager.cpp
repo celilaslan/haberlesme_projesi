@@ -136,7 +136,7 @@ void ZmqManager::publishTelemetry(const std::string& topic, const std::string& d
         if (pubToUi && running) {
             pubToUi->send(zmq::buffer(topic), zmq::send_flags::sndmore);
             pubToUi->send(zmq::buffer(data), zmq::send_flags::none);
-            Logger::info("Published to [" + topic + "]: " + data);
+            Logger::info("Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes");
         }
     } catch (const zmq::error_t& e) {
         Logger::error("Failed to publish telemetry: " + std::string(e.what()));
