@@ -203,14 +203,14 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
     try {
         // Ensure we have at least enough data for a packet header
         if (data.size() < sizeof(PacketHeader)) {
-            Logger::warn("Received packet too small for header from " + source_description + 
+            Logger::warn("Received packet too small for header from " + source_description +
                         " (size: " + std::to_string(data.size()) + " bytes)");
             return;
         }
 
         // Parse the packet header
         const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
-        
+
         // Extract UAV name by removing protocol prefix ("TCP:", "UDP:")
         std::string uav_name = "unknown_uav";
         size_t colon_pos = source_description.find(':');
@@ -223,14 +223,14 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         // Determine target and type strings for topic creation
         std::string target_name;
         std::string type_name;
-        
+
         switch (header->targetID) {
             case TargetIDs::CAMERA:  target_name = "camera"; break;
             case TargetIDs::MAPPING: target_name = "mapping"; break;
             case TargetIDs::GENERAL: target_name = "general"; break;
             default: target_name = "unknown"; break;
         }
-        
+
         switch (header->packetType) {
             case PacketTypes::LOCATION: type_name = "location"; break;
             case PacketTypes::STATUS:   type_name = "status"; break;
@@ -240,7 +240,7 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         }
 
         // Log packet information
-        Logger::info("Received " + type_name + " packet for " + target_name + 
+        Logger::info("Received " + type_name + " packet for " + target_name +
                     " from " + uav_name + " (" + std::to_string(data.size()) + " bytes)");
 
         // Create topic names for flexible routing (both target-based and type-based)

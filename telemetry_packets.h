@@ -19,7 +19,7 @@
 
 /**
  * @brief Common header for all telemetry packets
- * 
+ *
  * This header allows the service to route packets based on target and type
  * without needing to understand the specific payload content.
  */
@@ -32,12 +32,12 @@ struct PacketHeader {
 
 /**
  * @brief Location/Position data payload
- * 
+ *
  * Contains GPS coordinates and altitude information
  */
 struct LocationPayload {
     double latitude;    ///< Latitude in decimal degrees
-    double longitude;   ///< Longitude in decimal degrees  
+    double longitude;   ///< Longitude in decimal degrees
     float  altitude;    ///< Altitude in meters above sea level
     float  heading;     ///< Heading in degrees (0-359)
     float  speed;       ///< Ground speed in m/s
@@ -45,7 +45,7 @@ struct LocationPayload {
 
 /**
  * @brief System status payload
- * 
+ *
  * Contains general system health and operational status
  */
 struct StatusPayload {
@@ -58,7 +58,7 @@ struct StatusPayload {
 
 /**
  * @brief IMU (Inertial Measurement Unit) data payload
- * 
+ *
  * Contains accelerometer, gyroscope, and magnetometer readings
  */
 struct IMUPayload {
@@ -70,7 +70,7 @@ struct IMUPayload {
 
 /**
  * @brief Battery status payload
- * 
+ *
  * Contains battery health and power information
  */
 struct BatteryPayload {
@@ -113,7 +113,7 @@ namespace PacketTypes {
     constexpr uint8_t BATTERY = 7;
 }
 
-// Target ID constants  
+// Target ID constants
 namespace TargetIDs {
     constexpr uint8_t CAMERA = 1;
     constexpr uint8_t MAPPING = 2;
@@ -140,20 +140,20 @@ inline uint64_t getCurrentTimestamp() {
  * @param speed Ground speed in m/s
  * @return Complete location packet ready for transmission
  */
-inline LocationPacket createLocationPacket(uint8_t targetID, double lat, double lon, 
+inline LocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
                                          float alt, float heading = 0.0f, float speed = 0.0f) {
     LocationPacket packet;
     packet.header.targetID = targetID;
     packet.header.packetType = PacketTypes::LOCATION;
     packet.header.payloadLength = sizeof(LocationPayload);
     packet.header.timestamp = getCurrentTimestamp();
-    
+
     packet.payload.latitude = lat;
     packet.payload.longitude = lon;
     packet.payload.altitude = alt;
     packet.payload.heading = heading;
     packet.payload.speed = speed;
-    
+
     return packet;
 }
 
@@ -174,13 +174,13 @@ inline StatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t
     packet.header.packetType = PacketTypes::STATUS;
     packet.header.payloadLength = sizeof(StatusPayload);
     packet.header.timestamp = getCurrentTimestamp();
-    
+
     packet.payload.systemHealth = health;
     packet.payload.missionState = mission;
     packet.payload.flightTime = flightTime;
     packet.payload.cpuUsage = cpu;
     packet.payload.memoryUsage = memory;
-    
+
     return packet;
 }
 

@@ -383,14 +383,14 @@ int main(int argc, char* argv[]) {
             double base_latitude = 41.01384;
             double base_longitude = 28.94966;
             float base_altitude = 100.0f;
-            
+
             // Offset each UAV's position slightly for realistic simulation
             if (config.name == "UAV_2") {
                 base_latitude += 0.001;   // ~111m north
                 base_longitude += 0.001;  // ~78m east (at Istanbul latitude)
                 base_altitude += 20.0f;
             } else if (config.name == "UAV_3") {
-                base_latitude -= 0.001;   // ~111m south  
+                base_latitude -= 0.001;   // ~111m south
                 base_longitude += 0.002;  // ~156m east
                 base_altitude += 40.0f;
             }
@@ -421,22 +421,22 @@ int main(int argc, char* argv[]) {
                     LocationPacket mappingPacket = createLocationPacket(
                         TargetIDs::MAPPING,
                         base_latitude + (rand() % 2000 - 1000) / 100000.0,  // ±10m variation
-                        base_longitude + (rand() % 2000 - 1000) / 100000.0, // ±7.8m variation  
+                        base_longitude + (rand() % 2000 - 1000) / 100000.0, // ±7.8m variation
                         base_altitude + (rand() % 20 - 10),                  // ±10m altitude variation
                         rand() % 360,                                        // Random heading
                         10.0f + (rand() % 50) / 10.0f                       // 10-15 m/s speed
                     );
-                    
+
                     socket.send_to(boost::asio::buffer(&mappingPacket, sizeof(LocationPacket)), remote_endpoint);
-                    std::cout << "[" << getTimestamp() << "] [" << config.name 
-                              << "] Sent Mapping Location (UDP): Lat=" << std::fixed << std::setprecision(6) 
-                              << mappingPacket.payload.latitude << ", Lon=" << mappingPacket.payload.longitude 
+                    std::cout << "[" << getTimestamp() << "] [" << config.name
+                              << "] Sent Mapping Location (UDP): Lat=" << std::fixed << std::setprecision(6)
+                              << mappingPacket.payload.latitude << ", Lon=" << mappingPacket.payload.longitude
                               << ", Alt=" << mappingPacket.payload.altitude << "m" << '\n';
                     std::this_thread::sleep_for(std::chrono::milliseconds(data_send_interval_ms));
 
                     if (!g_running) break;
 
-                    // Create and send camera-targeted status packet  
+                    // Create and send camera-targeted status packet
                     StatusPacket cameraPacket = createStatusPacket(
                         TargetIDs::CAMERA,
                         2 + (rand() % 2),           // Health: Good to Excellent
@@ -445,9 +445,9 @@ int main(int argc, char* argv[]) {
                         20.0f + (rand() % 30),      // CPU usage 20-50%
                         30.0f + (rand() % 40)       // Memory usage 30-70%
                     );
-                    
+
                     socket.send_to(boost::asio::buffer(&cameraPacket, sizeof(StatusPacket)), remote_endpoint);
-                    std::cout << "[" << getTimestamp() << "] [" << config.name 
+                    std::cout << "[" << getTimestamp() << "] [" << config.name
                               << "] Sent Camera Status (UDP): Health=" << (int)cameraPacket.payload.systemHealth
                               << ", CPU=" << cameraPacket.payload.cpuUsage << "%" << '\n';
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
@@ -480,10 +480,10 @@ int main(int argc, char* argv[]) {
                         rand() % 360,                                        // Random heading
                         10.0f + (rand() % 50) / 10.0f                       // 10-15 m/s speed
                     );
-                    
+
                     try {
                         push_to_service.send(zmq::buffer(&mappingPacket, sizeof(LocationPacket)), zmq::send_flags::dontwait);
-                        std::cout << "[" << getTimestamp() << "] [" << config.name 
+                        std::cout << "[" << getTimestamp() << "] [" << config.name
                                   << "] Sent Mapping Location (TCP): Lat=" << std::fixed << std::setprecision(6)
                                   << mappingPacket.payload.latitude << ", Lon=" << mappingPacket.payload.longitude
                                   << ", Alt=" << mappingPacket.payload.altitude << "m" << '\n';
@@ -506,10 +506,10 @@ int main(int argc, char* argv[]) {
                         20.0f + (rand() % 30),      // CPU usage 20-50%
                         30.0f + (rand() % 40)       // Memory usage 30-70%
                     );
-                    
+
                     try {
                         push_to_service.send(zmq::buffer(&cameraPacket, sizeof(StatusPacket)), zmq::send_flags::dontwait);
-                        std::cout << "[" << getTimestamp() << "] [" << config.name 
+                        std::cout << "[" << getTimestamp() << "] [" << config.name
                                   << "] Sent Camera Status (TCP): Health=" << (int)cameraPacket.payload.systemHealth
                                   << ", CPU=" << cameraPacket.payload.cpuUsage << "%" << '\n';
                     } catch (const zmq::error_t& e) {
@@ -580,7 +580,7 @@ int main(int argc, char* argv[]) {
                         }
                     }
 
-                    std::cout << "[" << getTimestamp() << "] [" << config.name 
+                    std::cout << "[" << getTimestamp() << "] [" << config.name
                               << "] Sent Mapping Location (TCP+UDP): Lat=" << std::fixed << std::setprecision(6)
                               << mappingPacket.payload.latitude << ", Lon=" << mappingPacket.payload.longitude
                               << ", Alt=" << mappingPacket.payload.altitude << "m" << '\n';
@@ -616,7 +616,7 @@ int main(int argc, char* argv[]) {
                         }
                     }
 
-                    std::cout << "[" << getTimestamp() << "] [" << config.name 
+                    std::cout << "[" << getTimestamp() << "] [" << config.name
                               << "] Sent Camera Status (TCP+UDP): Health=" << (int)cameraPacket.payload.systemHealth
                               << ", CPU=" << cameraPacket.payload.cpuUsage << "%" << '\n';
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_interval));
