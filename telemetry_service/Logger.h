@@ -17,10 +17,28 @@
 #include <vector>
 
 /**
+ * @brief Strong type wrapper for status messages to prevent parameter swapping
+ */
+struct StatusMessage {
+    std::string value;
+    explicit StatusMessage(std::string msg) : value(std::move(msg)) {}
+    explicit StatusMessage(const char* msg) : value(msg) {}
+};
+
+/**
+ * @brief Strong type wrapper for detail messages to prevent parameter swapping
+ */
+struct DetailMessage {
+    std::string value;
+    explicit DetailMessage(std::string msg) : value(std::move(msg)) {}
+    explicit DetailMessage(const char* msg) : value(msg) {}
+};
+
+/**
  * @enum LogLevel
  * @brief Log level enumeration for message categorization
  */
-enum class LogLevel {
+enum class LogLevel : std::uint8_t {
     DEBUG = 0,  ///< Detailed debug information
     INFO = 1,   ///< General informational messages
     WARN = 2,   ///< Warning messages
@@ -90,9 +108,16 @@ class Logger {
      * @brief Log a structured service status message
      * @param component Component name (e.g., "TCP", "UDP", "Service")
      * @param status Status message
-     * @param details Optional additional details
      */
-    static void status(const std::string& component, const std::string& status, const std::string& details = "");
+    static void status(const std::string& component, const std::string& status);
+
+    /**
+     * @brief Log a structured service status message with details
+     * @param component Component name (e.g., "TCP", "UDP", "Service")
+     * @param status Status message
+     * @param details Additional details
+     */
+    static void statusWithDetails(const std::string& component, const StatusMessage& status, const DetailMessage& details);
 
     /**
      * @brief Log a performance metric
@@ -125,9 +150,9 @@ class Logger {
     static void shutdown();
 
    private:
-    static std::unique_ptr<std::ofstream> logFile;  ///< Log file output stream
+    static std::unique_ptr<std::ofstream> log_file;  ///< Log file output stream
     static std::mutex mtx;                          ///< Mutex for thread-safe access
-    static LogLevel currentLevel;                   ///< Current minimum log level
+    static LogLevel current_level;                   ///< Current minimum log level
 
     /**
      * @brief Generate a timestamp string for log entries

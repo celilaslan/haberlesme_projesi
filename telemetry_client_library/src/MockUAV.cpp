@@ -22,7 +22,14 @@ namespace TelemetryAPI {
      */
     class MockUAV::Impl {
        public:
-        Impl() : running_(false), data_loss_rate_(0.0), additional_latency_(0), message_counter_(1000) {}
+        Impl() : running_(false) {}
+
+        // Rule of 5: Disable copy and move operations for resource management
+        Impl(const Impl&) = delete;
+        Impl& operator=(const Impl&) = delete;
+        Impl(Impl&&) = delete;
+        Impl& operator=(Impl&&) = delete;
+        ~Impl() { stop(); }
 
         bool createMockUAV(const std::string& name, const std::map<std::string, std::string>& config) {
             std::lock_guard<std::mutex> lock(config_mutex_);
@@ -31,19 +38,19 @@ namespace TelemetryAPI {
             config_ = config;
 
             // Parse configuration
-            auto it = config.find("data_rate_ms");
-            if (it != config.end()) {
+            auto config_iter = config.find("data_rate_ms");
+            if (config_iter != config.end()) {
                 try {
-                    data_rate_ms_ = std::stoi(it->second);
+                    data_rate_ms_ = std::stoi(config_iter->second);
                 } catch (...) {
                     data_rate_ms_ = 1000;  // Default 1 second
                 }
             }
 
-            it = config.find("base_code");
-            if (it != config.end()) {
+            config_iter = config.find("base_code");
+            if (config_iter != config.end()) {
                 try {
-                    base_code_ = std::stoi(it->second);
+                    base_code_ = std::stoi(config_iter->second);
                 } catch (...) {
                     base_code_ = 1000;  // Default base code
                 }
@@ -105,14 +112,12 @@ namespace TelemetryAPI {
 
         bool isRunning() const { return running_; }
 
-        void setDataCallback(std::function<void(const TelemetryData&)> callback) { data_callback_ = callback; }
-
-        ~Impl() { stop(); }
+        void setDataCallback(std::function<void(const TelemetryData&)> callback) { data_callback_ = std::move(callback); }
 
        private:
         void runSimulation() {
-            std::random_device rd;
-            std::mt19937 gen(rd());
+            std::random_device random_device;
+            std::mt19937 gen(random_device());
             std::uniform_real_distribution<> loss_dist(0.0, 1.0);
 
             while (running_) {
@@ -152,9 +157,9 @@ namespace TelemetryAPI {
                                                       .count();
 
                     // Determine data type based on message content
-                    if (data_to_send.find("1") == data_to_send.length() - 4) {  // Ends with 1xxx
+                    if (data_to_send.find('1') == data_to_send.length() - 4) {  // Ends with 1xxx
                         telemetry_data.data_type = DataType::MAPPING;
-                    } else if (data_to_send.find("2") == data_to_send.length() - 4) {  // Ends with 2xxx
+                    } else if (data_to_send.find('2') == data_to_send.length() - 4) {  // Ends with 2xxx
                         telemetry_data.data_type = DataType::CAMERA;
                     } else {
                         telemetry_data.data_type = DataType::UNKNOWN;
@@ -175,8 +180,7 @@ namespace TelemetryAPI {
 
         std::string generateTelemetryData() {
             // Generate data similar to real UAV simulator
-            std::string data_type_prefix;
-            int current_code;
+            int current_code = 0;
 
             // Alternate between mapping and camera data
             if (message_counter_ % 2 == 0) {
@@ -200,11 +204,11 @@ namespace TelemetryAPI {
         std::thread simulation_thread_;
 
         // Simulation parameters
-        double data_loss_rate_;
-        int additional_latency_;
+        double data_loss_rate_{0.0};
+        int additional_latency_{0};
         int data_rate_ms_ = 1000;
         int base_code_ = 1000;
-        int message_counter_;
+        int message_counter_{1000};
 
         // Data injection
         std::queue<std::string> injected_data_queue_;

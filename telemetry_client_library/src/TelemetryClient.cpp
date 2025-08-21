@@ -8,6 +8,7 @@
 
 #include "TelemetryClient.h"
 
+#include <algorithm>
 #include <atomic>
 #include <boost/asio.hpp>
 #include <chrono>
@@ -26,6 +27,44 @@ using json = nlohmann::json;
 
 namespace TelemetryAPI {
 
+    // Strong types to prevent parameter swapping
+    namespace detail {
+        struct ServiceHostTag {};
+        struct ConfigFileTag {};
+        struct TcpPortTag {};
+        struct TimeoutMsTag {};
+
+        template<typename Tag>
+        struct TypedString {
+            std::string value;
+
+            // Implicit conversion from string for API compatibility
+            TypedString(std::string str) : value(std::move(str)) {}
+            TypedString(const char* str) : value(str) {}
+
+            // Explicit conversion to string
+            [[nodiscard]] const std::string& str() const { return value; }
+            operator const std::string&() const { return value; }
+        };
+
+        template<typename Tag>
+        struct TypedInt {
+            int value;
+
+            // Implicit conversion from int for API compatibility
+            TypedInt(int val) : value(val) {}
+
+            // Explicit conversion to int
+            [[nodiscard]] int get() const { return value; }
+            operator int() const { return value; }
+        };
+
+        using ServiceHost = TypedString<ServiceHostTag>;
+        using ConfigFile = TypedString<ConfigFileTag>;
+        using TcpPort = TypedInt<TcpPortTag>;
+        using TimeoutMs = TypedInt<TimeoutMsTag>;
+    }
+
     /**
      * @class TelemetryClient::Impl
      * @brief Private implementation class (PIMPL pattern)
@@ -39,7 +78,13 @@ namespace TelemetryAPI {
 
         ~Impl() { stopReceiving(); }
 
-        bool initialize(const std::string& service_host, const std::string& config_file) {
+        // Disable copy and move operations for complex networking state
+        Impl(const Impl&) = delete;
+        Impl& operator=(const Impl&) = delete;
+        Impl(Impl&&) = delete;
+        Impl& operator=(Impl&&) = delete;
+
+        bool initialize(const detail::ServiceHost& service_host, const detail::ConfigFile& config_file) {
             // State validation (fail-fast design)
             if (client_state_ != ClientState::IDLE && client_state_ != ClientState::ERROR) {
                 last_error_ =
@@ -48,20 +93,10 @@ namespace TelemetryAPI {
             }
 
             try {
-                service_host_ = service_host;
-
-                // Load configuration
-                if (!loadConfiguration(config_file)) {
-                    last_error_ = "Failed to load service configuration";
-                    client_state_ = ClientState::ERROR;
-                    return false;
-                }
-
-                last_error_.clear();
-                client_state_ = ClientState::INITIALIZED;
-                return true;
+                service_host_ = service_host.str();
+                return loadConfiguration(config_file.str());
             } catch (const std::exception& e) {
-                last_error_ = "Initialization error: " + std::string(e.what());
+                last_error_ = "Initialization failed: " + std::string(e.what());
                 client_state_ = ClientState::ERROR;
                 return false;
             }
@@ -87,8 +122,8 @@ namespace TelemetryAPI {
 
             try {
                 protocol_ = protocol;
-                telemetry_callback_ = callback;
-                error_callback_ = error_callback;
+                telemetry_callback_ = std::move(callback);
+                error_callback_ = std::move(error_callback);
                 running_ = true;
 
                 // Start appropriate receiver threads based on protocol
@@ -185,7 +220,7 @@ namespace TelemetryAPI {
 
             if (debug_mode_) {
                 std::cout << "[TelemetryClient] Unsubscribed from UAV: " << uav_name
-                          << " (type: " << static_cast<int>(data_type) << ")" << std::endl;
+                          << " (type: " << static_cast<int>(data_type) << ")" << '\n';
             }
 
             return true;
@@ -207,7 +242,7 @@ namespace TelemetryAPI {
             }
 
             if (debug_mode_) {
-                std::cout << "[TelemetryClient] Unsubscribed from data type: " << prefix << std::endl;
+                std::cout << "[TelemetryClient] Unsubscribed from data type: " << prefix << '\n';
             }
 
             return true;
@@ -238,7 +273,7 @@ namespace TelemetryAPI {
 
             if (debug_mode_) {
                 std::cout << "[TelemetryClient] Cleared all subscriptions ("
-                          << all_filters.size() + all_type_filters.size() << " total)" << std::endl;
+                          << all_filters.size() + all_type_filters.size() << " total)" << '\n';
             }
 
             return true;
@@ -253,7 +288,7 @@ namespace TelemetryAPI {
                     command_socket_->connect(addr);
 
                     if (debug_mode_) {
-                        std::cout << "[TelemetryClient] Connected command socket to " << addr << std::endl;
+                        std::cout << "[TelemetryClient] Connected command socket to " << addr << '\n';
                     }
                 }
 
@@ -263,7 +298,7 @@ namespace TelemetryAPI {
                 command_socket_->send(zmq::buffer(formatted_command), zmq::send_flags::dontwait);
 
                 if (debug_mode_) {
-                    std::cout << "[TelemetryClient] Sent command: " << formatted_command << std::endl;
+                    std::cout << "[TelemetryClient] Sent command: " << formatted_command << '\n';
                 }
 
                 last_error_.clear();
@@ -307,7 +342,7 @@ namespace TelemetryAPI {
                 }
             } catch (const std::exception& e) {
                 if (debug_mode_) {
-                    std::cerr << "[TelemetryClient] Cleanup error: " << e.what() << std::endl;
+                    std::cerr << "[TelemetryClient] Cleanup error: " << e.what() << '\n';
                 }
             }
 
@@ -389,7 +424,7 @@ namespace TelemetryAPI {
         std::string last_error_;
 
         // Protocol and callbacks
-        Protocol protocol_;
+        Protocol protocol_ = Protocol::TCP_ONLY;
         TelemetryCallback telemetry_callback_;
         ErrorCallback error_callback_;
 
@@ -423,7 +458,7 @@ namespace TelemetryAPI {
             // If no config file specified, try to find one
             if (config_path.empty()) {
                 const char* env_config = std::getenv("SERVICE_CONFIG");
-                if (env_config) {
+                if (env_config != nullptr) {
                     config_path = env_config;
                 } else {
                     config_path = "service_config.json";
@@ -434,19 +469,19 @@ namespace TelemetryAPI {
             if (!file.is_open()) {
                 if (debug_mode_) {
                     std::cout << "[TelemetryClient] Config file not found: " << config_path << ", using defaults"
-                              << std::endl;
+                              << '\n';
                 }
                 return true;  // Use default values
             }
 
             try {
-                json j;
-                file >> j;
+                json config_json;
+                file >> config_json;
                 file.close();
 
                 // Load UI ports
-                if (j.contains("ui_ports")) {
-                    auto ui_ports = j["ui_ports"];
+                if (config_json.contains("ui_ports")) {
+                    auto ui_ports = config_json["ui_ports"];
                     config_.tcp_publish_port = ui_ports.value("tcp_publish_port", 5557);
                     config_.tcp_command_port = ui_ports.value("tcp_command_port", 5558);
                     config_.udp_camera_port = ui_ports.value("udp_camera_port", 5570);
@@ -454,8 +489,8 @@ namespace TelemetryAPI {
                 }
 
                 // Load available UAVs
-                if (j.contains("uavs") && j["uavs"].is_array()) {
-                    for (const auto& uav : j["uavs"]) {
+                if (config_json.contains("uavs") && config_json["uavs"].is_array()) {
+                    for (const auto& uav : config_json["uavs"]) {
                         if (uav.contains("name")) {
                             available_uavs_.push_back(uav["name"]);
                         }
@@ -465,7 +500,7 @@ namespace TelemetryAPI {
                 if (debug_mode_) {
                     std::cout << "[TelemetryClient] Loaded config: TCP " << config_.tcp_publish_port << "/"
                               << config_.tcp_command_port << ", UDP " << config_.udp_camera_port << "/"
-                              << config_.udp_mapping_port << ", UAVs: " << available_uavs_.size() << std::endl;
+                              << config_.udp_mapping_port << ", UAVs: " << available_uavs_.size() << '\n';
                 }
 
                 return true;
@@ -502,11 +537,12 @@ namespace TelemetryAPI {
                 }
 
                 if (debug_mode_) {
-                    std::cout << "[TelemetryClient] TCP receiver connected to " << addr << std::endl;
+                    std::cout << "[TelemetryClient] TCP receiver connected to " << addr << '\n';
                 }
 
                 while (running_) {
-                    zmq::message_t topic_msg, data_msg;
+                    zmq::message_t topic_msg;
+                    zmq::message_t data_msg;
 
                     // Non-blocking receive with timeout
                     auto recv_result = tcp_socket_->recv(topic_msg, zmq::recv_flags::dontwait);
@@ -533,7 +569,7 @@ namespace TelemetryAPI {
             }
 
             if (debug_mode_) {
-                std::cout << "[TelemetryClient] TCP receiver thread stopped" << std::endl;
+                std::cout << "[TelemetryClient] TCP receiver thread stopped" << '\n';
             }
         }
 
@@ -549,7 +585,7 @@ namespace TelemetryAPI {
 
                 if (debug_mode_) {
                     std::cout << "[TelemetryClient] UDP receivers bound to ports " << config_.udp_camera_port << " and "
-                              << config_.udp_mapping_port << std::endl;
+                              << config_.udp_mapping_port << '\n';
                 }
 
                 // Buffers for async operations
@@ -563,8 +599,8 @@ namespace TelemetryAPI {
                                                               &start_camera_receive]() {
                     camera_socket->async_receive_from(boost::asio::buffer(*camera_buffer), *camera_endpoint,
                                                       [this, camera_buffer, &start_camera_receive](
-                                                          const boost::system::error_code& ec, std::size_t length) {
-                                                          if (!ec && length > 0 && running_) {
+                                                          const boost::system::error_code& error_code, std::size_t length) {
+                                                          if (!error_code && length > 0 && running_) {
                                                               std::string message(camera_buffer->data(), length);
                                                               parseUdpMessage(message, Protocol::UDP_ONLY);
                                                           }
@@ -579,8 +615,8 @@ namespace TelemetryAPI {
                                                                &start_mapping_receive]() {
                     mapping_socket->async_receive_from(boost::asio::buffer(*mapping_buffer), *mapping_endpoint,
                                                        [this, mapping_buffer, &start_mapping_receive](
-                                                           const boost::system::error_code& ec, std::size_t length) {
-                                                           if (!ec && length > 0 && running_) {
+                                                           const boost::system::error_code& error_code, std::size_t length) {
+                                                           if (!error_code && length > 0 && running_) {
                                                                std::string message(mapping_buffer->data(), length);
                                                                parseUdpMessage(message, Protocol::UDP_ONLY);
                                                            }
@@ -608,7 +644,7 @@ namespace TelemetryAPI {
             }
 
             if (debug_mode_) {
-                std::cout << "[TelemetryClient] UDP receiver thread stopped" << std::endl;
+                std::cout << "[TelemetryClient] UDP receiver thread stopped" << '\n';
             }
         }
 
@@ -655,7 +691,7 @@ namespace TelemetryAPI {
             }
 
             if (debug_mode_) {
-                std::cout << "[TelemetryClient] Received " << topic << ": " << data << std::endl;
+                std::cout << "[TelemetryClient] Received " << topic << ": " << data << '\n';
             }
 
             // Call user callback with thread safety protection
@@ -691,13 +727,8 @@ namespace TelemetryAPI {
             }
 
             // Check data type filters
-            for (const auto& prefix : data_type_filters_) {
-                if (topic.find(prefix) == 0) {
-                    return true;
-                }
-            }
-
-            return false;
+            return std::any_of(data_type_filters_.begin(), data_type_filters_.end(),
+                              [&topic](const std::string& prefix) { return topic.find(prefix) == 0; });
         }
     };
 
@@ -712,7 +743,7 @@ namespace TelemetryAPI {
     }
 
     bool TelemetryClient::startReceiving(Protocol protocol, TelemetryCallback callback, ErrorCallback error_callback) {
-        return pImpl->startReceiving(protocol, callback, error_callback);
+        return pImpl->startReceiving(protocol, std::move(callback), std::move(error_callback));
     }
 
     bool TelemetryClient::subscribeToUAV(const std::string& uav_name, DataType data_type) {

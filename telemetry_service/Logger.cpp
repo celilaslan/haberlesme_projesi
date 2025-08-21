@@ -14,9 +14,9 @@
 #include <iostream>
 
 // Static member definitions
-std::unique_ptr<std::ofstream> Logger::logFile = nullptr;
+std::unique_ptr<std::ofstream> Logger::log_file = nullptr;
 std::mutex Logger::mtx;
-LogLevel Logger::currentLevel = LogLevel::INFO;
+LogLevel Logger::current_level = LogLevel::INFO;
 
 /**
  * @brief Initialize the logging system
@@ -29,12 +29,12 @@ LogLevel Logger::currentLevel = LogLevel::INFO;
  */
 void Logger::init(const std::string& logFilePath, LogLevel level) {
     std::lock_guard<std::mutex> lock(mtx);
-    currentLevel = level;
-    if (!logFile) {
+    current_level = level;
+    if (!log_file) {
         // Open log file in truncate mode (overwrite existing content)
-        logFile = std::make_unique<std::ofstream>(logFilePath, std::ios::trunc);
-        if (!logFile->is_open()) {
-            std::cerr << "[" << getTimestamp() << "] ERROR: Could not open log file: " << logFilePath << std::endl;
+        log_file = std::make_unique<std::ofstream>(logFilePath, std::ios::trunc);
+        if (!log_file->is_open()) {
+            std::cerr << "[" << getTimestamp() << "] ERROR: Could not open log file: " << logFilePath << '\n';
         }
     }
 }
@@ -51,10 +51,10 @@ std::string Logger::getTimestamp() {
     const auto now = std::chrono::system_clock::now();
     const auto time_t_now = std::chrono::system_clock::to_time_t(now);
     const auto duration = now.time_since_epoch();
-    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
+    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
 
     std::ostringstream oss;
-    struct tm time_info;
+    struct tm time_info{};
 
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
@@ -65,7 +65,7 @@ std::string Logger::getTimestamp() {
 
     // Format the timestamp with milliseconds
     oss << std::put_time(&time_info, "%Y-%m-%d %H:%M:%S");
-    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+    oss << '.' << std::setfill('0') << std::setw(3) << milliseconds.count();
     return oss.str();
 }
 
@@ -107,7 +107,7 @@ void Logger::error(const std::string& msg) { log(LogLevel::ERROR, msg, true); }
  */
 void Logger::setLevel(LogLevel level) {
     std::lock_guard<std::mutex> lock(mtx);
-    currentLevel = level;
+    current_level = level;
 }
 
 /**
@@ -120,24 +120,24 @@ void Logger::log(LogLevel level, const std::string& msg, bool useStderr) {
     std::lock_guard<std::mutex> lock(mtx);
 
     // Check if this message should be logged based on current level
-    if (level < currentLevel) {
+    if (level < current_level) {
         return;
     }
 
-    std::string levelStr = levelToString(level);
-    std::string logMsg = "[" + getTimestamp() + "] " + levelStr + ": " + msg;
+    std::string level_str = levelToString(level);
+    std::string log_msg = "[" + getTimestamp() + "] " + level_str + ": " + msg;
 
     // Write to appropriate output stream
     if (useStderr) {
-        std::cerr << logMsg << std::endl;
+        std::cerr << log_msg << '\n';
     } else {
-        std::cout << logMsg << std::endl;
+        std::cout << log_msg << '\n';
     }
 
     // Write to log file if available and properly initialized
-    if (logFile && logFile->is_open()) {
-        *logFile << logMsg << std::endl;
-        logFile->flush();  // Ensure immediate write for important messages
+    if (log_file && log_file->is_open()) {
+        *log_file << log_msg << '\n';
+        log_file->flush();  // Ensure immediate write for important messages
     }
 }
 
@@ -163,14 +163,24 @@ std::string Logger::levelToString(LogLevel level) {
 
 /**
  * @brief Log a structured service status message
- * @param component Component name
- * @param status Status message
- * @param details Optional additional details
+ * @param component Component name (e.g., "TCP", "UDP", "Service")
+ * @param status Status message (e.g., "Starting", "Running", "Stopped")
  */
-void Logger::status(const std::string& component, const std::string& status, const std::string& details) {
+void Logger::status(const std::string& component, const std::string& status) {
     std::string msg = "[" + component + "] " + status;
-    if (!details.empty()) {
-        msg += " (" + details + ")";
+    info(msg);
+}
+
+/**
+ * @brief Log a structured service status message with details
+ * @param component Component name (e.g., "TCP", "UDP", "Service")
+ * @param status Status message (e.g., "Starting", "Running", "Stopped")
+ * @param details Additional details (e.g., port numbers, error info)
+ */
+void Logger::statusWithDetails(const std::string& component, const StatusMessage& status, const DetailMessage& details) {
+    std::string msg = "[" + component + "] " + status.value;
+    if (!details.value.empty()) {
+        msg += " (" + details.value + ")";
     }
     info(msg);
 }
@@ -200,19 +210,19 @@ void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, cons
     info("Configuration Summary:");
     info("  UAVs configured: " + std::to_string(uavCount));
 
-    std::string tcpPortsStr = "  TCP ports: ";
+    std::string tcp_ports_str = "  TCP ports: ";
     for (size_t i = 0; i < tcpPorts.size(); ++i) {
-        if (i > 0) tcpPortsStr += ", ";
-        tcpPortsStr += std::to_string(tcpPorts[i]);
+        if (i > 0) tcp_ports_str += ", ";
+        tcp_ports_str += std::to_string(tcpPorts[i]);
     }
-    info(tcpPortsStr);
+    info(tcp_ports_str);
 
-    std::string udpPortsStr = "  UDP ports: ";
+    std::string udp_ports_str = "  UDP ports: ";
     for (size_t i = 0; i < udpPorts.size(); ++i) {
-        if (i > 0) udpPortsStr += ", ";
-        udpPortsStr += std::to_string(udpPorts[i]);
+        if (i > 0) udp_ports_str += ", ";
+        udp_ports_str += std::to_string(udpPorts[i]);
     }
-    info(udpPortsStr);
+    info(udp_ports_str);
     info("Service ready for connections.");
 }
 
@@ -222,7 +232,7 @@ void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, cons
  */
 bool Logger::isInitialized() {
     std::lock_guard<std::mutex> lock(mtx);
-    return logFile != nullptr && logFile->is_open();
+    return log_file != nullptr && log_file->is_open();
 }
 
 /**
@@ -233,9 +243,9 @@ bool Logger::isInitialized() {
  */
 void Logger::shutdown() {
     std::lock_guard<std::mutex> lock(mtx);
-    if (logFile && logFile->is_open()) {
-        logFile->flush();
-        logFile->close();
-        logFile.reset();
+    if (log_file && log_file->is_open()) {
+        log_file->flush();
+        log_file->close();
+        log_file.reset();
     }
 }

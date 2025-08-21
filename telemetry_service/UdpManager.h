@@ -10,6 +10,7 @@
 #ifndef UDPMANAGER_H
 #define UDPMANAGER_H
 
+#include <array>
 #include <atomic>
 #include <boost/asio.hpp>
 #include <functional>
@@ -38,7 +39,7 @@ class UdpServer {
     /**
      * @brief Constructor - sets up UDP server for one UAV
      * @param io_context Boost.Asio I/O context for async operations
-     * @param ip IP address to bind to (usually "0.0.0.0" for all interfaces)
+     * @param address IP address to bind to (usually "0.0.0.0" for all interfaces)
      * @param port UDP port number to listen on
      * @param uav_name Name of the UAV this server handles
      * @param callback Function to call when messages are received
@@ -46,7 +47,7 @@ class UdpServer {
      * Creates a UDP socket bound to the specified address and port,
      * and starts the asynchronous receive loop.
      */
-    UdpServer(boost::asio::io_context& io_context, const std::string& ip, short port, const std::string& uav_name,
+    UdpServer(boost::asio::io_context& io_context, const std::string& address, short port, const std::string& uav_name,
               UdpMessageCallback callback);
 
    private:
@@ -56,12 +57,12 @@ class UdpServer {
      * Sets up an async_receive_from operation that will call itself
      * recursively to continuously listen for incoming UDP packets.
      */
-    void do_receive();
+    void doReceive();
 
     udp::socket socket_;                  ///< UDP socket for receiving data
     udp::endpoint remote_endpoint_;       ///< Endpoint of the last sender
-    enum { max_length = 1024 };           ///< Maximum UDP packet size
-    char data_[max_length];               ///< Buffer for incoming data
+    enum : std::uint16_t { max_length = 1024 };           ///< Maximum UDP packet size
+    std::array<char, max_length> data_{};   ///< Buffer for incoming data
     std::string uav_name_;                ///< Name of the UAV this server handles
     UdpMessageCallback messageCallback_;  ///< Callback for received messages
 };
@@ -90,6 +91,12 @@ class UdpManager {
      * @brief Destructor - ensures clean shutdown
      */
     ~UdpManager();
+
+    // Rule of 5: Disable copy/move operations for resource management safety
+    UdpManager(const UdpManager&) = delete;
+    UdpManager& operator=(const UdpManager&) = delete;
+    UdpManager(UdpManager&&) = delete;
+    UdpManager& operator=(UdpManager&&) = delete;
 
     /**
      * @brief Start UDP communication system

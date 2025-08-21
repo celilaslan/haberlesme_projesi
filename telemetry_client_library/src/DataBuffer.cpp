@@ -26,11 +26,14 @@ namespace TelemetryAPI {
     class DataBuffer::Impl {
        public:
         Impl()
-            : buffer_enabled_(false),
-              recording_(false),
-              replaying_(false),
-              max_buffer_size_(100 * 1024 * 1024),
-              current_buffer_size_(0) {}  // 100MB default
+            : replaying_(false),
+              max_buffer_size_(static_cast<size_t>(100) * 1024 * 1024) {}  // 100MB default
+
+        // Disable copy and move operations for complex state management
+        Impl(const Impl&) = delete;
+        Impl& operator=(const Impl&) = delete;
+        Impl(Impl&&) = delete;
+        Impl& operator=(Impl&&) = delete;
 
         bool enableBuffering(size_t max_buffer_size_mb) {
             std::lock_guard<std::mutex> lock(buffer_mutex_);
@@ -121,7 +124,7 @@ namespace TelemetryAPI {
                 return 0.0;
             }
 
-            return static_cast<double>(current_buffer_size_) / max_buffer_size_;
+            return static_cast<double>(current_buffer_size_) / static_cast<double>(max_buffer_size_);
         }
 
         void addTelemetryData(const TelemetryData& data) {
@@ -170,9 +173,9 @@ namespace TelemetryAPI {
             std::vector<TelemetryData> result;
             size_t count = std::min(max_count, buffer_.size());
 
-            auto it = buffer_.rbegin();  // Start from most recent
-            for (size_t i = 0; i < count; ++i, ++it) {
-                result.push_back(*it);
+            auto buffer_iter = buffer_.rbegin();  // Start from most recent
+            for (size_t i = 0; i < count; ++i, ++buffer_iter) {
+                result.push_back(*buffer_iter);
             }
 
             // Reverse to get chronological order
@@ -243,7 +246,7 @@ namespace TelemetryAPI {
                     }
 
                     uint64_t relative_time = data.timestamp_ms - first_timestamp;
-                    uint64_t adjusted_time = static_cast<uint64_t>(relative_time / speed_multiplier);
+                    auto adjusted_time = static_cast<uint64_t>(static_cast<double>(relative_time) / speed_multiplier);
                     uint64_t target_time = start_time + adjusted_time;
 
                     // Wait until it's time to replay this data
@@ -269,7 +272,7 @@ namespace TelemetryAPI {
             replaying_ = false;
         }
 
-        size_t estimateDataSize(const TelemetryData& data) {
+        static size_t estimateDataSize(const TelemetryData& data) {
             return sizeof(TelemetryData) + data.raw_data.size() + data.uav_name.size();
         }
 
@@ -277,13 +280,13 @@ namespace TelemetryAPI {
         mutable std::mutex recording_mutex_;
 
         // Buffer management
-        bool buffer_enabled_;
+        bool buffer_enabled_{false};
         size_t max_buffer_size_;
-        size_t current_buffer_size_;
+        size_t current_buffer_size_{0};
         std::deque<TelemetryData> buffer_;
 
         // Recording
-        bool recording_;
+        bool recording_{false};
         std::ofstream recording_file_;
         std::string recording_filename_;
         size_t recorded_count_ = 0;

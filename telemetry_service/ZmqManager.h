@@ -42,18 +42,24 @@ class ZmqManager {
     /**
      * @brief Constructor
      * @param ctx ZeroMQ context to use for all sockets
-     * @param config Configuration containing UAV and UI port settings
+     * @param cfg Configuration containing UAV and UI port settings
      * @param callback Function to call when telemetry messages are received
      *
      * Initializes the ZmqManager with the necessary configuration and sets up
      * the callback for handling incoming telemetry messages.
      */
-    ZmqManager(zmq::context_t& ctx, const Config& config, ZmqMessageCallback callback);
+    ZmqManager(zmq::context_t& ctx, const Config& cfg, ZmqMessageCallback callback);
 
     /**
      * @brief Destructor - ensures proper cleanup
      */
     ~ZmqManager();
+
+    // Delete copy and move operations for thread safety
+    ZmqManager(const ZmqManager&) = delete;
+    ZmqManager& operator=(const ZmqManager&) = delete;
+    ZmqManager(ZmqManager&&) = delete;
+    ZmqManager& operator=(ZmqManager&&) = delete;
 
     /**
      * @brief Start the ZMQ communication threads
@@ -107,6 +113,33 @@ class ZmqManager {
     void forwarderLoop();
 
     /**
+     * @brief Helper to set up polling items for UAV telemetry sockets
+     * @return Vector of polling items for zmq::poll
+     */
+    std::vector<zmq::pollitem_t> setupTelemetryPolling() const;
+
+    /**
+     * @brief Helper to process incoming telemetry from a specific UAV socket
+     * @param socket_index Index of the socket that received data
+     */
+    void processIncomingTelemetry(size_t socket_index);
+
+    /**
+     * @brief Helper to parse UI command and extract target UAV and command
+     * @param message The raw UI command message
+     * @return Pair of target_uav and actual_command
+     */
+    static std::pair<std::string, std::string> parseUICommand(const std::string& message);
+
+    /**
+     * @brief Helper to forward command to specific UAV
+     * @param target_uav The UAV name to send command to
+     * @param command The command to send
+     * @return true if command was forwarded successfully
+     */
+    bool forwardCommandToUAV(const std::string& target_uav, const std::string& command);
+
+    /**
      * @brief Extract the target UAV name from a UI command message
      * @param message The complete command message
      * @return The UAV name that should receive the command
@@ -114,7 +147,7 @@ class ZmqManager {
      * Parses command messages to determine which UAV they should be sent to.
      * Expected format: "UAV_NAME:command_data"
      */
-    std::string extractUISource(const std::string& message);
+    static std::string extractUISource(const std::string& message);
 
     // Core components
     zmq::context_t& context;              ///< Reference to the ZeroMQ context

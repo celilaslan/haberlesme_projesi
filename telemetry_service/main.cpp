@@ -94,17 +94,17 @@ int main() {
     } catch (const std::exception& e) {
         // Log any fatal errors that cause the service to crash
         Logger::error("A fatal error occurred: " + std::string(e.what()));
-        std::cerr << "FATAL ERROR: " << e.what() << std::endl;
+        std::cerr << "FATAL ERROR: " << e.what() << '\n';
         return 1;
     } catch (...) {
         // Catch any other types of exceptions (not derived from std::exception)
         Logger::error("An unknown fatal error occurred");
-        std::cerr << "FATAL ERROR: Unknown exception occurred" << std::endl;
+        std::cerr << "FATAL ERROR: Unknown exception occurred" << '\n';
         return 1;
     }
 
     Logger::info("=== APPLICATION TERMINATED GRACEFULLY ===");
-    std::cout << "Application terminated gracefully." << std::endl;
+    std::cout << "Application terminated gracefully." << '\n';
 
     // Ensure logger cleanup
     Logger::shutdown();

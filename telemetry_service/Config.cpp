@@ -32,12 +32,12 @@ bool Config::loadFromFile(const std::string& path) {
     }
 
     // Parse JSON content
-    nlohmann::json j;
-    file >> j;
+    nlohmann::json json_data;
+    file >> json_data;
     file.close();
 
     // Process each UAV in the configuration
-    for (const auto& uav_json : j["uavs"]) {
+    for (const auto& uav_json : json_data["uavs"]) {
         UAVConfig uav;
 
         // Extract required UAV fields
@@ -55,17 +55,17 @@ bool Config::loadFromFile(const std::string& path) {
     }
 
     // Load UI port configuration
-    uiPorts.tcp_command_port = j["ui_ports"]["tcp_command_port"];
-    uiPorts.tcp_publish_port = j["ui_ports"]["tcp_publish_port"];
+    uiPorts.tcp_command_port = json_data["ui_ports"]["tcp_command_port"];
+    uiPorts.tcp_publish_port = json_data["ui_ports"]["tcp_publish_port"];
 
     // Load UDP ports
-    uiPorts.udp_camera_port = j["ui_ports"]["udp_camera_port"];
-    uiPorts.udp_mapping_port = j["ui_ports"]["udp_mapping_port"];
-    uiPorts.udp_command_port = j["ui_ports"]["udp_command_port"];
+    uiPorts.udp_camera_port = json_data["ui_ports"]["udp_camera_port"];
+    uiPorts.udp_mapping_port = json_data["ui_ports"]["udp_mapping_port"];
+    uiPorts.udp_command_port = json_data["ui_ports"]["udp_command_port"];
 
     // Load log file path if specified
-    if (j.contains("log_file")) {
-        logFile = j["log_file"];
+    if (json_data.contains("log_file")) {
+        logFile = json_data["log_file"];
     }
 
     return true;

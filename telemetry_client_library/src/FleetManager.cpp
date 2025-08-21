@@ -21,10 +21,10 @@ namespace TelemetryAPI {
      */
     class FleetManager::Impl {
        public:
-        Impl() : client_(nullptr) {}
+        Impl() = default;
 
         bool initialize(TelemetryClient* client) {
-            if (!client) {
+            if (client == nullptr) {
                 return false;
             }
 
@@ -37,7 +37,7 @@ namespace TelemetryAPI {
         }
 
         bool broadcastCommand(const std::vector<std::string>& uav_names, const std::string& command) {
-            if (!client_) {
+            if (client_ == nullptr) {
                 return false;
             }
 
@@ -66,10 +66,10 @@ namespace TelemetryAPI {
             // Update last command for each UAV
             std::lock_guard<std::mutex> lock(fleet_mutex_);
             for (const auto& uav_name : uav_names) {
-                auto it = fleet_status_.uav_statuses.find(uav_name);
-                if (it != fleet_status_.uav_statuses.end()) {
-                    it->second.last_command = command;
-                    it->second.last_command_status = all_successful ? CommandStatus::SENT : CommandStatus::FAILED;
+                auto uav_iter = fleet_status_.uav_statuses.find(uav_name);
+                if (uav_iter != fleet_status_.uav_statuses.end()) {
+                    uav_iter->second.last_command = command;
+                    uav_iter->second.last_command_status = all_successful ? CommandStatus::SENT : CommandStatus::FAILED;
                 }
             }
 
@@ -102,7 +102,7 @@ namespace TelemetryAPI {
                 total_health += health;
             }
 
-            fleet_status_.total_uavs = fleet_status_.uav_statuses.size();
+            fleet_status_.total_uavs = static_cast<int>(fleet_status_.uav_statuses.size());
             fleet_status_.overall_health_score =
                 fleet_status_.total_uavs > 0 ? total_health / fleet_status_.total_uavs : 0.0;
             fleet_status_.last_update = now;
@@ -111,7 +111,7 @@ namespace TelemetryAPI {
         }
 
         bool executeCoordinatedCommand(const std::map<std::string, std::string>& uav_commands) {
-            if (!client_) {
+            if (client_ == nullptr) {
                 return false;
             }
 
@@ -140,10 +140,10 @@ namespace TelemetryAPI {
             // Update command status for all UAVs
             std::lock_guard<std::mutex> lock(fleet_mutex_);
             for (const auto& [uav_name, command] : uav_commands) {
-                auto it = fleet_status_.uav_statuses.find(uav_name);
-                if (it != fleet_status_.uav_statuses.end()) {
-                    it->second.last_command = command;
-                    it->second.last_command_status = all_successful ? CommandStatus::SENT : CommandStatus::FAILED;
+                auto uav_iter = fleet_status_.uav_statuses.find(uav_name);
+                if (uav_iter != fleet_status_.uav_statuses.end()) {
+                    uav_iter->second.last_command = command;
+                    uav_iter->second.last_command_status = all_successful ? CommandStatus::SENT : CommandStatus::FAILED;
                 }
             }
 
@@ -171,12 +171,12 @@ namespace TelemetryAPI {
         bool removeUAV(const std::string& uav_name) {
             std::lock_guard<std::mutex> lock(fleet_mutex_);
 
-            auto it = fleet_status_.uav_statuses.find(uav_name);
-            if (it == fleet_status_.uav_statuses.end()) {
+            auto uav_iter = fleet_status_.uav_statuses.find(uav_name);
+            if (uav_iter == fleet_status_.uav_statuses.end()) {
                 return false;  // Doesn't exist
             }
 
-            fleet_status_.uav_statuses.erase(it);
+            fleet_status_.uav_statuses.erase(uav_iter);
             return true;
         }
 
@@ -187,10 +187,10 @@ namespace TelemetryAPI {
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();
 
-            auto it = fleet_status_.uav_statuses.find(uav_name);
-            if (it != fleet_status_.uav_statuses.end()) {
-                it->second.last_seen = now;
-                it->second.connected = true;
+            auto uav_iter = fleet_status_.uav_statuses.find(uav_name);
+            if (uav_iter != fleet_status_.uav_statuses.end()) {
+                uav_iter->second.last_seen = now;
+                uav_iter->second.connected = true;
             } else {
                 // Auto-add new UAVs
                 addUAV(uav_name);
@@ -206,7 +206,7 @@ namespace TelemetryAPI {
             monitoring_active_ = true;
         }
 
-        double calculateUAVHealth(const UAVStatus& status, uint64_t time_since_last_seen) {
+        static double calculateUAVHealth(const UAVStatus& status, uint64_t time_since_last_seen) {
             double health = 1.0;
 
             // Connection health (50% weight)
@@ -247,7 +247,7 @@ namespace TelemetryAPI {
             return std::max(0.0, std::min(1.0, health));
         }
 
-        TelemetryClient* client_;
+        TelemetryClient* client_{nullptr};
         mutable std::mutex fleet_mutex_;
         FleetStatus fleet_status_;
         bool monitoring_active_ = false;

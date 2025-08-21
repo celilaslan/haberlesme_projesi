@@ -56,13 +56,13 @@ void ZmqManager::start() {
         pubToUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pub);
         std::string ui_pub_addr = "tcp://*:" + std::to_string(config.getUiPorts().tcp_publish_port);
         pubToUi->bind(ui_pub_addr);
-        Logger::status("TCP", "UI Publisher bound", ui_pub_addr);
+        Logger::statusWithDetails("TCP", StatusMessage("UI Publisher bound"), DetailMessage(ui_pub_addr));
 
         // PULL socket for receiving commands from UI components
         pullFromUi = std::make_unique<zmq::socket_t>(context, zmq::socket_type::pull);
         std::string ui_cmd_addr = "tcp://*:" + std::to_string(config.getUiPorts().tcp_command_port);
         pullFromUi->bind(ui_cmd_addr);
-        Logger::status("TCP", "UI Command receiver bound", ui_cmd_addr);
+        Logger::statusWithDetails("TCP", StatusMessage("UI Command receiver bound"), DetailMessage(ui_cmd_addr));
 
         // Set up UAV communication sockets for each configured UAV
         for (const auto& uav : config.getUAVs()) {
@@ -78,8 +78,15 @@ void ZmqManager::start() {
             push_socket->bind(command_addr);
             uavCommandSockets.push_back(std::move(push_socket));
 
-            Logger::status("ZMQ", "UAV " + uav.name + " configured",
-                           "Telemetry: " + telemetry_addr + ", Commands: " + command_addr);
+            std::string config_msg;
+            config_msg.reserve(50 + telemetry_addr.size() + command_addr.size());
+            config_msg += "Telemetry: ";
+            config_msg += telemetry_addr;
+            config_msg += ", Commands: ";
+            config_msg += command_addr;
+
+            std::string uav_msg = "UAV " + uav.name + " configured";
+            Logger::statusWithDetails("ZMQ", StatusMessage(uav_msg), DetailMessage(config_msg));
         }
     } catch (const zmq::error_t& e) {
         Logger::error("ZMQ socket setup failed: " + std::string(e.what()));
@@ -147,54 +154,71 @@ void ZmqManager::publishTelemetry(const std::string& topic, const std::string& d
  */
 void ZmqManager::receiverLoop() {
     try {
-        // Set up polling items for all UAV telemetry sockets
-        std::vector<zmq::pollitem_t> pollitems;
-        {
-            std::lock_guard<std::mutex> lock(socketMutex);
-            for (auto& sockPtr : uavTelemetrySockets) {
-                pollitems.push_back({*sockPtr, 0, ZMQ_POLLIN, 0});
-            }
-        }
+        std::vector<zmq::pollitem_t> poll_items = setupTelemetryPolling();
 
         while (running) {
             // Handle case where no UAVs are configured
-            if (pollitems.empty()) {
+            if (poll_items.empty()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 continue;
             }
 
             // Poll all UAV sockets with 100ms timeout
-            zmq::poll(pollitems.data(), pollitems.size(), std::chrono::milliseconds(100));
+            zmq::poll(poll_items.data(), poll_items.size(), std::chrono::milliseconds(100));
 
             // Check each socket for incoming data
-            for (size_t i = 0; i < pollitems.size() && running; ++i) {
-                if (pollitems[i].revents & ZMQ_POLLIN) {
-                    zmq::message_t message;
-                    zmq::recv_result_t received;
-                    {
-                        std::lock_guard<std::mutex> lock(socketMutex);
-                        if (i < uavTelemetrySockets.size()) {
-                            received = uavTelemetrySockets[i]->recv(message, zmq::recv_flags::none);
-                        }
-                    }
-
-                    if (received.has_value()) {
-                        // Extract message data and identify source UAV
-                        std::string data(static_cast<char*>(message.data()), message.size());
-                        std::string uav_name = (i < config.getUAVs().size()) ? config.getUAVs()[i].name : "UNKNOWN";
-
-                        // Call the registered callback with source identification
-                        if (messageCallback_) {
-                            messageCallback_("TCP:" + uav_name, data);
-                        }
-                    }
+            for (size_t i = 0; i < poll_items.size() && running; ++i) {
+                if ((poll_items[i].revents & ZMQ_POLLIN) != 0) {
+                    processIncomingTelemetry(i);
                 }
             }
         }
     } catch (const std::exception& e) {
         Logger::error("ZMQ receiver loop error: " + std::string(e.what()));
     }
-    Logger::status("ZMQ", "Receiver thread stopped", "");
+    Logger::status("ZMQ", "Receiver thread stopped");
+}
+
+/**
+ * @brief Helper to set up polling items for UAV telemetry sockets
+ * @return Vector of polling items for zmq::poll
+ */
+std::vector<zmq::pollitem_t> ZmqManager::setupTelemetryPolling() const {
+    std::vector<zmq::pollitem_t> poll_items;
+    std::lock_guard<std::mutex> lock(socketMutex);
+    poll_items.reserve(uavTelemetrySockets.size());
+    for (const auto& sock_ptr : uavTelemetrySockets) {
+        poll_items.push_back({*sock_ptr, 0, ZMQ_POLLIN, 0});
+    }
+    return poll_items;
+}
+
+/**
+ * @brief Helper to process incoming telemetry from a specific UAV socket
+ * @param socket_index Index of the socket that received data
+ */
+void ZmqManager::processIncomingTelemetry(size_t socket_index) {
+    zmq::message_t message;
+    zmq::recv_result_t received;
+
+    {
+        std::lock_guard<std::mutex> lock(socketMutex);
+        if (socket_index < uavTelemetrySockets.size()) {
+            received = uavTelemetrySockets[socket_index]->recv(message, zmq::recv_flags::none);
+        }
+    }
+
+    if (received.has_value()) {
+        // Extract message data and identify source UAV
+        std::string data(static_cast<char*>(message.data()), message.size());
+        std::string uav_name = (socket_index < config.getUAVs().size()) ?
+                              config.getUAVs()[socket_index].name : "UNKNOWN";
+
+        // Call the registered callback with source identification
+        if (messageCallback_) {
+            messageCallback_("TCP:" + uav_name, data);
+        }
+    }
 }
 
 /**
@@ -214,34 +238,17 @@ void ZmqManager::forwarderLoop() {
         while (running) {
             // Poll UI socket with 100ms timeout
             zmq::poll(&ui_poll, 1, std::chrono::milliseconds(100));
-            if (ui_poll.revents & ZMQ_POLLIN) {
+            if ((ui_poll.revents & ZMQ_POLLIN) != 0) {
                 zmq::message_t ui_msg;
                 auto recv_result = pullFromUi->recv(ui_msg, zmq::recv_flags::none);
                 if (recv_result.has_value()) {
                     std::string msg(static_cast<char*>(ui_msg.data()), ui_msg.size());
                     Logger::info("RECEIVED FROM UI [" + extractUISource(msg) + "]: " + msg);
 
-                    // Parse command to extract target UAV and actual command
-                    // Expected format: "UAV_NAME:command_data"
-                    size_t colon_pos = msg.find(':');
-                    std::string target_uav = (colon_pos != std::string::npos) ? msg.substr(0, colon_pos) : "UAV_1";
-                    std::string actual_cmd = (colon_pos != std::string::npos) ? msg.substr(colon_pos + 1) : msg;
+                    auto [target_uav, actual_cmd] = parseUICommand(msg);
+                    bool success = forwardCommandToUAV(target_uav, actual_cmd);
 
-                    // Find the target UAV and forward the command
-                    const auto& uavs = config.getUAVs();
-                    bool uav_found = false;
-                    for (size_t i = 0; i < uavs.size(); ++i) {
-                        if (uavs[i].name == target_uav) {
-                            std::lock_guard<std::mutex> lock(socketMutex);
-                            if (i < uavCommandSockets.size() && running) {
-                                Logger::info("FORWARDING TO " + target_uav + ": " + actual_cmd);
-                                uavCommandSockets[i]->send(zmq::buffer(actual_cmd), zmq::send_flags::none);
-                                uav_found = true;
-                            }
-                            break;
-                        }
-                    }
-                    if (!uav_found) {
+                    if (!success) {
                         Logger::warn("Command target UAV not found: " + target_uav);
                     }
                 }
@@ -250,7 +257,7 @@ void ZmqManager::forwarderLoop() {
     } catch (const std::exception& e) {
         Logger::error("ZMQ forwarder loop error: " + std::string(e.what()));
     }
-    Logger::status("ZMQ", "Forwarder thread stopped", "");
+    Logger::status("ZMQ", "Forwarder thread stopped");
 }
 
 /**
@@ -265,4 +272,49 @@ std::string ZmqManager::extractUISource(const std::string& message) {
     if (message.find("[camera-ui]") != std::string::npos) return "camera";
     if (message.find("[mapping-ui]") != std::string::npos) return "mapping";
     return "unknown";
+}
+
+/**
+ * @brief Helper to parse UI command and extract target UAV and command
+ * @param message The raw UI command message
+ * @return Pair of target_uav and actual_command
+ */
+std::pair<std::string, std::string> ZmqManager::parseUICommand(const std::string& message) {
+    // Parse command to extract target UAV and actual command
+    // Expected format: "UAV_NAME:command_data"
+    size_t colon_pos = message.find(':');
+    std::string target_uav = (colon_pos != std::string::npos) ?
+                            message.substr(0, colon_pos) : "UAV_1";
+    std::string actual_cmd = (colon_pos != std::string::npos) ?
+                            message.substr(colon_pos + 1) : message;
+    return {target_uav, actual_cmd};
+}
+
+/**
+ * @brief Helper to forward command to specific UAV
+ * @param target_uav The UAV name to send command to
+ * @param command The command to send
+ * @return true if command was forwarded successfully
+ */
+bool ZmqManager::forwardCommandToUAV(const std::string& target_uav, const std::string& command) {
+    const auto& uavs = config.getUAVs();
+
+    for (size_t i = 0; i < uavs.size(); ++i) {
+        if (uavs[i].name == target_uav) {
+            std::lock_guard<std::mutex> lock(socketMutex);
+            if (i < uavCommandSockets.size() && running) {
+                std::string forward_msg;
+                forward_msg.reserve(25 + target_uav.size() + command.size());
+                forward_msg += "FORWARDING TO ";
+                forward_msg += target_uav;
+                forward_msg += ": ";
+                forward_msg += command;
+                Logger::info(forward_msg);
+                uavCommandSockets[i]->send(zmq::buffer(command), zmq::send_flags::none);
+                return true;
+            }
+            break;
+        }
+    }
+    return false;
 }

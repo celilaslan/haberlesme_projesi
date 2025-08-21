@@ -2,7 +2,7 @@
  * @file TelemetryClientAdvanced.cpp
  * @brief Implementation of the TelemetryClientAdvanced class
  *
- * Enhanced TelemetryClient with advanced features.
+ * This file contains the implementation of the enhanced TelemetryClient with advanced features.
  */
 
 #include <atomic>
@@ -39,12 +39,8 @@ namespace TelemetryAPI {
     class TelemetryClientAdvanced::AdvancedImpl {
        public:
         AdvancedImpl()
-            : stream_mode_(StreamMode::REALTIME),
-              operation_mode_(OperationMode::DEVELOPMENT),
-              data_format_(DataFormat::JSON),
-              user_permissions_(Permission::READ_ONLY),
-              auto_failover_enabled_(false),
-              performance_monitoring_(false) {
+            : performance_monitoring_(false),
+              network_stats_{} {
             // Initialize advanced components - using shared_ptr for safe access
             data_analyzer_ = std::make_shared<DataAnalyzer>();
             fleet_manager_ = std::make_shared<FleetManager>();
@@ -69,6 +65,12 @@ namespace TelemetryAPI {
             }
         }
 
+        // Disable copy and move operations for complex state management
+        AdvancedImpl(const AdvancedImpl&) = delete;
+        AdvancedImpl& operator=(const AdvancedImpl&) = delete;
+        AdvancedImpl(AdvancedImpl&&) = delete;
+        AdvancedImpl& operator=(AdvancedImpl&&) = delete;
+
         // ========================================================================
         // COMMAND RESPONSE & ACKNOWLEDGMENT SYSTEM
         // ========================================================================
@@ -88,7 +90,7 @@ namespace TelemetryAPI {
                 response.response_time_ms = 0;
 
                 pending_commands_[command_id] = response;
-                command_callbacks_[command_id] = callback;
+                command_callbacks_[command_id] = std::move(callback);
             }
 
             // Send command asynchronously
@@ -102,20 +104,20 @@ namespace TelemetryAPI {
 
                 // Update command status
                 std::lock_guard<std::mutex> lock(commands_mutex_);
-                auto it = pending_commands_.find(command_id);
-                if (it != pending_commands_.end()) {
-                    it->second.acknowledged = success;
-                    it->second.status = success ? CommandStatus::ACKNOWLEDGED : CommandStatus::FAILED;
-                    it->second.response_time_ms = duration.count();
+                auto command_iter = pending_commands_.find(command_id);
+                if (command_iter != pending_commands_.end()) {
+                    command_iter->second.acknowledged = success;
+                    command_iter->second.status = success ? CommandStatus::ACKNOWLEDGED : CommandStatus::FAILED;
+                    command_iter->second.response_time_ms = duration.count();
 
                     if (!success) {
-                        it->second.error_message = "Command send failed";
+                        command_iter->second.error_message = "Command send failed";
                     }
 
                     // Notify callback
                     auto callback_it = command_callbacks_.find(command_id);
                     if (callback_it != command_callbacks_.end()) {
-                        callback_it->second(it->second);
+                        callback_it->second(command_iter->second);
                         command_callbacks_.erase(callback_it);
                     }
                 }
@@ -127,7 +129,7 @@ namespace TelemetryAPI {
             return command_id;
         }
 
-        CommandResponse sendCommandSync(TelemetryClient* client, const std::string& uav_name,
+        static CommandResponse sendCommandSync(TelemetryClient* client, const std::string& uav_name,
                                         const std::string& command, int timeout_ms) {
             std::string command_id = generateCommandId();
             CommandResponse response;
@@ -155,9 +157,9 @@ namespace TelemetryAPI {
         CommandResponse getCommandStatus(const std::string& command_id) {
             std::lock_guard<std::mutex> lock(commands_mutex_);
 
-            auto it = pending_commands_.find(command_id);
-            if (it != pending_commands_.end()) {
-                return it->second;
+            auto status_iter = pending_commands_.find(command_id);
+            if (status_iter != pending_commands_.end()) {
+                return status_iter->second;
             }
 
             // Return empty response if not found
@@ -207,7 +209,7 @@ namespace TelemetryAPI {
 
         bool subscribeToEvents(TelemetryEvent event, EventCallback callback) {
             std::lock_guard<std::mutex> lock(events_mutex_);
-            event_callbacks_[event].push_back(callback);
+            event_callbacks_[event].push_back(std::move(callback));
             return true;
         }
 
@@ -222,26 +224,33 @@ namespace TelemetryAPI {
             std::lock_guard<std::mutex> lock(thresholds_mutex_);
 
             std::string key = uav_name + ":" + parameter;
-            DataThreshold dt;
-            dt.uav_name = uav_name;
-            dt.parameter = parameter;
-            dt.threshold = threshold;
-            dt.callback = alert_callback;
+            DataThreshold data_threshold;
+            data_threshold.uav_name = uav_name;
+            data_threshold.parameter = parameter;
+            data_threshold.threshold = threshold;
+            data_threshold.callback = std::move(alert_callback);
 
-            data_thresholds_[key] = dt;
+            data_thresholds_[key] = data_threshold;
             return true;
         }
 
         void triggerEvent(TelemetryEvent event, const std::string& details) {
             std::lock_guard<std::mutex> lock(events_mutex_);
 
-            auto it = event_callbacks_.find(event);
-            if (it != event_callbacks_.end()) {
-                for (const auto& callback : it->second) {
+            auto event_iter = event_callbacks_.find(event);
+            if (event_iter != event_callbacks_.end()) {
+                for (const auto& callback : event_iter->second) {
                     try {
                         callback(event, details);
+                    } catch (const std::exception& e) {
+                        // Log exception (in production, use proper logging framework)
+                        // std::cerr << "Event callback exception: " << e.what() << std::endl;
+                        (void)e; // Suppress unused variable warning
                     } catch (...) {
-                        // Ignore callback exceptions
+                        // Log unknown exception (in production, use proper logging framework)
+                        // std::cerr << "Unknown event callback exception" << std::endl;
+                        // Exception caught and ignored to prevent cascade failures
+                        std::ignore = 0; // Intentionally ignore unknown exceptions
                     }
                 }
             }
@@ -276,19 +285,17 @@ namespace TelemetryAPI {
         bool setOperationMode(OperationMode mode) {
             operation_mode_ = mode;
 
-            // Adjust settings based on mode
+            // Adjust settings based on mode (implementation pending)
             switch (mode) {
                 case OperationMode::DEVELOPMENT:
-                    // Enable full logging, relaxed timeouts
-                    break;
                 case OperationMode::PRODUCTION:
-                    // Optimize for performance
-                    break;
                 case OperationMode::EMERGENCY:
-                    // Maximum reliability settings
-                    break;
                 case OperationMode::LOW_BANDWIDTH:
-                    // Minimize data transfer
+                    // TODO: Implement mode-specific configurations
+                    // DEVELOPMENT: Enable full logging, relaxed timeouts
+                    // PRODUCTION: Optimize for performance
+                    // EMERGENCY: Maximum reliability settings
+                    // LOW_BANDWIDTH: Minimize data transfer
                     break;
             }
 
@@ -336,13 +343,13 @@ namespace TelemetryAPI {
         ProtocolSettings getProtocolSettings(Protocol protocol) {
             std::lock_guard<std::mutex> lock(protocol_settings_mutex_);
 
-            auto it = protocol_settings_.find(protocol);
-            if (it != protocol_settings_.end()) {
-                return it->second;
+            auto protocol_iter = protocol_settings_.find(protocol);
+            if (protocol_iter != protocol_settings_.end()) {
+                return protocol_iter->second;
             }
 
             // Return default settings
-            ProtocolSettings default_settings;
+            ProtocolSettings default_settings{};
             default_settings.tcp_keepalive_interval = 30;
             default_settings.udp_max_packet_size = 1024;
             default_settings.enable_compression = false;
@@ -378,7 +385,7 @@ namespace TelemetryAPI {
         struct DataThreshold {
             std::string uav_name;
             std::string parameter;
-            double threshold;
+            double threshold{0.0};
             AlertCallback callback;
         };
 
@@ -398,7 +405,7 @@ namespace TelemetryAPI {
 
             // Update real system metrics
             current_metrics_.cpu_usage_percent = getCurrentCpuUsage();
-            current_metrics_.memory_usage_mb = getCurrentMemoryUsage();
+            current_metrics_.memory_usage_mb = static_cast<size_t>(getCurrentMemoryUsage());
             current_metrics_.messages_per_second = message_count_last_second_;
             current_metrics_.average_processing_time_ms = calculateAverageProcessingTime();
 
@@ -411,19 +418,20 @@ namespace TelemetryAPI {
         }
 
         // Get actual CPU usage (simplified implementation)
-        double getCurrentCpuUsage() {
+        static double getCurrentCpuUsage() {
 // This is a simplified implementation. For production, you'd want to use
 // platform-specific APIs like /proc/stat on Linux or GetSystemTimes on Windows
 #ifdef __linux__
-            static auto last_idle = 0ULL, last_total = 0ULL;
+            static auto last_idle = 0ULL;
+            static auto last_total = 0ULL;
             std::ifstream file("/proc/stat");
             std::string line;
             if (std::getline(file, line)) {
-                std::istringstream ss(line);
+                std::istringstream stat_stream(line);
                 std::string cpu;
                 std::vector<unsigned long long> times(10, 0);
-                ss >> cpu;
-                for (size_t i = 0; i < times.size() && ss >> times[i]; ++i) {
+                stat_stream >> cpu;
+                for (size_t i = 0; i < times.size() && stat_stream >> times[i]; ++i) {
                 }
 
                 auto idle = times[3] + times[4];
@@ -436,7 +444,7 @@ namespace TelemetryAPI {
                 last_total = total;
 
                 if (total_diff > 0) {
-                    return 100.0 * (1.0 - static_cast<double>(idle_diff) / total_diff);
+                    return 100.0 * (1.0 - static_cast<double>(idle_diff) / static_cast<double>(total_diff));
                 }
             }
 #endif
@@ -444,15 +452,15 @@ namespace TelemetryAPI {
         }
 
         // Get actual memory usage
-        double getCurrentMemoryUsage() {
+        static double getCurrentMemoryUsage() {
 #ifdef __linux__
             std::ifstream file("/proc/self/status");
             std::string line;
             while (std::getline(file, line)) {
                 if (line.substr(0, 6) == "VmRSS:") {
-                    std::istringstream ss(line.substr(6));
-                    double memory_kb;
-                    if (ss >> memory_kb) {
+                    std::istringstream memory_stream(line.substr(6));
+                    double memory_kb = 0.0;
+                    if (memory_stream >> memory_kb) {
                         return memory_kb / 1024.0;  // Convert KB to MB
                     }
                 }
@@ -473,10 +481,10 @@ namespace TelemetryAPI {
         // ========================================================================
 
         // Streaming and modes
-        StreamMode stream_mode_;
-        OperationMode operation_mode_;
-        DataFormat data_format_;
-        Permission user_permissions_;
+        StreamMode stream_mode_{StreamMode::REALTIME};
+        OperationMode operation_mode_{OperationMode::DEVELOPMENT};
+        DataFormat data_format_{DataFormat::JSON};
+        Permission user_permissions_{Permission::READ_ONLY};
 
         // Command tracking
         mutable std::mutex commands_mutex_;
@@ -487,7 +495,7 @@ namespace TelemetryAPI {
         // Network resilience
         mutable std::mutex backup_services_mutex_;
         std::map<int, std::string> backup_services_;  // priority -> host
-        bool auto_failover_enabled_;
+        bool auto_failover_enabled_{false};
         int max_connections_ = 10;
         NetworkStats network_stats_;
 
@@ -528,7 +536,7 @@ namespace TelemetryAPI {
 
     // TelemetryClientAdvanced implementation
     TelemetryClientAdvanced::TelemetryClientAdvanced()
-        : TelemetryClient(), pAdvancedImpl(std::make_unique<AdvancedImpl>()) {
+        : pAdvancedImpl(std::make_unique<AdvancedImpl>()) {
         // Initialize fleet manager with this client - safe access via weak_ptr
         if (auto fleet_mgr = pAdvancedImpl->getFleetManager().lock()) {
             fleet_mgr->initialize(this);
@@ -540,7 +548,7 @@ namespace TelemetryAPI {
     // Command Response & Acknowledgment System
     std::string TelemetryClientAdvanced::sendCommandAsync(const std::string& uav_name, const std::string& command,
                                                           CommandResponseCallback callback, int timeout_ms) {
-        return pAdvancedImpl->sendCommandAsync(this, uav_name, command, callback, timeout_ms);
+        return pAdvancedImpl->sendCommandAsync(this, uav_name, command, std::move(callback), timeout_ms);
     }
 
     CommandResponse TelemetryClientAdvanced::sendCommandSync(const std::string& uav_name, const std::string& command,
@@ -572,7 +580,7 @@ namespace TelemetryAPI {
 
     // Event System
     bool TelemetryClientAdvanced::subscribeToEvents(TelemetryEvent event, EventCallback callback) {
-        return pAdvancedImpl->subscribeToEvents(event, callback);
+        return pAdvancedImpl->subscribeToEvents(event, std::move(callback));
     }
 
     bool TelemetryClientAdvanced::unsubscribeFromEvents(TelemetryEvent event) {
@@ -581,7 +589,7 @@ namespace TelemetryAPI {
 
     bool TelemetryClientAdvanced::setDataThreshold(const std::string& uav_name, const std::string& parameter,
                                                    double threshold, AlertCallback alert_callback) {
-        return pAdvancedImpl->setDataThreshold(uav_name, parameter, threshold, alert_callback);
+        return pAdvancedImpl->setDataThreshold(uav_name, parameter, threshold, std::move(alert_callback));
     }
 
     // Security & Authentication

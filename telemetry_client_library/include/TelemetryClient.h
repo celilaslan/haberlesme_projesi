@@ -10,6 +10,7 @@
 #ifndef TELEMETRY_CLIENT_H
 #define TELEMETRY_CLIENT_H
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -37,7 +38,7 @@ namespace TelemetryAPI {
      * @enum Protocol
      * @brief Communication protocol options
      */
-    enum class Protocol {
+    enum class Protocol : std::uint8_t {
         TCP_ONLY,  ///< Use TCP (ZeroMQ) for reliable communication
         UDP_ONLY,  ///< Use UDP for low-latency communication
         BOTH       ///< Use both protocols (recommended)
@@ -47,7 +48,7 @@ namespace TelemetryAPI {
      * @enum DataType
      * @brief Type of telemetry data
      */
-    enum class DataType {
+    enum class DataType : std::uint8_t {
         MAPPING,  ///< Mapping/navigation data
         CAMERA,   ///< Camera/vision data
         UNKNOWN   ///< Unknown or mixed data
@@ -57,7 +58,7 @@ namespace TelemetryAPI {
      * @enum ClientState
      * @brief Client lifecycle states for robust state management
      */
-    enum class ClientState {
+    enum class ClientState : std::uint8_t {
         IDLE,         ///< Client created but not initialized
         INITIALIZED,  ///< Client initialized, ready to start receiving
         RUNNING,      ///< Client actively receiving telemetry data
@@ -70,12 +71,12 @@ namespace TelemetryAPI {
      * @brief Structure representing received telemetry data
      */
     struct TELEMETRY_API TelemetryData {
-        std::string uav_name;   ///< UAV identifier (e.g., "UAV_1")
-        DataType data_type;     ///< Type of data (mapping, camera, etc.)
-        std::string raw_data;   ///< Raw telemetry data
-        std::string topic;      ///< Topic name used for routing
-        Protocol received_via;  ///< Protocol used to receive this data
-        uint64_t timestamp_ms;  ///< Timestamp when data was received (milliseconds since epoch)
+        std::string uav_name;                             ///< UAV identifier (e.g., "UAV_1")
+        DataType data_type = DataType::UNKNOWN;           ///< Type of data (mapping, camera, etc.)
+        std::string raw_data;                             ///< Raw telemetry data
+        std::string topic;                                ///< Topic name used for routing
+        Protocol received_via = Protocol::TCP_ONLY;      ///< Protocol used to receive this data
+        uint64_t timestamp_ms = 0;                        ///< Timestamp when data was received (milliseconds since epoch)
     };
 
     /**
@@ -208,19 +209,19 @@ namespace TelemetryAPI {
          * @brief Check if the client is currently receiving data
          * @return true if actively receiving, false otherwise
          */
-        bool isReceiving() const;
+        [[nodiscard]] bool isReceiving() const;
 
         /**
          * @brief Get current client state
          * @return Current lifecycle state of the client
          */
-        ClientState getCurrentState() const;
+        [[nodiscard]] ClientState getCurrentState() const;
 
         /**
          * @brief Get human-readable description of current state
          * @return String describing the current client state
          */
-        std::string getStateDescription() const;
+        [[nodiscard]] std::string getStateDescription() const;
 
         /**
          * @brief Reset client to IDLE state (for error recovery)
@@ -232,13 +233,13 @@ namespace TelemetryAPI {
          * @brief Get list of available UAVs from the service configuration
          * @return Vector of UAV names
          */
-        std::vector<std::string> getAvailableUAVs() const;
+        [[nodiscard]] std::vector<std::string> getAvailableUAVs() const;
 
         /**
          * @brief Get connection status information
          * @return Human-readable string describing connection status
          */
-        std::string getConnectionStatus() const;
+        [[nodiscard]] std::string getConnectionStatus() const;
 
         /**
          * @brief Enable or disable debug logging
@@ -253,16 +254,18 @@ namespace TelemetryAPI {
          * @brief Get the last error message
          * @return String containing the last error that occurred
          */
-        std::string getLastError() const;
+        [[nodiscard]] std::string getLastError() const;
+
+        // Disable copy and move operations for PIMPL pattern
+        TelemetryClient(const TelemetryClient&) = delete;
+        TelemetryClient& operator=(const TelemetryClient&) = delete;
+        TelemetryClient(TelemetryClient&&) = delete;
+        TelemetryClient& operator=(TelemetryClient&&) = delete;
 
        private:
         // Forward declaration of implementation class (PIMPL pattern)
         class Impl;
         std::unique_ptr<Impl> pImpl;
-
-        // Disable copy constructor and assignment operator
-        TelemetryClient(const TelemetryClient&) = delete;
-        TelemetryClient& operator=(const TelemetryClient&) = delete;
     };
 
     // ============================================================================
@@ -273,7 +276,7 @@ namespace TelemetryAPI {
      * @enum CommandStatus
      * @brief Status of a command execution
      */
-    enum class CommandStatus {
+    enum class CommandStatus : std::uint8_t {
         SENT,          ///< Command has been sent
         ACKNOWLEDGED,  ///< Command acknowledged by UAV
         EXECUTED,      ///< Command successfully executed
@@ -285,7 +288,7 @@ namespace TelemetryAPI {
      * @enum StreamMode
      * @brief Data streaming modes
      */
-    enum class StreamMode {
+    enum class StreamMode : std::uint8_t {
         REALTIME,  ///< Immediate delivery, may drop packets
         RELIABLE,  ///< Guaranteed delivery with buffering
         ADAPTIVE   ///< Automatically adjust based on network conditions
@@ -295,7 +298,7 @@ namespace TelemetryAPI {
      * @enum OperationMode
      * @brief Operation modes for different scenarios
      */
-    enum class OperationMode {
+    enum class OperationMode : std::uint8_t {
         DEVELOPMENT,   ///< Full logging, relaxed timeouts
         PRODUCTION,    ///< Optimized performance
         EMERGENCY,     ///< Maximum reliability
@@ -306,7 +309,7 @@ namespace TelemetryAPI {
      * @enum Permission
      * @brief User permission levels
      */
-    enum class Permission {
+    enum class Permission : std::uint8_t {
         READ_ONLY,          ///< Can only receive telemetry
         BASIC_COMMANDS,     ///< takeoff, land, status
         ADVANCED_COMMANDS,  ///< navigation, system config
@@ -317,7 +320,7 @@ namespace TelemetryAPI {
      * @enum TelemetryEvent
      * @brief Types of telemetry events
      */
-    enum class TelemetryEvent {
+    enum class TelemetryEvent : std::uint8_t {
         UAV_CONNECTED,          ///< UAV has connected
         UAV_DISCONNECTED,       ///< UAV has disconnected
         DATA_QUALITY_DEGRADED,  ///< Data quality issues detected
@@ -330,7 +333,7 @@ namespace TelemetryAPI {
      * @enum DataFormat
      * @brief Supported data formats
      */
-    enum class DataFormat {
+    enum class DataFormat : std::uint8_t {
         JSON,      ///< JSON format
         PROTOBUF,  ///< Protocol Buffers
         MSGPACK,   ///< MessagePack
@@ -341,7 +344,7 @@ namespace TelemetryAPI {
      * @enum CompressionType
      * @brief Compression algorithms
      */
-    enum class CompressionType {
+    enum class CompressionType : std::uint8_t {
         NONE,  ///< No compression
         GZIP,  ///< GZIP compression
         LZ4,   ///< LZ4 compression
@@ -353,12 +356,12 @@ namespace TelemetryAPI {
      * @brief Response from a command execution
      */
     struct TELEMETRY_API CommandResponse {
-        std::string command_id;     ///< Unique command identifier
-        bool acknowledged;          ///< Whether command was acknowledged
-        std::string response_data;  ///< Response data from UAV
-        uint64_t response_time_ms;  ///< Time taken for response
-        CommandStatus status;       ///< Current status of command
-        std::string error_message;  ///< Error message if failed
+        std::string command_id;                           ///< Unique command identifier
+        bool acknowledged = false;                        ///< Whether command was acknowledged
+        std::string response_data;                        ///< Response data from UAV
+        uint64_t response_time_ms = 0;                    ///< Time taken for response
+        CommandStatus status = CommandStatus::SENT;      ///< Current status of command
+        std::string error_message;                        ///< Error message if failed
     };
 
     /**
@@ -366,11 +369,11 @@ namespace TelemetryAPI {
      * @brief Data quality metrics
      */
     struct TELEMETRY_API DataQuality {
-        double packet_loss_rate;      ///< Packet loss percentage (0.0-1.0)
-        double average_latency_ms;    ///< Average latency in milliseconds
-        int missing_sequences;        ///< Number of missing sequence numbers
-        double data_freshness_score;  ///< Data freshness score (0.0-1.0)
-        uint64_t last_update_time;    ///< Timestamp of last update
+        double packet_loss_rate = 0.0;       ///< Packet loss percentage (0.0-1.0)
+        double average_latency_ms = 0.0;     ///< Average latency in milliseconds
+        int missing_sequences = 0;           ///< Number of missing sequence numbers
+        double data_freshness_score = 1.0;   ///< Data freshness score (0.0-1.0)
+        uint64_t last_update_time = 0;       ///< Timestamp of last update
     };
 
     /**
@@ -378,12 +381,12 @@ namespace TelemetryAPI {
      * @brief Bandwidth usage statistics
      */
     struct TELEMETRY_API BandwidthStats {
-        double bytes_per_second_in;     ///< Incoming bytes per second
-        double bytes_per_second_out;    ///< Outgoing bytes per second
-        double peak_bandwidth_in;       ///< Peak incoming bandwidth
-        double peak_bandwidth_out;      ///< Peak outgoing bandwidth
-        uint64_t total_bytes_received;  ///< Total bytes received
-        uint64_t total_bytes_sent;      ///< Total bytes sent
+        double bytes_per_second_in = 0.0;     ///< Incoming bytes per second
+        double bytes_per_second_out = 0.0;    ///< Outgoing bytes per second
+        double peak_bandwidth_in = 0.0;       ///< Peak incoming bandwidth
+        double peak_bandwidth_out = 0.0;      ///< Peak outgoing bandwidth
+        uint64_t total_bytes_received = 0;    ///< Total bytes received
+        uint64_t total_bytes_sent = 0;        ///< Total bytes sent
     };
 
     /**
@@ -391,13 +394,13 @@ namespace TelemetryAPI {
      * @brief Status of a single UAV
      */
     struct TELEMETRY_API UAVStatus {
-        std::string name;                   ///< UAV name
-        bool connected;                     ///< Connection status
-        uint64_t last_seen;                 ///< Last seen timestamp
-        DataQuality data_quality;           ///< Data quality metrics
-        double health_score;                ///< Overall health score (0.0-1.0)
-        std::string last_command;           ///< Last command sent
-        CommandStatus last_command_status;  ///< Status of last command
+        std::string name;                              ///< UAV name
+        bool connected = false;                        ///< Connection status
+        uint64_t last_seen = 0;                        ///< Last seen timestamp
+        DataQuality data_quality;                      ///< Data quality metrics
+        double health_score = 1.0;                     ///< Overall health score (0.0-1.0)
+        std::string last_command;                      ///< Last command sent
+        CommandStatus last_command_status = CommandStatus::SENT;  ///< Status of last command
     };
 
     /**
@@ -406,10 +409,10 @@ namespace TelemetryAPI {
      */
     struct TELEMETRY_API FleetStatus {
         std::map<std::string, UAVStatus> uav_statuses;  ///< Individual UAV statuses
-        int active_uavs;                                ///< Number of active UAVs
-        int total_uavs;                                 ///< Total number of UAVs
-        double overall_health_score;                    ///< Overall fleet health (0.0-1.0)
-        uint64_t last_update;                           ///< Last update timestamp
+        int active_uavs = 0;                            ///< Number of active UAVs
+        int total_uavs = 0;                             ///< Total number of UAVs
+        double overall_health_score = 1.0;              ///< Overall fleet health (0.0-1.0)
+        uint64_t last_update = 0;                       ///< Last update timestamp
     };
 
     /**
@@ -429,10 +432,10 @@ namespace TelemetryAPI {
      * @brief Authentication configuration
      */
     struct TELEMETRY_API AuthConfig {
-        std::string username;          ///< Username
-        std::string password;          ///< Password
-        std::string certificate_path;  ///< Path to certificate file
-        bool enable_encryption;        ///< Enable encryption
+        std::string username;                  ///< Username
+        std::string password;                  ///< Password
+        std::string certificate_path;          ///< Path to certificate file
+        bool enable_encryption = true;         ///< Enable encryption
     };
 
     /**
@@ -451,9 +454,9 @@ namespace TelemetryAPI {
      * @brief Current configuration profile
      */
     struct TELEMETRY_API ConfigurationProfile {
-        OperationMode mode;                           ///< Current operation mode
-        std::map<std::string, std::string> settings;  ///< Configuration settings
-        uint64_t last_modified;                       ///< Last modification timestamp
+        OperationMode mode = OperationMode::PRODUCTION;  ///< Current operation mode
+        std::map<std::string, std::string> settings;     ///< Configuration settings
+        uint64_t last_modified = 0;                      ///< Last modification timestamp
     };
 
     /**
@@ -461,11 +464,11 @@ namespace TelemetryAPI {
      * @brief Performance monitoring metrics
      */
     struct TELEMETRY_API PerformanceMetrics {
-        double cpu_usage_percent;           ///< CPU usage percentage
-        size_t memory_usage_mb;             ///< Memory usage in MB
-        int messages_per_second;            ///< Messages processed per second
-        double average_processing_time_ms;  ///< Average message processing time
-        uint64_t uptime_seconds;            ///< Library uptime in seconds
+        double cpu_usage_percent = 0.0;           ///< CPU usage percentage
+        size_t memory_usage_mb = 0;               ///< Memory usage in MB
+        int messages_per_second = 0;              ///< Messages processed per second
+        double average_processing_time_ms = 0.0;  ///< Average message processing time
+        uint64_t uptime_seconds = 0;              ///< Library uptime in seconds
     };
 
     // Forward declarations for advanced classes
@@ -543,6 +546,12 @@ namespace TelemetryAPI {
          */
         ~DataAnalyzer();
 
+        // Disable copy and move operations for PIMPL pattern
+        DataAnalyzer(const DataAnalyzer&) = delete;
+        DataAnalyzer& operator=(const DataAnalyzer&) = delete;
+        DataAnalyzer(DataAnalyzer&&) = delete;
+        DataAnalyzer& operator=(DataAnalyzer&&) = delete;
+
         /**
          * @brief Get data quality metrics for specific UAV and data type
          * @param uav_name Name of the UAV
@@ -602,6 +611,12 @@ namespace TelemetryAPI {
          * @brief Destructor
          */
         ~FleetManager();
+
+        // Disable copy and move operations for PIMPL pattern
+        FleetManager(const FleetManager&) = delete;
+        FleetManager& operator=(const FleetManager&) = delete;
+        FleetManager(FleetManager&&) = delete;
+        FleetManager& operator=(FleetManager&&) = delete;
 
         /**
          * @brief Initialize fleet manager with telemetry client
@@ -666,6 +681,12 @@ namespace TelemetryAPI {
          */
         ~DataBuffer();
 
+        // Disable copy and move operations for PIMPL pattern
+        DataBuffer(const DataBuffer&) = delete;
+        DataBuffer& operator=(const DataBuffer&) = delete;
+        DataBuffer(DataBuffer&&) = delete;
+        DataBuffer& operator=(DataBuffer&&) = delete;
+
         /**
          * @brief Enable data buffering
          * @param max_buffer_size_mb Maximum buffer size in megabytes
@@ -698,19 +719,19 @@ namespace TelemetryAPI {
          * @brief Check if currently recording
          * @return true if recording is active
          */
-        bool isRecording() const;
+        [[nodiscard]] bool isRecording() const;
 
         /**
          * @brief Check if currently replaying
          * @return true if replay is active
          */
-        bool isReplaying() const;
+        [[nodiscard]] bool isReplaying() const;
 
         /**
          * @brief Get current buffer usage
          * @return Buffer usage as percentage (0.0-1.0)
          */
-        double getBufferUsage() const;
+        [[nodiscard]] double getBufferUsage() const;
 
        private:
         class Impl;
@@ -732,6 +753,12 @@ namespace TelemetryAPI {
          * @brief Destructor
          */
         ~MockUAV();
+
+        // Disable copy and move operations for PIMPL pattern
+        MockUAV(const MockUAV&) = delete;
+        MockUAV& operator=(const MockUAV&) = delete;
+        MockUAV(MockUAV&&) = delete;
+        MockUAV& operator=(MockUAV&&) = delete;
 
         /**
          * @brief Create a mock UAV
@@ -778,7 +805,7 @@ namespace TelemetryAPI {
          * @brief Check if mock UAV is running
          * @return true if running
          */
-        bool isRunning() const;
+        [[nodiscard]] bool isRunning() const;
 
        private:
         class Impl;
@@ -803,6 +830,12 @@ namespace TelemetryAPI {
          * @brief Destructor
          */
         ~TelemetryClientAdvanced();
+
+        // Disable copy and move operations
+        TelemetryClientAdvanced(const TelemetryClientAdvanced&) = delete;
+        TelemetryClientAdvanced& operator=(const TelemetryClientAdvanced&) = delete;
+        TelemetryClientAdvanced(TelemetryClientAdvanced&&) = delete;
+        TelemetryClientAdvanced& operator=(TelemetryClientAdvanced&&) = delete;
 
         // ========================================================================
         // COMMAND RESPONSE & ACKNOWLEDGMENT SYSTEM
@@ -850,7 +883,7 @@ namespace TelemetryAPI {
          * @brief Get current streaming mode
          * @return Current streaming mode
          */
-        StreamMode getStreamMode() const;
+        [[nodiscard]] StreamMode getStreamMode() const;
 
         // ========================================================================
         // NETWORK RESILIENCE & FAILOVER
@@ -943,7 +976,7 @@ namespace TelemetryAPI {
          * @brief Get current permission level
          * @return Current permission level
          */
-        Permission getUserPermissions() const;
+        [[nodiscard]] Permission getUserPermissions() const;
 
         // ========================================================================
         // CONFIGURATION & PROFILES
@@ -960,7 +993,7 @@ namespace TelemetryAPI {
          * @brief Get current operation mode
          * @return Current operation mode
          */
-        OperationMode getOperationMode() const;
+        [[nodiscard]] OperationMode getOperationMode() const;
 
         /**
          * @brief Update configuration setting
@@ -991,7 +1024,7 @@ namespace TelemetryAPI {
          * @brief Get current data format
          * @return Current data format
          */
-        DataFormat getDataFormat() const;
+        [[nodiscard]] DataFormat getDataFormat() const;
 
         /**
          * @brief Set protocol-specific settings

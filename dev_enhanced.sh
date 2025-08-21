@@ -24,9 +24,9 @@ print_usage() {
     echo "  rebuild [Debug|Release]   - Clean and build"
     echo ""
     echo "Code Quality Commands:"
-    echo "  format                    - Format all C++ source files using clang-format"
-    echo "  lint                      - Run static analysis using clang-tidy"
-    echo "  check                     - Run both format check and lint"
+    echo "  format [file]             - Format all C++ files or specific file using clang-format"
+    echo "  lint [file]               - Run static analysis on all files or specific file using clang-tidy"
+    echo "  check [file]              - Run both format check and lint on all files or specific file"
     echo ""
     echo "Run Commands:"
     echo "  run <target> [args...]    - Run a built target"
@@ -40,7 +40,9 @@ print_usage() {
     echo "Examples:"
     echo "  $0 build"
     echo "  $0 format"
+    echo "  $0 format telemetry_client_library/src/TelemetryClient.cpp"
     echo "  $0 lint"
+    echo "  $0 lint telemetry_client_library/include/TelemetryClient.h"
     echo "  $0 run telemetry_service"
     echo "  $0 run uav_sim UAV_1"
 }
@@ -82,25 +84,12 @@ check_clang_tools() {
 }
 
 format_code() {
-    log_info "Formatting C++ source files..."
+    local target_file="$1"
 
     if ! check_clang_tools; then
         log_error "clang-format not available"
         return 1
     fi
-
-    # Find all C++ source files
-    local cpp_files=()
-    while IFS= read -r -d '' file; do
-        cpp_files+=("$file")
-    done < <(find "$PROJECT_ROOT" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
-
-    if [ ${#cpp_files[@]} -eq 0 ]; then
-        log_warning "No C++ files found to format"
-        return 0
-    fi
-
-    log_info "Found ${#cpp_files[@]} C++ files to format"
 
     # Create .clang-format file if it doesn't exist
     if [ ! -f "$PROJECT_ROOT/.clang-format" ]; then
@@ -116,50 +105,104 @@ SortIncludes: true
 EOF
     fi
 
-    # Format files
-    for file in "${cpp_files[@]}"; do
-        clang-format -i "$file"
-        echo "  Formatted: $(basename "$file")"
-    done
+    if [ -n "$target_file" ]; then
+        # Format single file
+        if [ ! -f "$target_file" ]; then
+            log_error "File not found: $target_file"
+            return 1
+        fi
 
-    log_success "Code formatting completed"
+        if [[ ! "$target_file" =~ \.(cpp|h|hpp)$ ]]; then
+            log_error "File is not a C++ source file: $target_file"
+            return 1
+        fi
+
+        log_info "Formatting file: $target_file"
+        clang-format -i "$target_file"
+        log_success "Formatted: $(basename "$target_file")"
+    else
+        # Format all files
+        log_info "Formatting all C++ source files..."
+
+        # Find all C++ source files
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$PROJECT_ROOT" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
+
+        if [ ${#cpp_files[@]} -eq 0 ]; then
+            log_warning "No C++ files found to format"
+            return 0
+        fi
+
+        log_info "Found ${#cpp_files[@]} C++ files to format"
+
+        # Format files
+        for file in "${cpp_files[@]}"; do
+            clang-format -i "$file"
+            echo "  Formatted: $(basename "$file")"
+        done
+
+        log_success "Code formatting completed"
+    fi
 }
 
 check_format() {
-    log_info "Checking code formatting..."
+    local target_file="$1"
 
     if ! check_clang_tools; then
         log_error "clang-format not available"
         return 1
     fi
 
-    local cpp_files=()
-    while IFS= read -r -d '' file; do
-        cpp_files+=("$file")
-    done < <(find "$PROJECT_ROOT" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
-
-    local unformatted_files=()
-    for file in "${cpp_files[@]}"; do
-        if ! clang-format --dry-run --Werror "$file" &> /dev/null; then
-            unformatted_files+=("$file")
+    if [ -n "$target_file" ]; then
+        # Check single file
+        if [ ! -f "$target_file" ]; then
+            log_error "File not found: $target_file"
+            return 1
         fi
-    done
 
-    if [ ${#unformatted_files[@]} -eq 0 ]; then
-        log_success "All files are properly formatted"
-        return 0
+        log_info "Checking formatting for: $target_file"
+        if clang-format --dry-run --Werror "$target_file" &> /dev/null; then
+            log_success "File is properly formatted: $(basename "$target_file")"
+            return 0
+        else
+            log_error "File needs formatting: $target_file"
+            log_info "Run '$0 format $target_file' to fix formatting"
+            return 1
+        fi
     else
-        log_error "Found ${#unformatted_files[@]} unformatted files:"
-        for file in "${unformatted_files[@]}"; do
-            echo "  - $file"
+        # Check all files
+        log_info "Checking code formatting..."
+
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$PROJECT_ROOT" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
+
+        local unformatted_files=()
+        for file in "${cpp_files[@]}"; do
+            if ! clang-format --dry-run --Werror "$file" &> /dev/null; then
+                unformatted_files+=("$file")
+            fi
         done
-        log_info "Run '$0 format' to fix formatting issues"
-        return 1
+
+        if [ ${#unformatted_files[@]} -eq 0 ]; then
+            log_success "All files are properly formatted"
+            return 0
+        else
+            log_error "Found ${#unformatted_files[@]} unformatted files:"
+            for file in "${unformatted_files[@]}"; do
+                echo "  - $file"
+            done
+            log_info "Run '$0 format' to fix formatting issues"
+            return 1
+        fi
     fi
 }
 
 lint_code() {
-    log_info "Running static analysis with clang-tidy..."
+    local target_file="$1"
 
     if ! check_clang_tools; then
         log_error "clang-tidy not available"
@@ -206,34 +249,59 @@ CheckOptions:
 EOF
     fi
 
-    # Find source files to analyze
-    local cpp_files=()
-    while IFS= read -r -d '' file; do
-        cpp_files+=("$file")
-    done < <(find "$PROJECT_ROOT" -type f -name "*.cpp" -not -path "*/build/*" -print0)
-
-    if [ ${#cpp_files[@]} -eq 0 ]; then
-        log_warning "No C++ source files found to analyze"
-        return 0
-    fi
-
-    log_info "Analyzing ${#cpp_files[@]} source files..."
-
-    local exit_code=0
-    for file in "${cpp_files[@]}"; do
-        echo "  Analyzing: $(basename "$file")"
-        if ! clang-tidy "$file" -p "$BUILD_DIR" --quiet; then
-            exit_code=1
+    if [ -n "$target_file" ]; then
+        # Lint single file
+        if [ ! -f "$target_file" ]; then
+            log_error "File not found: $target_file"
+            return 1
         fi
-    done
 
-    if [ $exit_code -eq 0 ]; then
-        log_success "Static analysis completed without issues"
+        if [[ ! "$target_file" =~ \.cpp$ ]]; then
+            log_error "File is not a C++ source file (.cpp): $target_file"
+            return 1
+        fi
+
+        log_info "Analyzing file: $target_file"
+        if clang-tidy "$target_file" -p "$BUILD_DIR" --quiet; then
+            log_success "Static analysis completed for: $(basename "$target_file")"
+            return 0
+        else
+            log_warning "Static analysis found issues in: $(basename "$target_file")"
+            return 1
+        fi
     else
-        log_warning "Static analysis found issues (see output above)"
-    fi
+        # Lint all files
+        log_info "Running static analysis with clang-tidy..."
 
-    return $exit_code
+        # Find source files to analyze
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$PROJECT_ROOT" -type f -name "*.cpp" -not -path "*/build/*" -print0)
+
+        if [ ${#cpp_files[@]} -eq 0 ]; then
+            log_warning "No C++ source files found to analyze"
+            return 0
+        fi
+
+        log_info "Analyzing ${#cpp_files[@]} source files..."
+
+        local exit_code=0
+        for file in "${cpp_files[@]}"; do
+            echo "  Analyzing: $(basename "$file")"
+            if ! clang-tidy "$file" -p "$BUILD_DIR" --quiet; then
+                exit_code=1
+            fi
+        done
+
+        if [ $exit_code -eq 0 ]; then
+            log_success "Static analysis completed without issues"
+        else
+            log_warning "Static analysis found issues (see output above)"
+        fi
+
+        return $exit_code
+    fi
 }
 
 build_project() {
@@ -310,19 +378,31 @@ case "$command" in
         build_project "$@"
         ;;
     format)
-        format_code
+        format_code "$@"
         ;;
     lint)
-        lint_code
+        lint_code "$@"
         ;;
     check)
-        log_info "Running comprehensive code quality check..."
-        echo ""
-        if check_format && lint_code; then
-            log_success "All code quality checks passed!"
+        local target_file="$1"
+        if [ -n "$target_file" ]; then
+            log_info "Running code quality check for: $target_file"
+            echo ""
+            if check_format "$target_file" && lint_code "$target_file"; then
+                log_success "Code quality check passed for: $(basename "$target_file")"
+            else
+                log_error "Code quality check failed for: $(basename "$target_file")"
+                exit 1
+            fi
         else
-            log_error "Code quality checks failed"
-            exit 1
+            log_info "Running comprehensive code quality check..."
+            echo ""
+            if check_format && lint_code; then
+                log_success "All code quality checks passed!"
+            else
+                log_error "Code quality checks failed"
+                exit 1
+            fi
         fi
         ;;
     run)

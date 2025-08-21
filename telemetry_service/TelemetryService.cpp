@@ -8,6 +8,7 @@
 
 #include "TelemetryService.h"
 
+#include <array>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -50,29 +51,30 @@ TelemetryService::TelemetryService() try : zmqContext_(1) {
 void TelemetryService::run(std::atomic<bool>& app_running) {
     try {
         // Load configuration from file (checks environment variable first)
-        std::string cfgPath = resolveConfigPath();
-        if (!config_.loadFromFile(cfgPath)) {
-            throw std::runtime_error("Could not load config file: " + cfgPath);
+        std::string cfg_path = resolveConfigPath();
+        if (!config_.loadFromFile(cfg_path)) {
+            throw std::runtime_error("Could not load config file: " + cfg_path);
         }
 
         // Set up logging system - resolve log file path relative to executable if needed
-        std::filesystem::path logPath(config_.getLogFile());
-        if (!logPath.is_absolute()) {
-            logPath = std::filesystem::path(getExecutableDir()) / logPath;
+        std::filesystem::path log_path(config_.getLogFile());
+        if (!log_path.is_absolute()) {
+            log_path = std::filesystem::path(getExecutableDir()) / log_path;
         }
         // Create log directory if it doesn't exist
-        if (logPath.has_parent_path()) {
-            std::error_code ec;
-            std::filesystem::create_directories(logPath.parent_path(), ec);
+        if (log_path.has_parent_path()) {
+            std::error_code error_code;
+            std::filesystem::create_directories(log_path.parent_path(), error_code);
         }
 
         // Initialize logging system and log startup information
-        Logger::init(logPath.string());
-        Logger::status("SERVICE", "STARTING", "Multi-UAV Telemetry Service v1.0");
+        Logger::init(log_path.string());
+        Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"), DetailMessage("Multi-UAV Telemetry Service v1.0"));
         Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
         // Create managers with proper error handling
-        bool zmqStarted = false, udpStarted = false;
+        bool zmq_started = false;
+        bool udp_started = false;
 
         try {
             // Create ZeroMQ manager with callback for incoming messages
@@ -87,20 +89,20 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
             // Start both communication managers with error handling
             zmqManager_->start();
-            zmqStarted = true;
+            zmq_started = true;
 
             udpManager_->start();
-            udpStarted = true;
+            udp_started = true;
 
         } catch (const std::exception& e) {
             Logger::error("Failed to start communication managers: " + std::string(e.what()));
 
             // Cleanup any partially started managers
-            if (udpStarted && udpManager_) {
+            if (udp_started && udpManager_) {
                 udpManager_->stop();
                 udpManager_->join();
             }
-            if (zmqStarted && zmqManager_) {
+            if (zmq_started && zmqManager_) {
                 zmqManager_->stop();
                 zmqManager_->join();
             }
@@ -108,16 +110,17 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         }
 
         // Collect port information for startup summary
-        std::vector<int> tcpPorts, udpPorts;
+        std::vector<int> tcp_ports;
+        std::vector<int> udp_ports;
         for (const auto& uav : config_.getUAVs()) {
-            tcpPorts.push_back(uav.tcp_telemetry_port);
-            tcpPorts.push_back(uav.tcp_command_port);
-            udpPorts.push_back(uav.udp_telemetry_port);
+            tcp_ports.push_back(uav.tcp_telemetry_port);
+            tcp_ports.push_back(uav.tcp_command_port);
+            udp_ports.push_back(uav.udp_telemetry_port);
         }
-        tcpPorts.push_back(config_.getUiPorts().tcp_publish_port);
-        tcpPorts.push_back(config_.getUiPorts().tcp_command_port);
+        tcp_ports.push_back(config_.getUiPorts().tcp_publish_port);
+        tcp_ports.push_back(config_.getUiPorts().tcp_command_port);
 
-        Logger::serviceStarted(config_.getUAVs().size(), tcpPorts, udpPorts);
+        Logger::serviceStarted(static_cast<int>(config_.getUAVs().size()), tcp_ports, udp_ports);
 
         // Main service loop - just sleep and wait for shutdown signal
         while (app_running) {
@@ -125,14 +128,14 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         }
 
         // Graceful shutdown sequence
-        Logger::status("SERVICE", "SHUTTING DOWN", "Signal received");
+        Logger::statusWithDetails("SERVICE", StatusMessage("SHUTTING DOWN"), DetailMessage("Signal received"));
 
         // Stop managers (this stops their internal threads)
-        Logger::status("UDP", "STOPPING", "Shutting down UDP services");
+        Logger::statusWithDetails("UDP", StatusMessage("STOPPING"), DetailMessage("Shutting down UDP services"));
         if (udpManager_) {
             udpManager_->stop();
         }
-        Logger::status("TCP", "STOPPING", "Shutting down TCP services");
+        Logger::statusWithDetails("TCP", StatusMessage("STOPPING"), DetailMessage("Shutting down TCP services"));
         if (zmqManager_) {
             zmqManager_->stop();
         }
@@ -145,7 +148,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
             zmqManager_->join();
         }
 
-        Logger::status("SERVICE", "SHUTDOWN COMPLETE", "All services stopped gracefully");
+        Logger::statusWithDetails("SERVICE", StatusMessage("SHUTDOWN COMPLETE"), DetailMessage("All services stopped gracefully"));
 
     } catch (const std::exception& e) {
         Logger::error("Service error: " + std::string(e.what()));
@@ -271,21 +274,21 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
 std::string TelemetryService::resolveConfigPath() {
     // Check environment variable first
     if (const char* env = std::getenv("SERVICE_CONFIG")) {
-        if (std::filesystem::exists(env)) return std::string(env);
+        if (std::filesystem::exists(env)) return {env};
     }
 
     // Try multiple candidate locations
     std::vector<std::filesystem::path> candidates;
     candidates.emplace_back("service_config.json");  // Current directory
 
-    std::filesystem::path exeDir = getExecutableDir();
-    candidates.push_back(exeDir / "service_config.json");                // Executable directory
-    candidates.push_back(exeDir.parent_path() / "service_config.json");  // Parent of executable
+    std::filesystem::path exe_dir = getExecutableDir();
+    candidates.push_back(exe_dir / "service_config.json");                // Executable directory
+    candidates.push_back(exe_dir.parent_path() / "service_config.json");  // Parent of executable
 
     // Return the first existing file
-    for (auto& p : candidates) {
-        std::error_code ec;
-        if (std::filesystem::exists(p, ec)) return p.string();
+    for (auto& path : candidates) {
+        std::error_code error_code;
+        if (std::filesystem::exists(path, error_code)) return path.string();
     }
 
     // Fallback to current directory
@@ -307,10 +310,10 @@ std::string TelemetryService::getExecutableDir() {
     return std::filesystem::path(path).parent_path().string();
 #else
     // Linux implementation using /proc/self/exe
-    char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    std::array<char, 4096> buffer{};
+    ssize_t len = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
     if (len == -1) return "";
-    buf[len] = '\0';
-    return std::filesystem::path(buf).parent_path().string();
+    // Use string constructor to avoid array subscript warning
+    return std::filesystem::path(std::string(buffer.data(), static_cast<size_t>(len))).parent_path().string();
 #endif
 }

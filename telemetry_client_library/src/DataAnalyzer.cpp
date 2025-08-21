@@ -32,7 +32,7 @@ namespace TelemetryAPI {
         int latency_samples = 0;
 
         // Circular buffer size limit
-        static constexpr size_t MAX_HISTORY = 1000;
+        static constexpr size_t max_history = 1000;
 
         void addPacket(const TelemetryData& data) {
             auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -46,7 +46,7 @@ namespace TelemetryAPI {
             last_update = now;
 
             // Maintain circular buffer
-            if (timestamps.size() > MAX_HISTORY) {
+            if (timestamps.size() > max_history) {
                 timestamps.pop_front();
                 packet_sizes.pop_front();
                 historical_data.pop_front();
@@ -54,7 +54,7 @@ namespace TelemetryAPI {
 
             // Calculate latency if timestamp is available
             if (data.timestamp_ms > 0) {
-                double latency = now - data.timestamp_ms;
+                double latency = static_cast<double>(now) - static_cast<double>(data.timestamp_ms);
                 if (latency >= 0 && latency < 60000) {  // Reasonable latency (< 1 minute)
                     total_latency += latency;
                     latency_samples++;
@@ -69,7 +69,7 @@ namespace TelemetryAPI {
      */
     class DataAnalyzer::Impl {
        public:
-        Impl() : validation_enabled_(false), total_bytes_in_(0), total_bytes_out_(0) {
+        Impl() {
             start_time_ = std::chrono::duration_cast<std::chrono::milliseconds>(
                               std::chrono::system_clock::now().time_since_epoch())
                               .count();
@@ -84,12 +84,12 @@ namespace TelemetryAPI {
                 key += (type == DataType::MAPPING ? "mapping" : "camera");
             }
 
-            auto it = uav_stats_.find(key);
-            if (it == uav_stats_.end()) {
+            auto stats_iter = uav_stats_.find(key);
+            if (stats_iter == uav_stats_.end()) {
                 return DataQuality{0.0, 0.0, 0, 0.0, 0};
             }
 
-            const auto& stats = it->second;
+            const auto& stats = stats_iter->second;
             DataQuality quality;
 
             // Calculate packet loss rate
@@ -119,11 +119,11 @@ namespace TelemetryAPI {
             if (age_ms < 1000) {  // < 1 second = perfect
                 quality.data_freshness_score = 1.0;
             } else if (age_ms < 5000) {  // < 5 seconds = good
-                quality.data_freshness_score = 1.0 - (age_ms - 1000) / 4000.0 * 0.3;
+                quality.data_freshness_score = 1.0 - (static_cast<double>(age_ms) - 1000) / 4000.0 * 0.3;
             } else if (age_ms < 30000) {  // < 30 seconds = acceptable
-                quality.data_freshness_score = 0.7 - (age_ms - 5000) / 25000.0 * 0.4;
+                quality.data_freshness_score = 0.7 - (static_cast<double>(age_ms) - 5000) / 25000.0 * 0.4;
             } else {  // > 30 seconds = poor
-                quality.data_freshness_score = std::max(0.0, 0.3 - (age_ms - 30000) / 60000.0 * 0.3);
+                quality.data_freshness_score = std::max(0.0, 0.3 - (static_cast<double>(age_ms) - 30000) / 60000.0 * 0.3);
             }
 
             return quality;
@@ -152,7 +152,9 @@ namespace TelemetryAPI {
 
             // Sort by timestamp
             std::sort(result.begin(), result.end(),
-                      [](const TelemetryData& a, const TelemetryData& b) { return a.timestamp_ms < b.timestamp_ms; });
+                      [](const TelemetryData& first, const TelemetryData& second) {
+                          return first.timestamp_ms < second.timestamp_ms;
+                      });
 
             return result;
         }
@@ -177,7 +179,8 @@ namespace TelemetryAPI {
             // Calculate current rates (bytes per second over last minute)
             uint64_t window_start = now - 60000;  // 1 minute window
 
-            size_t recent_bytes_in = 0, recent_bytes_out = 0;
+            size_t recent_bytes_in = 0;
+            size_t recent_bytes_out = 0;
             for (const auto& sample : bandwidth_samples_) {
                 if (sample.timestamp >= window_start) {
                     recent_bytes_in += sample.bytes_in;
@@ -185,8 +188,8 @@ namespace TelemetryAPI {
                 }
             }
 
-            stats.bytes_per_second_in = recent_bytes_in / 60.0;
-            stats.bytes_per_second_out = recent_bytes_out / 60.0;
+            stats.bytes_per_second_in = static_cast<double>(recent_bytes_in) / 60.0;
+            stats.bytes_per_second_out = static_cast<double>(recent_bytes_out) / 60.0;
 
             // Calculate peak bandwidth
             stats.peak_bandwidth_in = peak_bandwidth_in_;
@@ -262,7 +265,8 @@ namespace TelemetryAPI {
             for (uint64_t window_start = now - 60000; window_start < now; window_start += 1000) {
                 uint64_t window_end = window_start + 1000;
 
-                size_t window_bytes_in = 0, window_bytes_out = 0;
+                size_t window_bytes_in = 0;
+                size_t window_bytes_out = 0;
                 for (const auto& sample : bandwidth_samples_) {
                     if (sample.timestamp >= window_start && sample.timestamp < window_end) {
                         window_bytes_in += sample.bytes_in;
@@ -282,12 +286,12 @@ namespace TelemetryAPI {
         std::map<std::string, DataStats> uav_stats_;  // UAV_name -> stats
         std::map<std::string, int> rate_limits_;      // UAV_name -> max_msg_per_sec
 
-        bool validation_enabled_;
+        bool validation_enabled_{false};
         uint64_t start_time_;
 
         // Bandwidth tracking
-        size_t total_bytes_in_;
-        size_t total_bytes_out_;
+        size_t total_bytes_in_{0};
+        size_t total_bytes_out_{0};
         double peak_bandwidth_in_ = 0.0;
         double peak_bandwidth_out_ = 0.0;
         std::deque<BandwidthSample> bandwidth_samples_;
