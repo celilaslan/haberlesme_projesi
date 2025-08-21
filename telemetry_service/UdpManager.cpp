@@ -141,13 +141,15 @@ void UdpManager::start() {
             }
         }
 
-        // Set up UDP publishing sockets for UI communication
+        // Set up UDP multicast publishing sockets for UI communication
         cameraPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
         mappingPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
+
+        // Use multicast addresses instead of unicast to allow multiple subscribers
         cameraEndpoint_ =
-            udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_camera_port);
+            udp::endpoint(boost::asio::ip::address::from_string("239.0.0.1"), config_.getUiPorts().udp_camera_port);
         mappingEndpoint_ =
-            udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), config_.getUiPorts().udp_mapping_port);
+            udp::endpoint(boost::asio::ip::address::from_string("239.0.0.2"), config_.getUiPorts().udp_mapping_port);
         Logger::statusWithDetails("UDP", StatusMessage("UI Camera Publisher socket created"),
                        DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_camera_port)));
         Logger::statusWithDetails("UDP", StatusMessage("UI Mapping Publisher socket created"),

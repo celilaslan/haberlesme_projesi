@@ -94,7 +94,11 @@ namespace TelemetryAPI {
 
             try {
                 service_host_ = service_host.str();
-                return loadConfiguration(config_file.str());
+                if (loadConfiguration(config_file.str())) {
+                    client_state_ = ClientState::INITIALIZED;
+                    return true;
+                }
+                return false;
             } catch (const std::exception& e) {
                 last_error_ = "Initialization failed: " + std::string(e.what());
                 client_state_ = ClientState::ERROR;
@@ -577,14 +581,30 @@ namespace TelemetryAPI {
             try {
                 io_context_ = std::make_unique<boost::asio::io_context>();
 
-                // Create sockets for both camera and mapping data
-                auto camera_socket =
-                    std::make_unique<udp::socket>(*io_context_, udp::endpoint(udp::v4(), config_.udp_camera_port));
-                auto mapping_socket =
-                    std::make_unique<udp::socket>(*io_context_, udp::endpoint(udp::v4(), config_.udp_mapping_port));
+                // Create multicast receiver sockets instead of unicast binding
+                auto camera_socket = std::make_unique<udp::socket>(*io_context_);
+                auto mapping_socket = std::make_unique<udp::socket>(*io_context_);
+
+                // Open sockets and set multicast options
+                camera_socket->open(udp::v4());
+                mapping_socket->open(udp::v4());
+
+                // Allow multiple instances to bind to the same port
+                camera_socket->set_option(udp::socket::reuse_address(true));
+                mapping_socket->set_option(udp::socket::reuse_address(true));
+
+                // Bind to any address on the multicast ports
+                camera_socket->bind(udp::endpoint(udp::v4(), config_.udp_camera_port));
+                mapping_socket->bind(udp::endpoint(udp::v4(), config_.udp_mapping_port));
+
+                // Join multicast groups
+                camera_socket->set_option(boost::asio::ip::multicast::join_group(
+                    boost::asio::ip::address::from_string("239.0.0.1")));
+                mapping_socket->set_option(boost::asio::ip::multicast::join_group(
+                    boost::asio::ip::address::from_string("239.0.0.2")));
 
                 if (debug_mode_) {
-                    std::cout << "[TelemetryClient] UDP receivers bound to ports " << config_.udp_camera_port << " and "
+                    std::cout << "[TelemetryClient] UDP receivers joined multicast groups on ports " << config_.udp_camera_port << " and "
                               << config_.udp_mapping_port << '\n';
                 }
 
