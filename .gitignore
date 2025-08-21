@@ -254,3 +254,5 @@ telemetry_client_library/examples/simple_receiver
 telemetry_client_library/examples/advanced_client
 telemetry_client_library/examples/advanced_telemetry_client
 telemetry_client_library/examples/command_sender
+telemetry_client_library/examples/subscription_demo
+telemetry_client_library/examples/state_management_demo
