@@ -61,7 +61,6 @@ bool Config::loadFromFile(const std::string& path) {
     // Load UDP ports
     uiPorts.udp_camera_port = json_data["ui_ports"]["udp_camera_port"];
     uiPorts.udp_mapping_port = json_data["ui_ports"]["udp_mapping_port"];
-    uiPorts.udp_command_port = json_data["ui_ports"]["udp_command_port"];
 
     // Load log file path if specified
     if (json_data.contains("log_file")) {

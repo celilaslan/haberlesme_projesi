@@ -41,7 +41,6 @@ struct UIConfig {
     int tcp_publish_port{0};  ///< Port for publishing telemetry data to UI components (TCP)
     int udp_camera_port{0};   ///< Port for publishing camera telemetry data via UDP
     int udp_mapping_port{0};  ///< Port for publishing mapping telemetry data via UDP
-    int udp_command_port{0};  ///< Port for receiving commands from UI components (UDP)
 };
 
 /**
