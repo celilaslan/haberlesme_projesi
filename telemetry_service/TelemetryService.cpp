@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+
+#include "../telemetry_packets.h"
 #include <vector>
 
 #include "Logger.h"
@@ -198,13 +200,19 @@ void TelemetryService::onZmqMessage(const std::string& sourceDescription, const 
  */
 void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description,
                                                   const std::string& protocol) {
-    Logger::info("Received from " + source_description + ": " + data);
-
     try {
-        std::string topic = "unknown";
-        std::string uav_name = "unknown_uav";
+        // Ensure we have at least enough data for a packet header
+        if (data.size() < sizeof(PacketHeader)) {
+            Logger::warn("Received packet too small for header from " + source_description + 
+                        " (size: " + std::to_string(data.size()) + " bytes)");
+            return;
+        }
 
+        // Parse the packet header
+        const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
+        
         // Extract UAV name by removing protocol prefix ("TCP:", "UDP:")
+        std::string uav_name = "unknown_uav";
         size_t colon_pos = source_description.find(':');
         if (colon_pos != std::string::npos) {
             uav_name = source_description.substr(colon_pos + 1);
@@ -212,45 +220,43 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
             uav_name = source_description;
         }
 
-        // Use the data as-is (format: "UAV_1  1001")
-        const std::string& actual_data = data;
-
-        // Extract the numeric code from the end of the message
-        size_t last_space = actual_data.find_last_of(" \t");
-        if (last_space != std::string::npos) {
-            std::string numeric_part = actual_data.substr(last_space + 1);
-
-            try {
-                int code = std::stoi(numeric_part);
-
-                // Determine topic based on code ranges
-                // 1000-1999, 3000-3999, 5000-5999: mapping data
-                // 2000-2999, 4000-4999, 6000-6999: camera data
-                if ((code >= 1000 && code < 2000) || (code >= 3000 && code < 4000) || (code >= 5000 && code < 6000)) {
-                    topic = "mapping";
-                } else if ((code >= 2000 && code < 3000) || (code >= 4000 && code < 5000) ||
-                           (code >= 6000 && code < 7000)) {
-                    topic = "camera";
-                }
-            } catch (const std::invalid_argument&) {
-                Logger::warn("Invalid numeric code in telemetry data: " + numeric_part);
-            } catch (const std::out_of_range&) {
-                Logger::warn("Numeric code out of range in telemetry data: " + numeric_part);
-            }
-        } else {
-            Logger::warn("Could not find numeric code in telemetry data: " + actual_data);
+        // Determine target and type strings for topic creation
+        std::string target_name;
+        std::string type_name;
+        
+        switch (header->targetID) {
+            case TargetIDs::CAMERA:  target_name = "camera"; break;
+            case TargetIDs::MAPPING: target_name = "mapping"; break;
+            case TargetIDs::GENERAL: target_name = "general"; break;
+            default: target_name = "unknown"; break;
+        }
+        
+        switch (header->packetType) {
+            case PacketTypes::LOCATION: type_name = "location"; break;
+            case PacketTypes::STATUS:   type_name = "status"; break;
+            case PacketTypes::IMU:      type_name = "imu"; break;
+            case PacketTypes::BATTERY:  type_name = "battery"; break;
+            default: type_name = "unknown"; break;
         }
 
-        // Create the full topic name efficiently
-        std::string full_topic;
-        full_topic.reserve(topic.size() + uav_name.size() + 1);
-        full_topic = topic + "_" + uav_name;
+        // Log packet information
+        Logger::info("Received " + type_name + " packet for " + target_name + 
+                    " from " + uav_name + " (" + std::to_string(data.size()) + " bytes)");
+
+        // Create topic names for flexible routing (both target-based and type-based)
+        std::string target_topic = target_name + "_" + uav_name;
+        std::string type_topic = type_name + "_" + uav_name;
 
         // Route to UIs using the same protocol as the source, with validation
         if (protocol == "TCP" && zmqManager_) {
-            zmqManager_->publishTelemetry(full_topic, actual_data);
+            // Publish to both target-based and type-based topics for maximum flexibility
+            zmqManager_->publishTelemetry(target_topic, data);
+            if (target_topic != type_topic) {  // Avoid duplicate sends
+                zmqManager_->publishTelemetry(type_topic, data);
+            }
         } else if (protocol == "UDP" && udpManager_) {
-            udpManager_->publishTelemetry(full_topic, actual_data);
+            // For UDP, use target-based routing (maintains compatibility)
+            udpManager_->publishTelemetry(target_topic, data);
         } else {
             Logger::error("Cannot publish telemetry - manager not available for protocol: " + protocol);
         }
