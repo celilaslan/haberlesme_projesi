@@ -121,6 +121,8 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         }
         tcp_ports.push_back(config_.getUiPorts().tcp_publish_port);
         tcp_ports.push_back(config_.getUiPorts().tcp_command_port);
+        udp_ports.push_back(config_.getUiPorts().udp_camera_port);
+        udp_ports.push_back(config_.getUiPorts().udp_mapping_port);
 
         Logger::serviceStarted(static_cast<int>(config_.getUAVs().size()), tcp_ports, udp_ports);
 
