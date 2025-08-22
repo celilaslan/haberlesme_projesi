@@ -22,11 +22,11 @@
  * including ports for different communication protocols.
  */
 struct UAVConfig {
-    std::string name;                ///< Unique identifier for the UAV (e.g., "UAV_1")
-    std::string ip;                  ///< IP address or hostname of the UAV
-    int tcp_telemetry_port{0};       ///< TCP/ZeroMQ port for receiving telemetry data
-    int tcp_command_port{0};         ///< TCP/ZeroMQ port for sending commands to UAV
-    int udp_telemetry_port{0};       ///< UDP port for receiving telemetry data
+    std::string name;           ///< Unique identifier for the UAV (e.g., "UAV_1")
+    std::string ip;             ///< IP address or hostname of the UAV
+    int tcp_telemetry_port{0};  ///< TCP/ZeroMQ port for receiving telemetry data
+    int tcp_command_port{0};    ///< TCP/ZeroMQ port for sending commands to UAV
+    int udp_telemetry_port{0};  ///< UDP port for receiving telemetry data
 };
 
 /**

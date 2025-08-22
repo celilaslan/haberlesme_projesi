@@ -13,11 +13,10 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-
-#include "TelemetryPackets.h"
 #include <vector>
 
 #include "Logger.h"
+#include "TelemetryPackets.h"
 
 // Platform-specific includes for executable path detection
 #if defined(_WIN32)
@@ -71,7 +70,8 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
         // Initialize logging system and log startup information
         Logger::init(log_path.string());
-        Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"), DetailMessage("Multi-UAV Telemetry Service v1.0"));
+        Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"),
+                                  DetailMessage("Multi-UAV Telemetry Service v1.0"));
         Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
         // Create managers with proper error handling
@@ -150,7 +150,8 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
             zmqManager_->join();
         }
 
-        Logger::statusWithDetails("SERVICE", StatusMessage("SHUTDOWN COMPLETE"), DetailMessage("All services stopped gracefully"));
+        Logger::statusWithDetails("SERVICE", StatusMessage("SHUTDOWN COMPLETE"),
+                                  DetailMessage("All services stopped gracefully"));
 
     } catch (const std::exception& e) {
         Logger::error("Service error: " + std::string(e.what()));
@@ -204,7 +205,7 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         // Ensure we have at least enough data for a packet header
         if (data.size() < sizeof(PacketHeader)) {
             Logger::warn("Received packet too small for header from " + source_description +
-                        " (size: " + std::to_string(data.size()) + " bytes)");
+                         " (size: " + std::to_string(data.size()) + " bytes)");
             return;
         }
 
@@ -225,23 +226,41 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         std::string type_name;
 
         switch (header->targetID) {
-            case TargetIDs::CAMERA:  target_name = "camera"; break;
-            case TargetIDs::MAPPING: target_name = "mapping"; break;
-            case TargetIDs::GENERAL: target_name = "general"; break;
-            default: target_name = "unknown"; break;
+            case TargetIDs::CAMERA:
+                target_name = "camera";
+                break;
+            case TargetIDs::MAPPING:
+                target_name = "mapping";
+                break;
+            case TargetIDs::GENERAL:
+                target_name = "general";
+                break;
+            default:
+                target_name = "unknown";
+                break;
         }
 
         switch (header->packetType) {
-            case PacketTypes::LOCATION: type_name = "location"; break;
-            case PacketTypes::STATUS:   type_name = "status"; break;
-            case PacketTypes::IMU:      type_name = "imu"; break;
-            case PacketTypes::BATTERY:  type_name = "battery"; break;
-            default: type_name = "unknown"; break;
+            case PacketTypes::LOCATION:
+                type_name = "location";
+                break;
+            case PacketTypes::STATUS:
+                type_name = "status";
+                break;
+            case PacketTypes::IMU:
+                type_name = "imu";
+                break;
+            case PacketTypes::BATTERY:
+                type_name = "battery";
+                break;
+            default:
+                type_name = "unknown";
+                break;
         }
 
         // Log packet information
-        Logger::info("Received " + type_name + " packet for " + target_name +
-                    " from " + uav_name + " (" + std::to_string(data.size()) + " bytes)");
+        Logger::info("Received " + type_name + " packet for " + target_name + " from " + uav_name + " (" +
+                     std::to_string(data.size()) + " bytes)");
 
         // Create topic names for flexible routing (both target-based and type-based)
         std::string target_topic = target_name + "_" + uav_name;
@@ -262,7 +281,8 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         }
 
     } catch (const std::exception& e) {
-        Logger::error("Error processing telemetry packet (" + std::to_string(data.size()) + " bytes): " + std::string(e.what()));
+        Logger::error("Error processing telemetry packet (" + std::to_string(data.size()) +
+                      " bytes): " + std::string(e.what()));
     }
 }
 

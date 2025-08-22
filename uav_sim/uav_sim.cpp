@@ -30,43 +30,34 @@
 #pragma pack(push, 1)
 
 // Target IDs - must match what service expects
-enum TargetIDs : uint8_t {
-    CAMERA = 1,
-    MAPPING = 2,
-    GENERAL = 3
-};
+enum TargetIDs : uint8_t { CAMERA = 1, MAPPING = 2, GENERAL = 3 };
 
 // Packet Types - must match what service expects
-enum PacketTypes : uint8_t {
-    LOCATION_PACKET = 4,
-    STATUS_PACKET = 5,
-    IMU_PACKET = 6,
-    BATTERY_PACKET = 7
-};
+enum PacketTypes : uint8_t { LOCATION_PACKET = 4, STATUS_PACKET = 5, IMU_PACKET = 6, BATTERY_PACKET = 7 };
 
 // Packet header structure (must match service)
 struct UAVPacketHeader {
-    uint8_t  targetID;      ///< Primary target (1: Camera, 2: Mapping, 3: General)
-    uint8_t  packetType;    ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
-    uint16_t payloadLength; ///< Length of payload in bytes
-    uint64_t timestamp;     ///< UTC timestamp in milliseconds since epoch
+    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping, 3: General)
+    uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
+    uint16_t payloadLength;  ///< Length of payload in bytes
+    uint64_t timestamp;      ///< UTC timestamp in milliseconds since epoch
 };
 
 // Simple payload structures
 struct UAVLocationPayload {
-    double latitude;    ///< Latitude in decimal degrees
-    double longitude;   ///< Longitude in decimal degrees
-    float  altitude;    ///< Altitude in meters above sea level
-    float  heading;     ///< Heading in degrees (0-359)
-    float  speed;       ///< Ground speed in m/s
+    double latitude;   ///< Latitude in decimal degrees
+    double longitude;  ///< Longitude in decimal degrees
+    float altitude;    ///< Altitude in meters above sea level
+    float heading;     ///< Heading in degrees (0-359)
+    float speed;       ///< Ground speed in m/s
 };
 
 struct UAVStatusPayload {
-    uint8_t systemHealth;   ///< System health (0: Critical, 1: Warning, 2: Good, 3: Excellent)
-    uint8_t missionState;   ///< Mission state (0: Idle, 1: Takeoff, 2: Mission, 3: Landing, 4: Emergency)
-    uint16_t flightTime;    ///< Flight time in seconds
-    float cpuUsage;         ///< CPU usage percentage (0.0-100.0)
-    float memoryUsage;      ///< Memory usage percentage (0.0-100.0)
+    uint8_t systemHealth;  ///< System health (0: Critical, 1: Warning, 2: Good, 3: Excellent)
+    uint8_t missionState;  ///< Mission state (0: Idle, 1: Takeoff, 2: Mission, 3: Landing, 4: Emergency)
+    uint16_t flightTime;   ///< Flight time in seconds
+    float cpuUsage;        ///< CPU usage percentage (0.0-100.0)
+    float memoryUsage;     ///< Memory usage percentage (0.0-100.0)
 };
 
 // Complete packet structures
@@ -83,13 +74,15 @@ struct UAVStatusPacket {
 #pragma pack(pop)
 
 // Helper functions to create packets
-UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon, float alt, float heading, float speed) {
+UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon, float alt, float heading,
+                                       float speed) {
     UAVLocationPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = LOCATION_PACKET;
     packet.header.payloadLength = sizeof(UAVLocationPayload);
-    packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    packet.header.timestamp =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
 
     packet.payload.latitude = lat;
     packet.payload.longitude = lon;
@@ -100,13 +93,15 @@ UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
     return packet;
 }
 
-UAVStatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission, uint16_t flightTime, float cpu, float memory) {
+UAVStatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission, uint16_t flightTime, float cpu,
+                                   float memory) {
     UAVStatusPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = STATUS_PACKET;
     packet.header.payloadLength = sizeof(UAVStatusPayload);
-    packet.header.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    packet.header.timestamp =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
 
     packet.payload.systemHealth = health;
     packet.payload.missionState = mission;
@@ -128,7 +123,7 @@ using boost::asio::ip::udp;
 
 // Global flag to control all threads
 // NOLINT: Global variables needed for signal handler communication
-std::atomic<bool> g_running(true);  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+std::atomic<bool> g_running(true);      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 std::atomic<int> g_signal_received(0);  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // Configuration constants
@@ -147,11 +142,11 @@ namespace {
  * connect to the telemetry service using either TCP or UDP protocols.
  */
 struct UAVConfig {
-    std::string name;               ///< UAV identifier (e.g., "UAV_1")
-    std::string ip;                 ///< IP address of the telemetry service
-    int tcp_telemetry_port{0};      ///< TCP port for sending telemetry data
-    int tcp_command_port{0};        ///< TCP port for receiving commands
-    int udp_telemetry_port{0};      ///< UDP port for sending telemetry data (service-side port)
+    std::string name;           ///< UAV identifier (e.g., "UAV_1")
+    std::string ip;             ///< IP address of the telemetry service
+    int tcp_telemetry_port{0};  ///< TCP port for sending telemetry data
+    int tcp_command_port{0};    ///< TCP port for receiving commands
+    int udp_telemetry_port{0};  ///< UDP port for sending telemetry data (service-side port)
 };
 
 /**
@@ -168,7 +163,7 @@ std::string getTimestamp() {
     const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
 
     std::ostringstream oss;
-    struct tm time_info{};
+    struct tm time_info {};
 
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
@@ -551,14 +546,14 @@ int main(int argc, char* argv[]) {
                 // Send telemetry data for configured iterations
                 for (int i = 0; i < default_telemetry_iterations && g_running; ++i) {
                     // Create and send raw location data
-                    UAVLocationPacket locationPacket = createLocationPacket(
-                        TargetIDs::MAPPING,
-                        base_latitude + (rand() % 2000 - 1000) / 100000.0,  // ±10m variation
-                        base_longitude + (rand() % 2000 - 1000) / 100000.0, // ±7.8m variation
-                        base_altitude + (rand() % 20 - 10),                  // ±10m altitude variation
-                        rand() % 360,                                        // Random heading
-                        10.0f + (rand() % 50) / 10.0f                       // 10-15 m/s speed
-                    );
+                    UAVLocationPacket locationPacket =
+                        createLocationPacket(TargetIDs::MAPPING,
+                                             base_latitude + (rand() % 2000 - 1000) / 100000.0,   // ±10m variation
+                                             base_longitude + (rand() % 2000 - 1000) / 100000.0,  // ±7.8m variation
+                                             base_altitude + (rand() % 20 - 10),  // ±10m altitude variation
+                                             rand() % 360,                        // Random heading
+                                             10.0f + (rand() % 50) / 10.0f        // 10-15 m/s speed
+                        );
 
                     socket.send_to(boost::asio::buffer(&locationPacket, sizeof(UAVLocationPacket)), remote_endpoint);
                     std::cout << "[" << getTimestamp() << "] [" << config.name
@@ -570,13 +565,12 @@ int main(int argc, char* argv[]) {
                     if (!g_running) break;
 
                     // Create and send raw status data
-                    UAVStatusPacket statusPacket = createStatusPacket(
-                        TargetIDs::CAMERA,
-                        2 + (rand() % 2),           // Health: Good to Excellent
-                        2,                          // Mission state: In mission
-                        i * 2,                      // Flight time increases
-                        20.0f + (rand() % 30),      // CPU usage 20-50%
-                        30.0f + (rand() % 40)       // Memory usage 30-70%
+                    UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
+                                                                      2 + (rand() % 2),  // Health: Good to Excellent
+                                                                      2,                 // Mission state: In mission
+                                                                      i * 2,             // Flight time increases
+                                                                      20.0f + (rand() % 30),  // CPU usage 20-50%
+                                                                      30.0f + (rand() % 40)   // Memory usage 30-70%
                     );
 
                     socket.send_to(boost::asio::buffer(&statusPacket, sizeof(UAVStatusPacket)), remote_endpoint);
@@ -605,17 +599,18 @@ int main(int argc, char* argv[]) {
                     if (!g_running) break;
 
                     // Create and send raw location data
-                    UAVLocationPacket locationPacket = createLocationPacket(
-                        TargetIDs::MAPPING,
-                        base_latitude + (rand() % 2000 - 1000) / 100000.0,  // ±10m variation
-                        base_longitude + (rand() % 2000 - 1000) / 100000.0, // ±7.8m variation
-                        base_altitude + (rand() % 20 - 10),                  // ±10m altitude variation
-                        rand() % 360,                                        // Random heading
-                        10.0f + (rand() % 50) / 10.0f                       // 10-15 m/s speed
-                    );
+                    UAVLocationPacket locationPacket =
+                        createLocationPacket(TargetIDs::MAPPING,
+                                             base_latitude + (rand() % 2000 - 1000) / 100000.0,   // ±10m variation
+                                             base_longitude + (rand() % 2000 - 1000) / 100000.0,  // ±7.8m variation
+                                             base_altitude + (rand() % 20 - 10),  // ±10m altitude variation
+                                             rand() % 360,                        // Random heading
+                                             10.0f + (rand() % 50) / 10.0f        // 10-15 m/s speed
+                        );
 
                     try {
-                        push_to_service.send(zmq::buffer(&locationPacket, sizeof(UAVLocationPacket)), zmq::send_flags::dontwait);
+                        push_to_service.send(zmq::buffer(&locationPacket, sizeof(UAVLocationPacket)),
+                                             zmq::send_flags::dontwait);
                         std::cout << "[" << getTimestamp() << "] [" << config.name
                                   << "] Sent Location Data (TCP): Lat=" << std::fixed << std::setprecision(6)
                                   << locationPacket.payload.latitude << ", Lon=" << locationPacket.payload.longitude
@@ -631,17 +626,17 @@ int main(int argc, char* argv[]) {
                     if (!g_running) break;
 
                     // Create and send raw status data
-                    UAVStatusPacket statusPacket = createStatusPacket(
-                        TargetIDs::CAMERA,
-                        2 + (rand() % 2),           // Health: Good to Excellent
-                        2,                          // Mission state: In mission
-                        i * 2,                      // Flight time increases
-                        20.0f + (rand() % 30),      // CPU usage 20-50%
-                        30.0f + (rand() % 40)       // Memory usage 30-70%
+                    UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
+                                                                      2 + (rand() % 2),  // Health: Good to Excellent
+                                                                      2,                 // Mission state: In mission
+                                                                      i * 2,             // Flight time increases
+                                                                      20.0f + (rand() % 30),  // CPU usage 20-50%
+                                                                      30.0f + (rand() % 40)   // Memory usage 30-70%
                     );
 
                     try {
-                        push_to_service.send(zmq::buffer(&statusPacket, sizeof(UAVStatusPacket)), zmq::send_flags::dontwait);
+                        push_to_service.send(zmq::buffer(&statusPacket, sizeof(UAVStatusPacket)),
+                                             zmq::send_flags::dontwait);
                         std::cout << "[" << getTimestamp() << "] [" << config.name
                                   << "] Sent Status Data (TCP): Health=" << (int)statusPacket.payload.systemHealth
                                   << ", CPU=" << statusPacket.payload.cpuUsage << "%" << '\n';
@@ -686,18 +681,19 @@ int main(int argc, char* argv[]) {
                     if (!g_running) break;
 
                     // Create raw location data
-                    UAVLocationPacket locationPacket = createLocationPacket(
-                        TargetIDs::MAPPING,
-                        base_latitude + (rand() % 2000 - 1000) / 100000.0,  // ±10m variation
-                        base_longitude + (rand() % 2000 - 1000) / 100000.0, // ±7.8m variation
-                        base_altitude + (rand() % 20 - 10),                  // ±10m altitude variation
-                        rand() % 360,                                        // Random heading
-                        10.0f + (rand() % 50) / 10.0f                       // 10-15 m/s speed
-                    );
+                    UAVLocationPacket locationPacket =
+                        createLocationPacket(TargetIDs::MAPPING,
+                                             base_latitude + (rand() % 2000 - 1000) / 100000.0,   // ±10m variation
+                                             base_longitude + (rand() % 2000 - 1000) / 100000.0,  // ±7.8m variation
+                                             base_altitude + (rand() % 20 - 10),  // ±10m altitude variation
+                                             rand() % 360,                        // Random heading
+                                             10.0f + (rand() % 50) / 10.0f        // 10-15 m/s speed
+                        );
 
                     // UDP send (this should be fast)
                     try {
-                        udp_socket.send_to(boost::asio::buffer(&locationPacket, sizeof(UAVLocationPacket)), remote_endpoint);
+                        udp_socket.send_to(boost::asio::buffer(&locationPacket, sizeof(UAVLocationPacket)),
+                                           remote_endpoint);
                     } catch (const std::exception& e) {
                         std::cerr << "[" << getTimestamp() << "] [" << config.name << "] UDP send error: " << e.what()
                                   << '\n';
@@ -705,7 +701,8 @@ int main(int argc, char* argv[]) {
 
                     // TCP send (non-blocking)
                     try {
-                        push_to_service.send(zmq::buffer(&locationPacket, sizeof(UAVLocationPacket)), zmq::send_flags::dontwait);
+                        push_to_service.send(zmq::buffer(&locationPacket, sizeof(UAVLocationPacket)),
+                                             zmq::send_flags::dontwait);
                     } catch (const zmq::error_t& e) {
                         if (e.num() != EAGAIN) {
                             std::cerr << "[" << getTimestamp() << "] [" << config.name
@@ -722,18 +719,18 @@ int main(int argc, char* argv[]) {
                     if (!g_running) break;
 
                     // Create raw status data
-                    UAVStatusPacket statusPacket = createStatusPacket(
-                        TargetIDs::CAMERA,
-                        2 + (rand() % 2),           // Health: Good to Excellent
-                        2,                          // Mission state: In mission
-                        i * 2,                      // Flight time increases
-                        20.0f + (rand() % 30),      // CPU usage 20-50%
-                        30.0f + (rand() % 40)       // Memory usage 30-70%
+                    UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
+                                                                      2 + (rand() % 2),  // Health: Good to Excellent
+                                                                      2,                 // Mission state: In mission
+                                                                      i * 2,             // Flight time increases
+                                                                      20.0f + (rand() % 30),  // CPU usage 20-50%
+                                                                      30.0f + (rand() % 40)   // Memory usage 30-70%
                     );
 
                     // UDP send
                     try {
-                        udp_socket.send_to(boost::asio::buffer(&statusPacket, sizeof(UAVStatusPacket)), remote_endpoint);
+                        udp_socket.send_to(boost::asio::buffer(&statusPacket, sizeof(UAVStatusPacket)),
+                                           remote_endpoint);
                     } catch (const std::exception& e) {
                         std::cerr << "[" << getTimestamp() << "] [" << config.name << "] UDP send error: " << e.what()
                                   << '\n';
@@ -741,7 +738,8 @@ int main(int argc, char* argv[]) {
 
                     // TCP send (non-blocking)
                     try {
-                        push_to_service.send(zmq::buffer(&statusPacket, sizeof(UAVStatusPacket)), zmq::send_flags::dontwait);
+                        push_to_service.send(zmq::buffer(&statusPacket, sizeof(UAVStatusPacket)),
+                                             zmq::send_flags::dontwait);
                     } catch (const zmq::error_t& e) {
                         if (e.num() != EAGAIN) {
                             std::cerr << "[" << getTimestamp() << "] [" << config.name

@@ -34,7 +34,7 @@ namespace TelemetryAPI {
         struct TcpPortTag {};
         struct TimeoutMsTag {};
 
-        template<typename Tag>
+        template <typename Tag>
         struct TypedString {
             std::string value;
 
@@ -47,7 +47,7 @@ namespace TelemetryAPI {
             operator const std::string&() const { return value; }
         };
 
-        template<typename Tag>
+        template <typename Tag>
         struct TypedInt {
             int value;
 
@@ -63,7 +63,7 @@ namespace TelemetryAPI {
         using ConfigFile = TypedString<ConfigFileTag>;
         using TcpPort = TypedInt<TcpPortTag>;
         using TimeoutMs = TypedInt<TimeoutMsTag>;
-    }
+    }  // namespace detail
 
     /**
      * @class TelemetryClient::Impl
@@ -598,14 +598,14 @@ namespace TelemetryAPI {
                 mapping_socket->bind(udp::endpoint(udp::v4(), config_.udp_mapping_port));
 
                 // Join multicast groups
-                camera_socket->set_option(boost::asio::ip::multicast::join_group(
-                    boost::asio::ip::address::from_string("239.0.0.1")));
-                mapping_socket->set_option(boost::asio::ip::multicast::join_group(
-                    boost::asio::ip::address::from_string("239.0.0.2")));
+                camera_socket->set_option(
+                    boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("239.0.0.1")));
+                mapping_socket->set_option(
+                    boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string("239.0.0.2")));
 
                 if (debug_mode_) {
-                    std::cout << "[TelemetryClient] UDP receivers joined multicast groups on ports " << config_.udp_camera_port << " and "
-                              << config_.udp_mapping_port << '\n';
+                    std::cout << "[TelemetryClient] UDP receivers joined multicast groups on ports "
+                              << config_.udp_camera_port << " and " << config_.udp_mapping_port << '\n';
                 }
 
                 // Buffers for async operations
@@ -617,33 +617,35 @@ namespace TelemetryAPI {
                 // Lambda for camera data reception
                 std::function<void()> start_camera_receive = [this, &camera_socket, camera_buffer, camera_endpoint,
                                                               &start_camera_receive]() {
-                    camera_socket->async_receive_from(boost::asio::buffer(*camera_buffer), *camera_endpoint,
-                                                      [this, camera_buffer, &start_camera_receive](
-                                                          const boost::system::error_code& error_code, std::size_t length) {
-                                                          if (!error_code && length > 0 && running_) {
-                                                              std::string message(camera_buffer->data(), length);
-                                                              parseUdpMessage(message, Protocol::UDP_ONLY);
-                                                          }
-                                                          if (running_) {
-                                                              start_camera_receive();  // Continue receiving
-                                                          }
-                                                      });
+                    camera_socket->async_receive_from(
+                        boost::asio::buffer(*camera_buffer), *camera_endpoint,
+                        [this, camera_buffer, &start_camera_receive](const boost::system::error_code& error_code,
+                                                                     std::size_t length) {
+                            if (!error_code && length > 0 && running_) {
+                                std::string message(camera_buffer->data(), length);
+                                parseUdpMessage(message, Protocol::UDP_ONLY);
+                            }
+                            if (running_) {
+                                start_camera_receive();  // Continue receiving
+                            }
+                        });
                 };
 
                 // Lambda for mapping data reception
                 std::function<void()> start_mapping_receive = [this, &mapping_socket, mapping_buffer, mapping_endpoint,
                                                                &start_mapping_receive]() {
-                    mapping_socket->async_receive_from(boost::asio::buffer(*mapping_buffer), *mapping_endpoint,
-                                                       [this, mapping_buffer, &start_mapping_receive](
-                                                           const boost::system::error_code& error_code, std::size_t length) {
-                                                           if (!error_code && length > 0 && running_) {
-                                                               std::string message(mapping_buffer->data(), length);
-                                                               parseUdpMessage(message, Protocol::UDP_ONLY);
-                                                           }
-                                                           if (running_) {
-                                                               start_mapping_receive();  // Continue receiving
-                                                           }
-                                                       });
+                    mapping_socket->async_receive_from(
+                        boost::asio::buffer(*mapping_buffer), *mapping_endpoint,
+                        [this, mapping_buffer, &start_mapping_receive](const boost::system::error_code& error_code,
+                                                                       std::size_t length) {
+                            if (!error_code && length > 0 && running_) {
+                                std::string message(mapping_buffer->data(), length);
+                                parseUdpMessage(message, Protocol::UDP_ONLY);
+                            }
+                            if (running_) {
+                                start_mapping_receive();  // Continue receiving
+                            }
+                        });
                 };
 
                 // Start async operations
@@ -748,7 +750,7 @@ namespace TelemetryAPI {
 
             // Check data type filters
             return std::any_of(data_type_filters_.begin(), data_type_filters_.end(),
-                              [&topic](const std::string& prefix) { return topic.find(prefix) == 0; });
+                               [&topic](const std::string& prefix) { return topic.find(prefix) == 0; });
         }
     };
 

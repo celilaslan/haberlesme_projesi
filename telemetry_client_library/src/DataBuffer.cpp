@@ -25,9 +25,7 @@ namespace TelemetryAPI {
      */
     class DataBuffer::Impl {
        public:
-        Impl()
-            : replaying_(false),
-              max_buffer_size_(static_cast<size_t>(100) * 1024 * 1024) {}  // 100MB default
+        Impl() : replaying_(false), max_buffer_size_(static_cast<size_t>(100) * 1024 * 1024) {}  // 100MB default
 
         // Disable copy and move operations for complex state management
         Impl(const Impl&) = delete;

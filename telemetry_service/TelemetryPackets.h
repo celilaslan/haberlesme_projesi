@@ -10,8 +10,8 @@
 #ifndef TELEMETRY_PACKETS_H
 #define TELEMETRY_PACKETS_H
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 
 // Ensure struct packing without padding for network compatibility
@@ -24,10 +24,10 @@
  * without needing to understand the specific payload content.
  */
 struct PacketHeader {
-    uint8_t  targetID;      ///< Primary target (1: Camera, 2: Mapping, 3: General)
-    uint8_t  packetType;    ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
-    uint16_t payloadLength; ///< Length of payload in bytes
-    uint64_t timestamp;     ///< UTC timestamp in milliseconds since epoch
+    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping, 3: General)
+    uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
+    uint16_t payloadLength;  ///< Length of payload in bytes
+    uint64_t timestamp;      ///< UTC timestamp in milliseconds since epoch
 };
 
 /**
@@ -36,11 +36,11 @@ struct PacketHeader {
  * Contains GPS coordinates and altitude information
  */
 struct LocationPayload {
-    double latitude;    ///< Latitude in decimal degrees
-    double longitude;   ///< Longitude in decimal degrees
-    float  altitude;    ///< Altitude in meters above sea level
-    float  heading;     ///< Heading in degrees (0-359)
-    float  speed;       ///< Ground speed in m/s
+    double latitude;   ///< Latitude in decimal degrees
+    double longitude;  ///< Longitude in decimal degrees
+    float altitude;    ///< Altitude in meters above sea level
+    float heading;     ///< Heading in degrees (0-359)
+    float speed;       ///< Ground speed in m/s
 };
 
 /**
@@ -49,11 +49,11 @@ struct LocationPayload {
  * Contains general system health and operational status
  */
 struct StatusPayload {
-    uint8_t systemHealth;   ///< System health (0: Critical, 1: Warning, 2: Good, 3: Excellent)
-    uint8_t missionState;   ///< Mission state (0: Idle, 1: Takeoff, 2: Mission, 3: Landing, 4: Emergency)
-    uint16_t flightTime;    ///< Flight time in seconds
-    float cpuUsage;         ///< CPU usage percentage (0.0-100.0)
-    float memoryUsage;      ///< Memory usage percentage (0.0-100.0)
+    uint8_t systemHealth;  ///< System health (0: Critical, 1: Warning, 2: Good, 3: Excellent)
+    uint8_t missionState;  ///< Mission state (0: Idle, 1: Takeoff, 2: Mission, 3: Landing, 4: Emergency)
+    uint16_t flightTime;   ///< Flight time in seconds
+    float cpuUsage;        ///< CPU usage percentage (0.0-100.0)
+    float memoryUsage;     ///< Memory usage percentage (0.0-100.0)
 };
 
 /**
@@ -62,10 +62,10 @@ struct StatusPayload {
  * Contains accelerometer, gyroscope, and magnetometer readings
  */
 struct IMUPayload {
-    float accel_x, accel_y, accel_z;    ///< Acceleration in m/s² (X, Y, Z axes)
-    float gyro_x, gyro_y, gyro_z;       ///< Angular velocity in rad/s (X, Y, Z axes)
-    float mag_x, mag_y, mag_z;          ///< Magnetic field in µT (X, Y, Z axes)
-    float temperature;                   ///< IMU temperature in Celsius
+    float accel_x, accel_y, accel_z;  ///< Acceleration in m/s² (X, Y, Z axes)
+    float gyro_x, gyro_y, gyro_z;     ///< Angular velocity in rad/s (X, Y, Z axes)
+    float mag_x, mag_y, mag_z;        ///< Magnetic field in µT (X, Y, Z axes)
+    float temperature;                ///< IMU temperature in Celsius
 };
 
 /**
@@ -74,12 +74,12 @@ struct IMUPayload {
  * Contains battery health and power information
  */
 struct BatteryPayload {
-    float voltage;          ///< Battery voltage in volts
-    float current;          ///< Current draw in amperes
-    float remaining;        ///< Remaining capacity percentage (0.0-100.0)
-    uint16_t cycleCount;    ///< Number of charge cycles
-    uint8_t cellCount;      ///< Number of battery cells
-    float temperature;      ///< Battery temperature in Celsius
+    float voltage;        ///< Battery voltage in volts
+    float current;        ///< Current draw in amperes
+    float remaining;      ///< Remaining capacity percentage (0.0-100.0)
+    uint16_t cycleCount;  ///< Number of charge cycles
+    uint8_t cellCount;    ///< Number of battery cells
+    float temperature;    ///< Battery temperature in Celsius
 };
 
 // Complete packet types combining header with specific payloads
@@ -111,14 +111,14 @@ namespace PacketTypes {
     constexpr uint8_t STATUS = 5;
     constexpr uint8_t IMU = 6;
     constexpr uint8_t BATTERY = 7;
-}
+}  // namespace PacketTypes
 
 // Target ID constants
 namespace TargetIDs {
     constexpr uint8_t CAMERA = 1;
     constexpr uint8_t MAPPING = 2;
     constexpr uint8_t GENERAL = 3;
-}
+}  // namespace TargetIDs
 
 /**
  * @brief Utility function to get current timestamp in milliseconds
@@ -140,8 +140,8 @@ inline uint64_t getCurrentTimestamp() {
  * @param speed Ground speed in m/s
  * @return Complete location packet ready for transmission
  */
-inline LocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
-                                         float alt, float heading = 0.0f, float speed = 0.0f) {
+inline LocationPacket createLocationPacket(uint8_t targetID, double lat, double lon, float alt, float heading = 0.0f,
+                                           float speed = 0.0f) {
     LocationPacket packet;
     packet.header.targetID = targetID;
     packet.header.packetType = PacketTypes::LOCATION;
@@ -167,8 +167,8 @@ inline LocationPacket createLocationPacket(uint8_t targetID, double lat, double 
  * @param memory Memory usage percentage
  * @return Complete status packet ready for transmission
  */
-inline StatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission,
-                                     uint16_t flightTime, float cpu, float memory) {
+inline StatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission, uint16_t flightTime,
+                                       float cpu, float memory) {
     StatusPacket packet;
     packet.header.targetID = targetID;
     packet.header.packetType = PacketTypes::STATUS;
@@ -184,4 +184,4 @@ inline StatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t
     return packet;
 }
 
-#endif // TELEMETRY_PACKETS_H
+#endif  // TELEMETRY_PACKETS_H

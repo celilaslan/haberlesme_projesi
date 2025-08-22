@@ -211,8 +211,8 @@ void ZmqManager::processIncomingTelemetry(size_t socket_index) {
     if (received.has_value()) {
         // Extract message data and identify source UAV
         std::string data(static_cast<char*>(message.data()), message.size());
-        std::string uav_name = (socket_index < config.getUAVs().size()) ?
-                              config.getUAVs()[socket_index].name : "UNKNOWN";
+        std::string uav_name =
+            (socket_index < config.getUAVs().size()) ? config.getUAVs()[socket_index].name : "UNKNOWN";
 
         // Call the registered callback with source identification
         if (messageCallback_) {
@@ -283,10 +283,8 @@ std::pair<std::string, std::string> ZmqManager::parseUICommand(const std::string
     // Parse command to extract target UAV and actual command
     // Expected format: "UAV_NAME:command_data"
     size_t colon_pos = message.find(':');
-    std::string target_uav = (colon_pos != std::string::npos) ?
-                            message.substr(0, colon_pos) : "UAV_1";
-    std::string actual_cmd = (colon_pos != std::string::npos) ?
-                            message.substr(colon_pos + 1) : message;
+    std::string target_uav = (colon_pos != std::string::npos) ? message.substr(0, colon_pos) : "UAV_1";
+    std::string actual_cmd = (colon_pos != std::string::npos) ? message.substr(colon_pos + 1) : message;
     return {target_uav, actual_cmd};
 }
 

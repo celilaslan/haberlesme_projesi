@@ -123,7 +123,8 @@ namespace TelemetryAPI {
             } else if (age_ms < 30000) {  // < 30 seconds = acceptable
                 quality.data_freshness_score = 0.7 - (static_cast<double>(age_ms) - 5000) / 25000.0 * 0.4;
             } else {  // > 30 seconds = poor
-                quality.data_freshness_score = std::max(0.0, 0.3 - (static_cast<double>(age_ms) - 30000) / 60000.0 * 0.3);
+                quality.data_freshness_score =
+                    std::max(0.0, 0.3 - (static_cast<double>(age_ms) - 30000) / 60000.0 * 0.3);
             }
 
             return quality;
@@ -151,10 +152,9 @@ namespace TelemetryAPI {
             }
 
             // Sort by timestamp
-            std::sort(result.begin(), result.end(),
-                      [](const TelemetryData& first, const TelemetryData& second) {
-                          return first.timestamp_ms < second.timestamp_ms;
-                      });
+            std::sort(result.begin(), result.end(), [](const TelemetryData& first, const TelemetryData& second) {
+                return first.timestamp_ms < second.timestamp_ms;
+            });
 
             return result;
         }

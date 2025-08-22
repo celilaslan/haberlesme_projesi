@@ -38,9 +38,7 @@ namespace TelemetryAPI {
      */
     class TelemetryClientAdvanced::AdvancedImpl {
        public:
-        AdvancedImpl()
-            : performance_monitoring_(false),
-              network_stats_{} {
+        AdvancedImpl() : performance_monitoring_(false), network_stats_{} {
             // Initialize advanced components - using shared_ptr for safe access
             data_analyzer_ = std::make_shared<DataAnalyzer>();
             fleet_manager_ = std::make_shared<FleetManager>();
@@ -130,7 +128,7 @@ namespace TelemetryAPI {
         }
 
         static CommandResponse sendCommandSync(TelemetryClient* client, const std::string& uav_name,
-                                        const std::string& command, int timeout_ms) {
+                                               const std::string& command, int timeout_ms) {
             std::string command_id = generateCommandId();
             CommandResponse response;
             response.command_id = command_id;
@@ -245,12 +243,12 @@ namespace TelemetryAPI {
                     } catch (const std::exception& e) {
                         // Log exception (in production, use proper logging framework)
                         // std::cerr << "Event callback exception: " << e.what() << std::endl;
-                        (void)e; // Suppress unused variable warning
+                        (void)e;  // Suppress unused variable warning
                     } catch (...) {
                         // Log unknown exception (in production, use proper logging framework)
                         // std::cerr << "Unknown event callback exception" << std::endl;
                         // Exception caught and ignored to prevent cascade failures
-                        std::ignore = 0; // Intentionally ignore unknown exceptions
+                        std::ignore = 0;  // Intentionally ignore unknown exceptions
                     }
                 }
             }
@@ -535,8 +533,7 @@ namespace TelemetryAPI {
     };
 
     // TelemetryClientAdvanced implementation
-    TelemetryClientAdvanced::TelemetryClientAdvanced()
-        : pAdvancedImpl(std::make_unique<AdvancedImpl>()) {
+    TelemetryClientAdvanced::TelemetryClientAdvanced() : pAdvancedImpl(std::make_unique<AdvancedImpl>()) {
         // Initialize fleet manager with this client - safe access via weak_ptr
         if (auto fleet_mgr = pAdvancedImpl->getFleetManager().lock()) {
             fleet_mgr->initialize(this);

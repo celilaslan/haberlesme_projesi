@@ -112,7 +112,9 @@ namespace TelemetryAPI {
 
         bool isRunning() const { return running_; }
 
-        void setDataCallback(std::function<void(const TelemetryData&)> callback) { data_callback_ = std::move(callback); }
+        void setDataCallback(std::function<void(const TelemetryData&)> callback) {
+            data_callback_ = std::move(callback);
+        }
 
        private:
         void runSimulation() {

@@ -59,12 +59,12 @@ class UdpServer {
      */
     void doReceive();
 
-    udp::socket socket_;                  ///< UDP socket for receiving data
-    udp::endpoint remote_endpoint_;       ///< Endpoint of the last sender
-    enum : std::uint16_t { max_length = 1024 };           ///< Maximum UDP packet size
-    std::array<char, max_length> data_{};   ///< Buffer for incoming data
-    std::string uav_name_;                ///< Name of the UAV this server handles
-    UdpMessageCallback messageCallback_;  ///< Callback for received messages
+    udp::socket socket_;                         ///< UDP socket for receiving data
+    udp::endpoint remote_endpoint_;              ///< Endpoint of the last sender
+    enum : std::uint16_t { max_length = 1024 };  ///< Maximum UDP packet size
+    std::array<char, max_length> data_{};        ///< Buffer for incoming data
+    std::string uav_name_;                       ///< Name of the UAV this server handles
+    UdpMessageCallback messageCallback_;         ///< Callback for received messages
 };
 
 /**

@@ -37,7 +37,8 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& add
         socket_.open(udp::v4());
         socket_.bind(bind_endpoint);
 
-        Logger::statusWithDetails("UDP", StatusMessage("Server bound for " + uav_name), DetailMessage(address + ":" + std::to_string(port)));
+        Logger::statusWithDetails("UDP", StatusMessage("Server bound for " + uav_name),
+                                  DetailMessage(address + ":" + std::to_string(port)));
 
         // Start the asynchronous receive loop
         doReceive();
@@ -151,9 +152,9 @@ void UdpManager::start() {
         mappingEndpoint_ =
             udp::endpoint(boost::asio::ip::address::from_string("239.0.0.2"), config_.getUiPorts().udp_mapping_port);
         Logger::statusWithDetails("UDP", StatusMessage("UI Camera Publisher socket created"),
-                       DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_camera_port)));
+                                  DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_camera_port)));
         Logger::statusWithDetails("UDP", StatusMessage("UI Mapping Publisher socket created"),
-                       DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_mapping_port)));
+                                  DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_mapping_port)));
     } catch (const std::exception& e) {
         Logger::error("UDP setup failed: " + std::string(e.what()));
         running_ = false;

@@ -117,7 +117,8 @@ class Logger {
      * @param status Status message
      * @param details Additional details
      */
-    static void statusWithDetails(const std::string& component, const StatusMessage& status, const DetailMessage& details);
+    static void statusWithDetails(const std::string& component, const StatusMessage& status,
+                                  const DetailMessage& details);
 
     /**
      * @brief Log a performance metric
@@ -151,7 +152,7 @@ class Logger {
 
    private:
     static std::unique_ptr<std::ofstream> log_file;  ///< Log file output stream
-    static std::mutex mtx;                          ///< Mutex for thread-safe access
+    static std::mutex mtx;                           ///< Mutex for thread-safe access
     static LogLevel current_level;                   ///< Current minimum log level
 
     /**

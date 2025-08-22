@@ -71,12 +71,12 @@ namespace TelemetryAPI {
      * @brief Structure representing received telemetry data
      */
     struct TELEMETRY_API TelemetryData {
-        std::string uav_name;                             ///< UAV identifier (e.g., "UAV_1")
-        DataType data_type = DataType::UNKNOWN;           ///< Type of data (mapping, camera, etc.)
-        std::string raw_data;                             ///< Raw telemetry data
-        std::string topic;                                ///< Topic name used for routing
-        Protocol received_via = Protocol::TCP_ONLY;      ///< Protocol used to receive this data
-        uint64_t timestamp_ms = 0;                        ///< Timestamp when data was received (milliseconds since epoch)
+        std::string uav_name;                        ///< UAV identifier (e.g., "UAV_1")
+        DataType data_type = DataType::UNKNOWN;      ///< Type of data (mapping, camera, etc.)
+        std::string raw_data;                        ///< Raw telemetry data
+        std::string topic;                           ///< Topic name used for routing
+        Protocol received_via = Protocol::TCP_ONLY;  ///< Protocol used to receive this data
+        uint64_t timestamp_ms = 0;                   ///< Timestamp when data was received (milliseconds since epoch)
     };
 
     /**
@@ -356,12 +356,12 @@ namespace TelemetryAPI {
      * @brief Response from a command execution
      */
     struct TELEMETRY_API CommandResponse {
-        std::string command_id;                           ///< Unique command identifier
-        bool acknowledged = false;                        ///< Whether command was acknowledged
-        std::string response_data;                        ///< Response data from UAV
-        uint64_t response_time_ms = 0;                    ///< Time taken for response
-        CommandStatus status = CommandStatus::SENT;      ///< Current status of command
-        std::string error_message;                        ///< Error message if failed
+        std::string command_id;                      ///< Unique command identifier
+        bool acknowledged = false;                   ///< Whether command was acknowledged
+        std::string response_data;                   ///< Response data from UAV
+        uint64_t response_time_ms = 0;               ///< Time taken for response
+        CommandStatus status = CommandStatus::SENT;  ///< Current status of command
+        std::string error_message;                   ///< Error message if failed
     };
 
     /**
@@ -369,11 +369,11 @@ namespace TelemetryAPI {
      * @brief Data quality metrics
      */
     struct TELEMETRY_API DataQuality {
-        double packet_loss_rate = 0.0;       ///< Packet loss percentage (0.0-1.0)
-        double average_latency_ms = 0.0;     ///< Average latency in milliseconds
-        int missing_sequences = 0;           ///< Number of missing sequence numbers
-        double data_freshness_score = 1.0;   ///< Data freshness score (0.0-1.0)
-        uint64_t last_update_time = 0;       ///< Timestamp of last update
+        double packet_loss_rate = 0.0;      ///< Packet loss percentage (0.0-1.0)
+        double average_latency_ms = 0.0;    ///< Average latency in milliseconds
+        int missing_sequences = 0;          ///< Number of missing sequence numbers
+        double data_freshness_score = 1.0;  ///< Data freshness score (0.0-1.0)
+        uint64_t last_update_time = 0;      ///< Timestamp of last update
     };
 
     /**
@@ -381,12 +381,12 @@ namespace TelemetryAPI {
      * @brief Bandwidth usage statistics
      */
     struct TELEMETRY_API BandwidthStats {
-        double bytes_per_second_in = 0.0;     ///< Incoming bytes per second
-        double bytes_per_second_out = 0.0;    ///< Outgoing bytes per second
-        double peak_bandwidth_in = 0.0;       ///< Peak incoming bandwidth
-        double peak_bandwidth_out = 0.0;      ///< Peak outgoing bandwidth
-        uint64_t total_bytes_received = 0;    ///< Total bytes received
-        uint64_t total_bytes_sent = 0;        ///< Total bytes sent
+        double bytes_per_second_in = 0.0;   ///< Incoming bytes per second
+        double bytes_per_second_out = 0.0;  ///< Outgoing bytes per second
+        double peak_bandwidth_in = 0.0;     ///< Peak incoming bandwidth
+        double peak_bandwidth_out = 0.0;    ///< Peak outgoing bandwidth
+        uint64_t total_bytes_received = 0;  ///< Total bytes received
+        uint64_t total_bytes_sent = 0;      ///< Total bytes sent
     };
 
     /**
@@ -394,12 +394,12 @@ namespace TelemetryAPI {
      * @brief Status of a single UAV
      */
     struct TELEMETRY_API UAVStatus {
-        std::string name;                              ///< UAV name
-        bool connected = false;                        ///< Connection status
-        uint64_t last_seen = 0;                        ///< Last seen timestamp
-        DataQuality data_quality;                      ///< Data quality metrics
-        double health_score = 1.0;                     ///< Overall health score (0.0-1.0)
-        std::string last_command;                      ///< Last command sent
+        std::string name;                                         ///< UAV name
+        bool connected = false;                                   ///< Connection status
+        uint64_t last_seen = 0;                                   ///< Last seen timestamp
+        DataQuality data_quality;                                 ///< Data quality metrics
+        double health_score = 1.0;                                ///< Overall health score (0.0-1.0)
+        std::string last_command;                                 ///< Last command sent
         CommandStatus last_command_status = CommandStatus::SENT;  ///< Status of last command
     };
 
@@ -432,10 +432,10 @@ namespace TelemetryAPI {
      * @brief Authentication configuration
      */
     struct TELEMETRY_API AuthConfig {
-        std::string username;                  ///< Username
-        std::string password;                  ///< Password
-        std::string certificate_path;          ///< Path to certificate file
-        bool enable_encryption = true;         ///< Enable encryption
+        std::string username;           ///< Username
+        std::string password;           ///< Password
+        std::string certificate_path;   ///< Path to certificate file
+        bool enable_encryption = true;  ///< Enable encryption
     };
 
     /**

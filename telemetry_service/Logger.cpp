@@ -54,7 +54,7 @@ std::string Logger::getTimestamp() {
     const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
 
     std::ostringstream oss;
-    struct tm time_info{};
+    struct tm time_info {};
 
     // Use platform-specific thread-safe time conversion
 #if defined(_WIN32)
@@ -177,7 +177,8 @@ void Logger::status(const std::string& component, const std::string& status) {
  * @param status Status message (e.g., "Starting", "Running", "Stopped")
  * @param details Additional details (e.g., port numbers, error info)
  */
-void Logger::statusWithDetails(const std::string& component, const StatusMessage& status, const DetailMessage& details) {
+void Logger::statusWithDetails(const std::string& component, const StatusMessage& status,
+                               const DetailMessage& details) {
     std::string msg = "[" + component + "] " + status.value;
     if (!details.value.empty()) {
         msg += " (" + details.value + ")";
