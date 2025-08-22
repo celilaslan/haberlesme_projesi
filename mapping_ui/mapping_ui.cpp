@@ -23,98 +23,7 @@
 
 #include "TelemetryClient.h"
 
-// Binary packet parsing structures
-#pragma pack(push, 1)
-struct PacketHeader {
-    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping, 3: General)
-    uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
-};
-
-struct LocationPayload {
-    double latitude;   ///< Latitude in decimal degrees
-    double longitude;  ///< Longitude in decimal degrees
-    float altitude;    ///< Altitude in meters above sea level
-    float heading;     ///< Heading in degrees (0-359)
-    float speed;       ///< Ground speed in m/s
-};
-#pragma pack(pop)
-
-// Packet type constants
-constexpr uint8_t PACKET_TYPE_LOCATION = 4;
-
 using namespace TelemetryAPI;
-
-/**
- * @brief Convert binary data to hexadecimal string representation
- * @param data The binary data to convert
- * @return Hexadecimal string representation
- */
-std::string toHexString(const std::string& data) {
-    std::stringstream ss;
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (i > 0) ss << " ";
-        ss << std::hex << std::setw(2) << std::setfill('0') << std::uppercase
-           << static_cast<unsigned int>(static_cast<unsigned char>(data[i]));
-    }
-    return ss.str();
-}
-
-/**
- * @brief Parse and format PacketHeader information
- * @param raw_data The raw binary data
- * @return Formatted string with header information
- */
-std::string parsePacketHeaderInfo(const std::string& raw_data) {
-    if (raw_data.size() < sizeof(PacketHeader)) {
-        return "Invalid header size";
-    }
-
-    const PacketHeader* header = reinterpret_cast<const PacketHeader*>(raw_data.data());
-
-    std::stringstream ss;
-    ss << "Target:" << static_cast<int>(header->targetID)
-       << " Type:" << static_cast<int>(header->packetType);
-
-    return ss.str();
-}
-
-/**
- * @brief Parse binary location packet from raw data
- * @param raw_data The raw binary data received
- * @param latitude Reference to store parsed latitude
- * @param longitude Reference to store parsed longitude
- * @param altitude Reference to store parsed altitude
- * @param heading Reference to store parsed heading
- * @param speed Reference to store parsed speed
- * @return True if parsing was successful, false otherwise
- */
-bool parseBinaryLocationPacket(const std::string& raw_data, double& latitude, double& longitude,
-                              float& altitude, float& heading, float& speed) {
-    // Check if we have enough data for header + location payload
-    if (raw_data.size() < sizeof(PacketHeader) + sizeof(LocationPayload)) {
-        return false;
-    }
-
-    // Parse packet header
-    const PacketHeader* header = reinterpret_cast<const PacketHeader*>(raw_data.data());
-
-    // Verify this is a location packet
-    if (header->packetType != PACKET_TYPE_LOCATION) {
-        return false;
-    }
-
-    // Parse location payload
-    const LocationPayload* location = reinterpret_cast<const LocationPayload*>(
-        raw_data.data() + sizeof(PacketHeader));
-
-    latitude = location->latitude;
-    longitude = location->longitude;
-    altitude = location->altitude;
-    heading = location->heading;
-    speed = location->speed;
-
-    return true;
-}
 
 // Global flag for graceful shutdown
 std::atomic<bool> g_running(true);
@@ -173,30 +82,7 @@ void onTelemetryReceived(const TelemetryData& data) {
                                                                                : "MIXED";
 
         std::cout << "[" << GetTimestamp() << "] " << "UAV: " << data.uav_name << " | " << "Type: MAPPING | "
-                  << "Protocol: " << protocol_str;
-
-        // Try to parse binary location data
-        double latitude, longitude;
-        float altitude, heading, speed;
-
-        if (parseBinaryLocationPacket(data.raw_data, latitude, longitude, altitude, heading, speed)) {
-            // Display parsed location data (mapping data is typically GPS/location information)
-            std::cout << " | GPS: " << std::fixed << std::setprecision(6)
-                      << latitude << "°N, " << longitude << "°E"
-                      << " | Altitude: " << std::setprecision(1) << altitude << "m"
-                      << " | Heading: " << std::setprecision(0) << heading << "°"
-                      << " | Speed: " << std::setprecision(1) << speed << "m/s"
-                      << " | " << parsePacketHeaderInfo(data.raw_data)
-                      << " | Raw size: " << data.raw_data.size() << " bytes"
-                      << " | Hex: " << toHexString(data.raw_data);
-        } else {
-            // Fallback for non-binary packets or parsing errors
-            std::cout << " | " << parsePacketHeaderInfo(data.raw_data)
-                      << " | Raw size: " << data.raw_data.size() << " bytes"
-                      << " | Hex: " << toHexString(data.raw_data);
-        }
-
-        std::cout << std::endl;
+                  << "Protocol: " << protocol_str << " | " << "Data: " << data.raw_data << std::endl;
     }
 }
 
