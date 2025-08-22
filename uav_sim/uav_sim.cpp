@@ -39,8 +39,6 @@ enum PacketTypes : uint8_t { LOCATION_PACKET = 4, STATUS_PACKET = 5, IMU_PACKET 
 struct UAVPacketHeader {
     uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping, 3: General)
     uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
-    uint16_t payloadLength;  ///< Length of payload in bytes
-    uint64_t timestamp;      ///< UTC timestamp in milliseconds since epoch
 };
 
 // Simple payload structures
@@ -79,10 +77,6 @@ UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
     UAVLocationPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = LOCATION_PACKET;
-    packet.header.payloadLength = sizeof(UAVLocationPayload);
-    packet.header.timestamp =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count();
 
     packet.payload.latitude = lat;
     packet.payload.longitude = lon;
@@ -98,10 +92,6 @@ UAVStatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mis
     UAVStatusPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = STATUS_PACKET;
-    packet.header.payloadLength = sizeof(UAVStatusPayload);
-    packet.header.timestamp =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count();
 
     packet.payload.systemHealth = health;
     packet.payload.missionState = mission;

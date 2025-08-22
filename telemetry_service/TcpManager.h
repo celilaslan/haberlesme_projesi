@@ -1,33 +1,34 @@
 /**
- * @file ZmqManager.h
- * @brief ZeroMQ communication manager for the telemetry service
+ * @file TcpManager.h
+ * @brief TCP communication manager for the telemetry service
  *
- * This file defines the ZmqManager class which handles all ZeroMQ-based
- * communication with UAVs and UI components. It manages multiple socket
+ * This file defines the TcpManager class which handles all TCP-based
+ * communication with UAVs and UI components using ZeroMQ. It manages multiple socket
  * types and implements the publish-subscribe and push-pull patterns.
  */
 
-#ifndef ZMQMANAGER_H
-#define ZMQMANAGER_H
+#ifndef TCPMANAGER_H
+#define TCPMANAGER_H
 
 #include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 #include <zmq.hpp>
 
 #include "Config.h"
 
-// Callback function type for handling incoming ZMQ messages
-// Parameters: source description, message data
-using ZmqMessageCallback = std::function<void(const std::string&, const std::string&)>;
+// Callback function type for handling incoming TCP messages
+// Parameters: source description, binary message data
+using TcpMessageCallback = std::function<void(const std::string&, const std::vector<uint8_t>&)>;
 
 /**
- * @class ZmqManager
- * @brief Manages all ZeroMQ communication for the telemetry service
+ * @class TcpManager
+ * @brief Manages all TCP communication for the telemetry service
  *
- * The ZmqManager handles:
+ * The TcpManager handles:
  * - Receiving telemetry data from UAVs (PULL sockets)
  * - Publishing telemetry data to UI components (PUB socket)
  * - Receiving commands from UI components (PULL socket)
@@ -37,7 +38,7 @@ using ZmqMessageCallback = std::function<void(const std::string&, const std::str
  * - Receiver thread: Handles incoming telemetry from UAVs
  * - Forwarder thread: Handles command forwarding from UI to UAVs
  */
-class ZmqManager {
+class TcpManager {
    public:
     /**
      * @brief Constructor
@@ -45,24 +46,24 @@ class ZmqManager {
      * @param cfg Configuration containing UAV and UI port settings
      * @param callback Function to call when telemetry messages are received
      *
-     * Initializes the ZmqManager with the necessary configuration and sets up
+     * Initializes the TcpManager with the necessary configuration and sets up
      * the callback for handling incoming telemetry messages.
      */
-    ZmqManager(zmq::context_t& ctx, const Config& cfg, ZmqMessageCallback callback);
+    TcpManager(zmq::context_t& ctx, const Config& cfg, TcpMessageCallback callback);
 
     /**
      * @brief Destructor - ensures proper cleanup
      */
-    ~ZmqManager();
+    ~TcpManager();
 
     // Delete copy and move operations for thread safety
-    ZmqManager(const ZmqManager&) = delete;
-    ZmqManager& operator=(const ZmqManager&) = delete;
-    ZmqManager(ZmqManager&&) = delete;
-    ZmqManager& operator=(ZmqManager&&) = delete;
+    TcpManager(const TcpManager&) = delete;
+    TcpManager& operator=(const TcpManager&) = delete;
+    TcpManager(TcpManager&&) = delete;
+    TcpManager& operator=(TcpManager&&) = delete;
 
     /**
-     * @brief Start the ZMQ communication threads
+     * @brief Start the TCP communication threads
      *
      * Creates and binds all necessary sockets and starts the background
      * threads for message processing.
@@ -70,7 +71,7 @@ class ZmqManager {
     void start();
 
     /**
-     * @brief Stop the ZMQ communication threads
+     * @brief Stop the TCP communication threads
      *
      * Signals the background threads to stop processing messages.
      * Call join() after this to wait for threads to complete.
@@ -88,12 +89,12 @@ class ZmqManager {
     /**
      * @brief Publish telemetry data to UI subscribers
      * @param topic The topic to publish on (e.g., "camera_UAV_1")
-     * @param data The telemetry data to publish
+     * @param data The binary telemetry data to publish
      *
      * Sends telemetry data to all UI components subscribed to the given topic.
      * This method is thread-safe and can be called from callback functions.
      */
-    void publishTelemetry(const std::string& topic, const std::string& data);
+    void publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data);
 
    private:
     /**
@@ -153,7 +154,7 @@ class ZmqManager {
     zmq::context_t& context;              ///< Reference to the ZeroMQ context
     const Config& config;                 ///< Reference to configuration data
     std::atomic<bool> running{false};     ///< Flag controlling thread execution
-    ZmqMessageCallback messageCallback_;  ///< Callback for incoming messages
+    TcpMessageCallback messageCallback_;  ///< Callback for incoming messages
     mutable std::mutex socketMutex;       ///< Mutex for thread-safe socket operations
 
     // ZeroMQ sockets for different communication patterns
@@ -167,4 +168,4 @@ class ZmqManager {
     std::thread forwarderThread;  ///< Thread for forwarding commands
 };
 
-#endif  // ZMQMANAGER_H
+#endif  // TCPMANAGER_H

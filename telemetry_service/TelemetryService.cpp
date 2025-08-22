@@ -26,15 +26,15 @@
 #endif
 
 /**
- * @brief Constructor - initializes ZeroMQ context
+ * @brief Constructor - initializes ZeroMQ context for TCP communication
  *
- * Creates a ZeroMQ context with 1 I/O thread, which will be shared
- * by all ZeroMQ sockets in the application.
+ * Creates a ZeroMQ context with 1 I/O thread for TCP telemetry and command handling.
+ * UDP communication uses Boost.Asio and doesn't require ZeroMQ initialization.
  */
 TelemetryService::TelemetryService() try : zmqContext_(1) {
-    // ZMQ context initialized successfully
+    // ZMQ context initialized successfully for TCP communication
 } catch (const zmq::error_t& e) {
-    throw std::runtime_error("Failed to initialize ZMQ context: " + std::string(e.what()));
+    throw std::runtime_error("Failed to initialize ZMQ context for TCP: " + std::string(e.what()));
 } catch (const std::exception& e) {
     throw std::runtime_error("Failed to initialize TelemetryService: " + std::string(e.what()));
 }
@@ -80,17 +80,17 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
         try {
             // Create ZeroMQ manager with callback for incoming messages
-            zmqManager_ = std::make_unique<ZmqManager>(
+            tcpManager_ = std::make_unique<TcpManager>(
                 zmqContext_, config_,
-                [this](const std::string& source, const std::string& data) { this->onZmqMessage(source, data); });
+                [this](const std::string& source, const std::vector<uint8_t>& data) { this->onZmqMessage(source, data); });
 
             // Create UDP manager with callback for incoming messages
             udpManager_ = std::make_unique<UdpManager>(
                 config_,
-                [this](const std::string& source, const std::string& data) { this->onUdpMessage(source, data); });
+                [this](const std::string& source, const std::vector<uint8_t>& data) { this->onUdpMessage(source, data); });
 
             // Start both communication managers with error handling
-            zmqManager_->start();
+            tcpManager_->start();
             zmq_started = true;
 
             udpManager_->start();
@@ -104,9 +104,9 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
                 udpManager_->stop();
                 udpManager_->join();
             }
-            if (zmq_started && zmqManager_) {
-                zmqManager_->stop();
-                zmqManager_->join();
+            if (zmq_started && tcpManager_) {
+                tcpManager_->stop();
+                tcpManager_->join();
             }
             throw;
         }
@@ -121,6 +121,8 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         }
         tcp_ports.push_back(config_.getUiPorts().tcp_publish_port);
         tcp_ports.push_back(config_.getUiPorts().tcp_command_port);
+        udp_ports.push_back(config_.getUiPorts().udp_camera_port);
+        udp_ports.push_back(config_.getUiPorts().udp_mapping_port);
 
         Logger::serviceStarted(static_cast<int>(config_.getUAVs().size()), tcp_ports, udp_ports);
 
@@ -138,16 +140,16 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
             udpManager_->stop();
         }
         Logger::statusWithDetails("TCP", StatusMessage("STOPPING"), DetailMessage("Shutting down TCP services"));
-        if (zmqManager_) {
-            zmqManager_->stop();
+        if (tcpManager_) {
+            tcpManager_->stop();
         }
 
         // Wait for threads to complete
         if (udpManager_) {
             udpManager_->join();
         }
-        if (zmqManager_) {
-            zmqManager_->join();
+        if (tcpManager_) {
+            tcpManager_->join();
         }
 
         Logger::statusWithDetails("SERVICE", StatusMessage("SHUTDOWN COMPLETE"),
@@ -161,13 +163,13 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
 /**
  * @brief Handler for UDP messages - forwards to common processing
- * @param sourceDescription Description of the UDP source
- * @param data The received message data
+ * @param uav_name Name of the UAV that sent the message
+ * @param data The received binary message data
  */
-void TelemetryService::onUdpMessage(const std::string& sourceDescription, const std::string& data) {
+void TelemetryService::onUdpMessage(const std::string& uav_name, const std::vector<uint8_t>& data) {
     try {
         std::lock_guard<std::mutex> lock(processingMutex_);
-        processAndPublishTelemetry(data, sourceDescription, "UDP");
+        processAndPublishTelemetry(data, uav_name, "UDP");
     } catch (const std::exception& e) {
         Logger::error("UDP message processing error: " + std::string(e.what()));
     }
@@ -175,13 +177,13 @@ void TelemetryService::onUdpMessage(const std::string& sourceDescription, const 
 
 /**
  * @brief Handler for TCP messages - forwards to common processing
- * @param sourceDescription Description of the TCP source
- * @param data The received message data
+ * @param uav_name Name of the UAV that sent the message
+ * @param data The received binary message data
  */
-void TelemetryService::onZmqMessage(const std::string& sourceDescription, const std::string& data) {
+void TelemetryService::onZmqMessage(const std::string& uav_name, const std::vector<uint8_t>& data) {
     try {
         std::lock_guard<std::mutex> lock(processingMutex_);
-        processAndPublishTelemetry(data, sourceDescription, "TCP");
+        processAndPublishTelemetry(data, uav_name, "TCP");
     } catch (const std::exception& e) {
         Logger::error("TCP message processing error: " + std::string(e.what()));
     }
@@ -189,37 +191,28 @@ void TelemetryService::onZmqMessage(const std::string& sourceDescription, const 
 
 /**
  * @brief Common processing pipeline for all telemetry data
- * @param data The telemetry data to process
- * @param source_description Description of the data source
+ * @param data The binary telemetry data to process
+ * @param uav_name Name of the UAV that sent the data
  * @param protocol The protocol used (TCP or UDP)
  *
- * This method:
+ * This method implements simple dual-topic routing:
  * 1. Parses the binary packet header to determine target and type
- * 2. Extracts the UAV name from the source description
- * 3. Creates appropriate topic names for flexible routing
- * 4. Routes the complete binary packet to UI components
+ * 2. Uses the UAV name directly from service_config.json
+ * 3. Creates target and type topics for flexible subscription
+ * 4. Routes the complete binary packet to both topics
  */
-void TelemetryService::processAndPublishTelemetry(const std::string& data, const std::string& source_description,
+void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
                                                   const std::string& protocol) {
     try {
         // Ensure we have at least enough data for a packet header
         if (data.size() < sizeof(PacketHeader)) {
-            Logger::warn("Received packet too small for header from " + source_description +
+            Logger::warn("Received packet too small for header from " + uav_name +
                          " (size: " + std::to_string(data.size()) + " bytes)");
             return;
         }
 
         // Parse the packet header
         const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
-
-        // Extract UAV name by removing protocol prefix ("TCP:", "UDP:")
-        std::string uav_name = "unknown_uav";
-        size_t colon_pos = source_description.find(':');
-        if (colon_pos != std::string::npos) {
-            uav_name = source_description.substr(colon_pos + 1);
-        } else {
-            uav_name = source_description;
-        }
 
         // Determine target and type strings for topic creation
         std::string target_name;
@@ -231,9 +224,6 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
                 break;
             case TargetIDs::MAPPING:
                 target_name = "mapping";
-                break;
-            case TargetIDs::GENERAL:
-                target_name = "general";
                 break;
             default:
                 target_name = "unknown";
@@ -247,12 +237,6 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
             case PacketTypes::STATUS:
                 type_name = "status";
                 break;
-            case PacketTypes::IMU:
-                type_name = "imu";
-                break;
-            case PacketTypes::BATTERY:
-                type_name = "battery";
-                break;
             default:
                 type_name = "unknown";
                 break;
@@ -262,20 +246,25 @@ void TelemetryService::processAndPublishTelemetry(const std::string& data, const
         Logger::info("Received " + type_name + " packet for " + target_name + " from " + uav_name + " (" +
                      std::to_string(data.size()) + " bytes)");
 
-        // Create topic names for flexible routing (both target-based and type-based)
-        std::string target_topic = target_name + "_" + uav_name;
-        std::string type_topic = type_name + "_" + uav_name;
+        // Create topic names using dot-separated convention for clean routing
+        std::string target_topic = "target." + target_name + "." + uav_name;    // e.g., "target.camera.UAV_1"
+        std::string type_topic = "type." + type_name + "." + uav_name;           // e.g., "type.location.UAV_1"
 
         // Route to UIs using the same protocol as the source, with validation
-        if (protocol == "TCP" && zmqManager_) {
-            // Publish to both target-based and type-based topics for maximum flexibility
-            zmqManager_->publishTelemetry(target_topic, data);
+        if (protocol == "TCP" && tcpManager_) {
+            // Target routing: Send to intended target UI
+            tcpManager_->publishTelemetry(target_topic, data);            // e.g., "target.camera.UAV_1"
+
+            // Type routing: Allow cross-subscription to specific packet types
             if (target_topic != type_topic) {  // Avoid duplicate sends
-                zmqManager_->publishTelemetry(type_topic, data);
+                tcpManager_->publishTelemetry(type_topic, data);          // e.g., "type.location.UAV_1"
             }
         } else if (protocol == "UDP" && udpManager_) {
-            // For UDP, use target-based routing (maintains compatibility)
+            // For UDP, provide both target and type routing
             udpManager_->publishTelemetry(target_topic, data);
+            if (target_topic != type_topic) {
+                udpManager_->publishTelemetry(type_topic, data);
+            }
         } else {
             Logger::error("Cannot publish telemetry - manager not available for protocol: " + protocol);
         }

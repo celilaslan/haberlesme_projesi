@@ -3,7 +3,7 @@
  * @brief UDP communication manager for the telemetry service
  *
  * This file defines classes for managing UDP-based telemetry communication.
- * It provides an alternative to ZeroMQ for UAVs that prefer UDP for
+ * It provides an alternative to TCP for UAVs that prefer UDP for
  * lower latency or simpler networking requirements.
  */
 
@@ -17,14 +17,16 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
+#include <cstdio>
 
 #include "Config.h"
 
 using boost::asio::ip::udp;
 
 // Callback function type for handling incoming UDP messages
-// Parameters: source description, message data
-using UdpMessageCallback = std::function<void(const std::string&, const std::string&)>;
+// Parameters: source description, binary message data
+using UdpMessageCallback = std::function<void(const std::string&, const std::vector<uint8_t>&)>;
 
 /**
  * @class UdpServer
@@ -125,12 +127,12 @@ class UdpManager {
     /**
      * @brief Publish telemetry data to UI components via UDP
      * @param topic The topic to publish on (e.g., "camera_UAV_1")
-     * @param data The telemetry data to send
+     * @param data The binary telemetry data to send
      *
      * Sends telemetry data to UI components using UDP multicast.
      * The message format includes both topic and data.
      */
-    void publishTelemetry(const std::string& topic, const std::string& data);
+    void publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data);
 
    private:
     boost::asio::io_context io_context_;  ///< Boost.Asio I/O context for async operations

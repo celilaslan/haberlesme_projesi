@@ -3,8 +3,8 @@
  * @brief Simple C++ API for communicating with the telemetry service
  *
  * This header defines a clean, easy-to-use interface for developers who want
- * to communicate with the telemetry service without dealing with ZeroMQ or
- * Boost.Asio networking details directly.
+ * to communicate with the telemetry service without dealing with TCP or
+ * UDP networking details directly.
  */
 
 #ifndef TELEMETRY_CLIENT_H
@@ -39,7 +39,7 @@ namespace TelemetryAPI {
      * @brief Communication protocol options
      */
     enum class Protocol : std::uint8_t {
-        TCP_ONLY,  ///< Use TCP (ZeroMQ) for reliable communication
+        TCP_ONLY,  ///< Use TCP for reliable communication
         UDP_ONLY,  ///< Use UDP for low-latency communication
         BOTH       ///< Use both protocols (recommended)
     };

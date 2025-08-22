@@ -1,30 +1,32 @@
 /**
- * @file ZmqManager.cpp
- * @brief Implementation of ZeroMQ communication management
+ * @file TcpManager.cpp
+ * @brief Implementation of TCP communication management
  *
- * This file contains the implementation of the ZmqManager class, which handles
- * all ZeroMQ-based communication between the telemetry service, UAVs, and UI components.
+ * This file contains the implementation of the TcpManager class, which handles
+ * all TCP-based communication between the telemetry service, UAVs, and UI components
+ * using ZeroMQ as the underlying messaging library.
  */
 
-#include "ZmqManager.h"
+#include "TcpManager.h"
 
 #include <vector>
 
 #include "Logger.h"
+#include "TelemetryPackets.h"
 
 /**
- * @brief Constructor - initializes ZMQ manager with configuration and callback
+ * @brief Constructor - initializes TCP manager with configuration and callback
  * @param ctx ZeroMQ context for socket creation
  * @param cfg Configuration containing UAV and port settings
  * @param callback Function to call when telemetry messages are received
  */
-ZmqManager::ZmqManager(zmq::context_t& ctx, const Config& cfg, ZmqMessageCallback callback)
+TcpManager::TcpManager(zmq::context_t& ctx, const Config& cfg, TcpMessageCallback callback)
     : context(ctx), config(cfg), messageCallback_(std::move(callback)) {}
 
 /**
  * @brief Destructor - ensures clean shutdown
  */
-ZmqManager::~ZmqManager() {
+TcpManager::~TcpManager() {
     stop();
     join();
 
@@ -37,7 +39,7 @@ ZmqManager::~ZmqManager() {
 }
 
 /**
- * @brief Start ZMQ communication system
+ * @brief Start TCP communication system
  *
  * This method:
  * 1. Creates and binds all necessary ZMQ sockets
@@ -45,7 +47,7 @@ ZmqManager::~ZmqManager() {
  * 3. Sets up UAV communication (PULL/PUSH sockets for each UAV)
  * 4. Starts background threads for message processing
  */
-void ZmqManager::start() {
+void TcpManager::start() {
     running = true;
 
     try {
@@ -99,44 +101,79 @@ void ZmqManager::start() {
     }
 
     // Start background processing threads
-    receiverThread = std::thread(&ZmqManager::receiverLoop, this);
-    forwarderThread = std::thread(&ZmqManager::forwarderLoop, this);
+    receiverThread = std::thread(&TcpManager::receiverLoop, this);
+    forwarderThread = std::thread(&TcpManager::forwarderLoop, this);
 }
 
 /**
- * @brief Stop ZMQ communication threads
+ * @brief Stop TCP communication threads
  *
  * Sets the running flag to false, causing background threads to exit
  * their main loops. Call join() afterwards to wait for completion.
  */
-void ZmqManager::stop() { running = false; }
+void TcpManager::stop() { running = false; }
 
 /**
  * @brief Wait for background threads to complete
  *
  * Blocks until both receiver and forwarder threads have finished execution.
  */
-void ZmqManager::join() {
+void TcpManager::join() {
     if (receiverThread.joinable()) receiverThread.join();
     if (forwarderThread.joinable()) forwarderThread.join();
 }
 
 /**
  * @brief Publish telemetry data to UI subscribers
- * @param topic The topic to publish on (e.g., "camera_UAV_1")
+ * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
  * @param data The telemetry data to send
  *
  * Uses ZMQ multipart messaging: first frame is topic, second frame is data.
  * UI components subscribe to specific topics to receive relevant data.
+ * ZMQ handles subscription filtering automatically based on topic prefixes.
  * Thread-safe through mutex protection.
  */
-void ZmqManager::publishTelemetry(const std::string& topic, const std::string& data) {
+void TcpManager::publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data) {
     try {
         std::lock_guard<std::mutex> lock(socketMutex);
         if (pubToUi && running) {
             pubToUi->send(zmq::buffer(topic), zmq::send_flags::sndmore);
-            pubToUi->send(zmq::buffer(data), zmq::send_flags::none);
-            Logger::info("Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes");
+            pubToUi->send(zmq::buffer(data.data(), data.size()), zmq::send_flags::none);
+
+            // Decode packet info from binary data
+            std::string packetInfo = "";
+            if (data.size() >= sizeof(PacketHeader)) {
+                const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
+
+                std::string targetName;
+                switch (header->targetID) {
+                    case TargetIDs::CAMERA: targetName = "Camera"; break;
+                    case TargetIDs::MAPPING: targetName = "Mapping"; break;
+                    default: targetName = "Unknown(" + std::to_string(header->targetID) + ")"; break;
+                }
+
+                std::string typeName;
+                switch (header->packetType) {
+                    case PacketTypes::LOCATION: typeName = "Location"; break;
+                    case PacketTypes::STATUS: typeName = "Status"; break;
+                    default: typeName = "Unknown(" + std::to_string(header->packetType) + ")"; break;
+                }
+
+                packetInfo = " - Target: " + targetName + ", Type: " + typeName;
+            }
+
+            // Create hex dump of raw data (first 32 bytes for readability)
+            std::string hexData = "";
+            size_t hexLimit = std::min(data.size(), static_cast<size_t>(32));
+            for (size_t i = 0; i < hexLimit; ++i) {
+                char hex[4];
+                snprintf(hex, sizeof(hex), "%02X ", data[i]);
+                hexData += hex;
+            }
+            if (data.size() > 32) hexData += "...";
+
+            Logger::info("Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo +
+                        " | Hex: " + hexData);
         }
     } catch (const zmq::error_t& e) {
         Logger::error("Failed to publish telemetry: " + std::string(e.what()));
@@ -152,7 +189,7 @@ void ZmqManager::publishTelemetry(const std::string& topic, const std::string& d
  * 3. When data is received, calls the registered callback
  * 4. Runs until the running flag is set to false
  */
-void ZmqManager::receiverLoop() {
+void TcpManager::receiverLoop() {
     try {
         std::vector<zmq::pollitem_t> poll_items = setupTelemetryPolling();
 
@@ -183,7 +220,7 @@ void ZmqManager::receiverLoop() {
  * @brief Helper to set up polling items for UAV telemetry sockets
  * @return Vector of polling items for zmq::poll
  */
-std::vector<zmq::pollitem_t> ZmqManager::setupTelemetryPolling() const {
+std::vector<zmq::pollitem_t> TcpManager::setupTelemetryPolling() const {
     std::vector<zmq::pollitem_t> poll_items;
     std::lock_guard<std::mutex> lock(socketMutex);
     poll_items.reserve(uavTelemetrySockets.size());
@@ -197,7 +234,7 @@ std::vector<zmq::pollitem_t> ZmqManager::setupTelemetryPolling() const {
  * @brief Helper to process incoming telemetry from a specific UAV socket
  * @param socket_index Index of the socket that received data
  */
-void ZmqManager::processIncomingTelemetry(size_t socket_index) {
+void TcpManager::processIncomingTelemetry(size_t socket_index) {
     zmq::message_t message;
     zmq::recv_result_t received;
 
@@ -209,14 +246,15 @@ void ZmqManager::processIncomingTelemetry(size_t socket_index) {
     }
 
     if (received.has_value()) {
-        // Extract message data and identify source UAV
-        std::string data(static_cast<char*>(message.data()), message.size());
+        // Extract binary message data and identify source UAV
+        std::vector<uint8_t> data(static_cast<uint8_t*>(message.data()),
+                                  static_cast<uint8_t*>(message.data()) + message.size());
         std::string uav_name =
             (socket_index < config.getUAVs().size()) ? config.getUAVs()[socket_index].name : "UNKNOWN";
 
-        // Call the registered callback with source identification
+                // Call the registered callback with UAV name directly
         if (messageCallback_) {
-            messageCallback_("TCP:" + uav_name, data);
+            messageCallback_(uav_name, data);
         }
     }
 }
@@ -230,7 +268,7 @@ void ZmqManager::processIncomingTelemetry(size_t socket_index) {
  * 3. Forwards commands to the appropriate UAV
  * 4. Runs until the running flag is set to false
  */
-void ZmqManager::forwarderLoop() {
+void TcpManager::forwarderLoop() {
     try {
         // Set up polling for UI command socket
         zmq::pollitem_t ui_poll{*pullFromUi, 0, ZMQ_POLLIN, 0};
@@ -268,7 +306,7 @@ void ZmqManager::forwarderLoop() {
  * Analyzes the message content to determine which UI component sent the command.
  * This is used for logging and debugging purposes.
  */
-std::string ZmqManager::extractUISource(const std::string& message) {
+std::string TcpManager::extractUISource(const std::string& message) {
     if (message.find("[camera-ui]") != std::string::npos) return "camera";
     if (message.find("[mapping-ui]") != std::string::npos) return "mapping";
     return "unknown";
@@ -279,7 +317,7 @@ std::string ZmqManager::extractUISource(const std::string& message) {
  * @param message The raw UI command message
  * @return Pair of target_uav and actual_command
  */
-std::pair<std::string, std::string> ZmqManager::parseUICommand(const std::string& message) {
+std::pair<std::string, std::string> TcpManager::parseUICommand(const std::string& message) {
     // Parse command to extract target UAV and actual command
     // Expected format: "UAV_NAME:command_data"
     size_t colon_pos = message.find(':');
@@ -294,7 +332,7 @@ std::pair<std::string, std::string> ZmqManager::parseUICommand(const std::string
  * @param command The command to send
  * @return true if command was forwarded successfully
  */
-bool ZmqManager::forwardCommandToUAV(const std::string& target_uav, const std::string& command) {
+bool TcpManager::forwardCommandToUAV(const std::string& target_uav, const std::string& command) {
     const auto& uavs = config.getUAVs();
 
     for (size_t i = 0; i < uavs.size(); ++i) {

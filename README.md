@@ -34,7 +34,7 @@ Manual build with g++:
 
 ```bash
 # Build telemetry service (requires multiple source files)
-g++ -std=c++17 telemetry_service/main.cpp telemetry_service/TelemetryService.cpp telemetry_service/Config.cpp telemetry_service/Logger.cpp telemetry_service/ZmqManager.cpp telemetry_service/UdpManager.cpp -lzmq -lboost_system -lpthread -o telemetry_service/telemetry_service
+g++ -std=c++17 telemetry_service/main.cpp telemetry_service/TelemetryService.cpp telemetry_service/Config.cpp telemetry_service/Logger.cpp telemetry_service/TcpManager.cpp telemetry_service/UdpManager.cpp -lzmq -lboost_system -lpthread -o telemetry_service/telemetry_service
 
 # Build other components (single file each - all require Boost.Asio for UDP)
 g++ -std=c++17 uav_sim/uav_sim.cpp -lzmq -lboost_system -lpthread -o uav_sim/uav_sim
@@ -69,7 +69,7 @@ The build system supports professional-grade configuration options:
 # Configure with enhanced options
 ./dev.sh configure build Debug --warnings --debug --werror
 
-# Install to custom location  
+# Install to custom location
 ./dev.sh install /opt/telemetry-service
 
 # Create distribution packages
@@ -172,7 +172,7 @@ On Windows (PowerShell - enhanced with matching safety features):
 
 The service writes logs to `log_file`. If relative, logs resolve next to the telemetry_service executable.
 
-**Network Architecture**: 
+**Network Architecture**:
 - **TCP (ZeroMQ)**: Secure channel for commands and telemetry with PUB/SUB pattern for reliable message delivery
 - **UDP (Boost.Asio)**: Additional lightweight telemetry streaming with per-UAV dedicated ports for isolation
 - **Security**: UAVs receive commands only via TCP (industry standard), but send telemetry via both protocols

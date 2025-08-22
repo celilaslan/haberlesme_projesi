@@ -10,6 +10,7 @@
 #include "UdpManager.h"
 
 #include "Logger.h"
+#include "TelemetryPackets.h"
 
 // --- UdpServer Implementation ---
 
@@ -61,13 +62,11 @@ void UdpServer::doReceive() {
         [this](boost::system::error_code error_code, std::size_t bytes_recvd) {
             if (!error_code && bytes_recvd > 0) {
                 try {
-                    // Process received data if no error occurred
-                    std::string received_data(data_.data(), bytes_recvd);
-                    std::string source_desc = "UDP:" + uav_name_;
-
-                    // Call the registered callback with the received data
+                    // Process received binary data if no error occurred
+                    std::vector<uint8_t> received_data(data_.data(), data_.data() + bytes_recvd);
+                    // Call callback with UAV name directly
                     if (messageCallback_) {
-                        messageCallback_(source_desc, received_data);
+                        messageCallback_(uav_name_, received_data);
                     }
                 } catch (const std::exception& e) {
                     Logger::error("UDP receive processing error for " + uav_name_ + ": " + std::string(e.what()));
@@ -214,44 +213,108 @@ void UdpManager::join() {
 
 /**
  * @brief Publish telemetry data to UI components via UDP
- * @param topic The topic to publish on (e.g., "camera_UAV_1")
- * @param data The telemetry data to send
+ * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+ * @param data The binary telemetry data to send
  *
- * Sends telemetry data to UI components using UDP. Routes camera topics
- * to camera port and mapping topics to mapping port. Thread-safe.
+ * Routing behavior:
+ * - Target topics (target.camera.*, target.mapping.*) go only to their designated UI
+ * - Type topics are routed based on their specific type:
+ *   - type.location.*: primarily to mapping UI, also to camera UI for cross-subscription
+ *   - type.status.*: primarily to camera UI, also to mapping UI for cross-subscription
  */
-void UdpManager::publishTelemetry(const std::string& topic, const std::string& data) {
+void UdpManager::publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data) {
     try {
         std::lock_guard<std::mutex> lock(socketMutex_);
 
-        // Determine which socket to use based on topic
-        udp::socket* socket_ptr = nullptr;
-        udp::endpoint* endpoint_ptr = nullptr;
-
-        if (topic.find("camera") == 0) {
-            socket_ptr = cameraPublishSocket_.get();
-            endpoint_ptr = &cameraEndpoint_;
-        } else if (topic.find("mapping") == 0) {
-            socket_ptr = mappingPublishSocket_.get();
-            endpoint_ptr = &mappingEndpoint_;
-        } else {
-            Logger::error("Unknown topic type for UDP publish: " + topic);
-            return;
-        }
-
-        if (socket_ptr == nullptr || !socket_ptr->is_open()) {
-            Logger::error("UDP publish socket not available for topic: " + topic);
-            return;
-        }
-
         // Format message as "topic|data" for easy parsing by UI components
-        // Use more efficient string construction
-        std::string message;
-        message.reserve(topic.size() + data.size() + 1);
-        message = topic + "|" + data;
+        std::vector<uint8_t> message;
+        message.reserve(topic.size() + 1 + data.size());
 
-        socket_ptr->send_to(boost::asio::buffer(message), *endpoint_ptr);
-        Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes");
+        // Add topic as text
+        message.insert(message.end(), topic.begin(), topic.end());
+        // Add separator
+        message.push_back('|');
+        // Add binary data
+        message.insert(message.end(), data.begin(), data.end());
+
+        // Helper function to decode packet info from binary data
+        auto getPacketInfo = [](const std::vector<uint8_t>& data) -> std::string {
+            if (data.size() >= sizeof(PacketHeader)) {
+                const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
+
+                std::string targetName;
+                switch (header->targetID) {
+                    case TargetIDs::CAMERA: targetName = "Camera"; break;
+                    case TargetIDs::MAPPING: targetName = "Mapping"; break;
+                    default: targetName = "Unknown(" + std::to_string(header->targetID) + ")"; break;
+                }
+
+                std::string typeName;
+                switch (header->packetType) {
+                    case PacketTypes::LOCATION: typeName = "Location"; break;
+                    case PacketTypes::STATUS: typeName = "Status"; break;
+                    default: typeName = "Unknown(" + std::to_string(header->packetType) + ")"; break;
+                }
+
+                return " - Target: " + targetName + ", Type: " + typeName;
+            }
+            return "";
+        };
+
+        // Helper function to create hex dump
+        auto getHexDump = [](const std::vector<uint8_t>& data) -> std::string {
+            std::string hexData = "";
+            size_t hexLimit = std::min(data.size(), static_cast<size_t>(32));
+            for (size_t i = 0; i < hexLimit; ++i) {
+                char hex[4];
+                snprintf(hex, sizeof(hex), "%02X ", data[i]);
+                hexData += hex;
+            }
+            if (data.size() > 32) hexData += "...";
+            return " | Hex: " + hexData;
+        };
+
+        // Route based on topic type
+        if (topic.find("target.camera.") == 0) {
+            // Target-based routing: camera UI gets its targeted data
+            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
+                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + getPacketInfo(data) + getHexDump(data));
+            }
+        } else if (topic.find("target.mapping.") == 0) {
+            // Target-based routing: mapping UI gets its targeted data
+            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
+                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + getPacketInfo(data) + getHexDump(data));
+            }
+        } else if (topic.find("type.location.") == 0) {
+            // Location data: primarily for mapping UI, but camera UI can subscribe if needed
+            std::string packetInfo = getPacketInfo(data);
+            std::string hexInfo = getHexDump(data);
+            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
+                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
+            }
+            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
+                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
+            }
+        } else if (topic.find("type.status.") == 0) {
+            // Status data: primarily for camera UI, but mapping UI can subscribe if needed
+            std::string packetInfo = getPacketInfo(data);
+            std::string hexInfo = getHexDump(data);
+            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
+                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
+            }
+            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
+                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
+                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
+            }
+        } else {
+            Logger::error("Unknown topic format for UDP publish: " + topic);
+            return;
+        }
 
     } catch (const std::exception& e) {
         Logger::error("UDP publish error: " + std::string(e.what()));

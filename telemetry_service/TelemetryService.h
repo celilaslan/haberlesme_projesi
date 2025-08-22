@@ -15,10 +15,11 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 #include "Config.h"
+#include "TcpManager.h"
 #include "UdpManager.h"
-#include "ZmqManager.h"
 
 /**
  * @class TelemetryService
@@ -54,39 +55,38 @@ class TelemetryService {
    private:
     /**
      * @brief Callback handler for incoming UDP messages
-     * @param sourceDescription Description of the message source (e.g., "UDP:UAV_1")
-     * @param data The raw message data received
+     * @param uav_name Name of the UAV that sent the message (e.g., "UAV_1")
+     * @param data The raw binary message data received
      *
      * This method is called by the UdpManager when a UDP message is received.
      * It forwards the message to the common processing pipeline.
      */
-    void onUdpMessage(const std::string& sourceDescription, const std::string& data);
+    void onUdpMessage(const std::string& uav_name, const std::vector<uint8_t>& data);
 
     /**
      * @brief Callback handler for incoming TCP messages
-     * @param sourceDescription Description of the message source (e.g., "TCP:UAV_1")
-     * @param data The raw message data received
+     * @param uav_name Name of the UAV that sent the message (e.g., "UAV_1")
+     * @param data The raw binary message data received
      *
-     * This method is called by the ZmqManager when a TCP message is received.
+     * This method is called by the TcpManager when a TCP message is received.
      * It forwards the message to the common processing pipeline.
      */
-    void onZmqMessage(const std::string& sourceDescription, const std::string& data);
+    void onZmqMessage(const std::string& uav_name, const std::vector<uint8_t>& data);
 
     /**
      * @brief Common message processing and publishing pipeline
-     * @param data The telemetry data to process
-     * @param source_description Description of where the data came from
+     * @param data The binary telemetry data to process
+     * @param uav_name Name of the UAV that sent the data
      * @param protocol The protocol used (TCP or UDP)
      *
      * This method:
-     * 1. Logs the incoming message
-     * 2. Determines the appropriate topic based on message content
-     * 3. Publishes the processed data to UI subscribers using the same protocol
+     * 1. Parses the binary packet header to determine target and type
+     * 2. Uses the UAV name directly (no extraction needed)
+     * 3. Creates appropriate topic names for flexible routing
+     * 4. Routes the complete binary packet to UI components
      */
-    void processAndPublishTelemetry(const std::string& data, const std::string& source_description,
-                                    const std::string& protocol);
-
-    /**
+    void processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
+                                    const std::string& protocol);    /**
      * @brief Resolves the configuration file path
      * @return Full path to the configuration file
      *
@@ -106,7 +106,7 @@ class TelemetryService {
     // Core service components
     Config config_;                           ///< Configuration data loaded from JSON
     zmq::context_t zmqContext_;               ///< ZeroMQ context for all ZMQ operations
-    std::unique_ptr<ZmqManager> zmqManager_;  ///< Manages ZeroMQ communications
+    std::unique_ptr<TcpManager> tcpManager_;  ///< Manages TCP communications
     std::unique_ptr<UdpManager> udpManager_;  ///< Manages UDP communications
     mutable std::mutex processingMutex_;      ///< Mutex for thread-safe message processing
 };
