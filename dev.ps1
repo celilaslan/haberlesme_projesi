@@ -15,6 +15,12 @@
 #   install [prefix]        - Install the project to the specified prefix.
 #   package                 - Create distribution packages.
 #
+# Code Quality Commands:
+#   format                  - Format all source code using clang-format.
+#   lint                    - Run static analysis using clang-tidy.
+#   quality                 - Run comprehensive code quality checks (format + lint).
+#   check-format            - Check if code formatting is consistent.
+#
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
 #     <target>: telemetry_service, uav_sim, camera_ui, mapping_ui
@@ -28,6 +34,7 @@
 # Testing and Validation:
 #   demo                    - Run a quick, self-contained test of the system.
 #   test                    - Run project tests or smoke test if no tests available.
+#   test-cross-target       - Test cross-target subscription functionality.
 #   health                  - Comprehensive system health check.
 #   logs [-f]               - Show the tail of the service log file (-f to follow).
 #
@@ -43,6 +50,9 @@
 # Examples:
 #   .\dev.ps1 configure "Visual Studio 17 2022" Debug
 #   .\dev.ps1 build
+#   .\dev.ps1 format                   # Format all source code
+#   .\dev.ps1 lint                     # Run static analysis
+#   .\dev.ps1 quality                  # Full code quality check
 #   .\dev.ps1 health                   # Check system health
 #   .\dev.ps1 watch                    # Auto-rebuild on changes
 #   .\dev.ps1 run telemetry_service
@@ -52,6 +62,7 @@
 #   .\dev.ps1 up UAV_1 UAV_2 --protocol udp
 #   .\dev.ps1 down
 #   .\dev.ps1 logs -f
+#   .\dev.ps1 test-cross-target        # Test cross-target subscriptions
 
 param(
     [Parameter(Position=0)] [string] $Command,
@@ -129,22 +140,22 @@ function Get-CmakePath {
 
 function Kill-Procs {
     param([string[]] $names = @('telemetry_service','uav_sim','camera_ui','mapping_ui'))
-    
+
     # Get project-specific ports to identify our processes more safely
     $projectPorts = @(5555,5556,5557,5558,5559,5565,5569,5575,5579)
     $projectPids = @()
-    
+
     try {
-        $connections = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | 
+        $connections = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
                       Where-Object { $projectPorts -contains $_.LocalPort }
         $projectPids = $connections | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique
     } catch {
         # Fallback to process name matching if network query fails
         Write-Verbose "Cannot query network connections, using process name matching"
     }
-    
+
     foreach ($n in $names) {
-        try { 
+        try {
             $processes = Get-Process -Name $n -ErrorAction Stop
             foreach ($proc in $processes) {
                 # If we have port information, prefer processes that match our ports
@@ -157,7 +168,7 @@ function Kill-Procs {
                     $proc | Stop-Process -Force
                 }
             }
-        } catch { 
+        } catch {
             # Process not found or already stopped
         }
     }
@@ -183,30 +194,30 @@ function Wait-ForPort {
     param([int] $Port, [int] $TimeoutSec = 10)
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $attempt = 0
-    
+
     Write-Host "Waiting for port $Port to become available..." -ForegroundColor Gray
-    
+
     while ((Get-Date) -lt $deadline) {
         $attempt++
         try {
             $conn = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop
-            if ($conn) { 
+            if ($conn) {
                 Write-Host "✓ Port $Port is listening" -ForegroundColor Green
-                return $true 
+                return $true
             }
-        } catch { 
+        } catch {
             # Port not yet listening
         }
-        
+
         # Show progress every few attempts
         if ($attempt % 10 -eq 0) {
             $remaining = [Math]::Max(0, [Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds))
             Write-Host "  Still waiting... (${remaining}s remaining)" -ForegroundColor Gray
         }
-        
+
         Start-Sleep -Milliseconds 200
     }
-    
+
     Write-Host "✗ Timeout waiting for port $Port" -ForegroundColor Red
     return $false
 }
@@ -221,21 +232,275 @@ function Open-Term {
     }
 }
 
-function Ensure-BuildDirs { 
-    if (!(Test-Path (Join-Path $RepoRoot 'build'))) { 
-        New-Item -ItemType Directory -Path (Join-Path $RepoRoot 'build') | Out-Null 
-    } 
+function Ensure-BuildDirs {
+    if (!(Test-Path (Join-Path $RepoRoot 'build'))) {
+        New-Item -ItemType Directory -Path (Join-Path $RepoRoot 'build') | Out-Null
+    }
+}
+
+# --- Code Quality Functions ---
+
+function Format-Code {
+    Write-Host "=== CODE FORMATTING ===" -ForegroundColor Cyan
+
+    if (!(Have 'clang-format')) {
+        Write-Host "clang-format not found. Install LLVM/Clang tools for code formatting." -ForegroundColor Yellow
+        Write-Host "On Windows: choco install llvm or download from https://llvm.org/builds/" -ForegroundColor Gray
+        return $false
+    }
+
+    # Find all source files
+    $sourceExts = @('*.cpp', '*.c', '*.cc', '*.cxx', '*.h', '*.hpp', '*.hxx')
+    $sourceFiles = @()
+
+    foreach ($ext in $sourceExts) {
+        $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse | Where-Object {
+            $_.FullName -notlike "*\build\*" -and
+            $_.FullName -notlike "*\vcpkg\*" -and
+            $_.FullName -notlike "*\.git\*"
+        }
+        $sourceFiles += $files
+    }
+
+    if ($sourceFiles.Count -eq 0) {
+        Write-Host "No source files found to format." -ForegroundColor Yellow
+        return $true
+    }
+
+    Write-Host "Found $($sourceFiles.Count) source files to format" -ForegroundColor Gray
+
+    $formatted = 0
+    $errors = 0
+
+    foreach ($file in $sourceFiles) {
+        try {
+            $relativePath = $file.FullName.Replace($RepoRoot + "\", "")
+            Write-Host "  Formatting: $relativePath" -ForegroundColor Gray
+
+            # Format in-place
+            & clang-format -i -style=file $file.FullName
+            if ($LASTEXITCODE -eq 0) {
+                $formatted++
+            } else {
+                Write-Host "    Error formatting $relativePath" -ForegroundColor Red
+                $errors++
+            }
+        } catch {
+            Write-Host "    Exception formatting $($file.Name): $($_.Exception.Message)" -ForegroundColor Red
+            $errors++
+        }
+    }
+
+    Write-Host ""
+    Write-Host "FORMATTING COMPLETE:" -ForegroundColor Cyan
+    Write-Host "  Files processed: $($sourceFiles.Count)" -ForegroundColor White
+    Write-Host "  Successfully formatted: $formatted" -ForegroundColor Green
+    if ($errors -gt 0) {
+        Write-Host "  Errors: $errors" -ForegroundColor Red
+        return $false
+    } else {
+        Write-Host "  ✓ All files formatted successfully" -ForegroundColor Green
+        return $true
+    }
+}
+
+function Test-CodeFormat {
+    Write-Host "=== CHECKING CODE FORMATTING ===" -ForegroundColor Cyan
+
+    if (!(Have 'clang-format')) {
+        Write-Host "clang-format not found. Cannot check formatting." -ForegroundColor Yellow
+        return $false
+    }
+
+    # Find all source files
+    $sourceExts = @('*.cpp', '*.c', '*.cc', '*.cxx', '*.h', '*.hpp', '*.hxx')
+    $sourceFiles = @()
+
+    foreach ($ext in $sourceExts) {
+        $files = Get-ChildItem -Path $RepoRoot -Filter $ext -Recurse | Where-Object {
+            $_.FullName -notlike "*\build\*" -and
+            $_.FullName -notlike "*\vcpkg\*" -and
+            $_.FullName -notlike "*\.git\*"
+        }
+        $sourceFiles += $files
+    }
+
+    if ($sourceFiles.Count -eq 0) {
+        Write-Host "No source files found to check." -ForegroundColor Yellow
+        return $true
+    }
+
+    Write-Host "Checking formatting of $($sourceFiles.Count) source files..." -ForegroundColor Gray
+
+    $needsFormatting = @()
+    $errors = 0
+
+    foreach ($file in $sourceFiles) {
+        try {
+            $relativePath = $file.FullName.Replace($RepoRoot + "\", "")
+
+            # Check if file would be changed by clang-format
+            $original = Get-Content $file.FullName -Raw
+            $formatted = & clang-format -style=file $file.FullName
+
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "  Error checking $relativePath" -ForegroundColor Red
+                $errors++
+                continue
+            }
+
+            if ($original -ne $formatted) {
+                $needsFormatting += $relativePath
+            }
+        } catch {
+            Write-Host "  Exception checking $($file.Name): $($_.Exception.Message)" -ForegroundColor Red
+            $errors++
+        }
+    }
+
+    Write-Host ""
+    Write-Host "FORMATTING CHECK COMPLETE:" -ForegroundColor Cyan
+    Write-Host "  Files checked: $($sourceFiles.Count)" -ForegroundColor White
+
+    if ($needsFormatting.Count -eq 0 -and $errors -eq 0) {
+        Write-Host "  ✓ All files are properly formatted" -ForegroundColor Green
+        return $true
+    } else {
+        if ($needsFormatting.Count -gt 0) {
+            Write-Host "  Files needing formatting: $($needsFormatting.Count)" -ForegroundColor Yellow
+            foreach ($file in $needsFormatting) {
+                Write-Host "    - $file" -ForegroundColor Yellow
+            }
+            Write-Host "  Run '.\dev.ps1 format' to fix formatting" -ForegroundColor Gray
+        }
+        if ($errors -gt 0) {
+            Write-Host "  Errors: $errors" -ForegroundColor Red
+        }
+        return $false
+    }
+}
+
+function Invoke-Linting {
+    Write-Host "=== STATIC CODE ANALYSIS ===" -ForegroundColor Cyan
+
+    if (!(Have 'clang-tidy')) {
+        Write-Host "clang-tidy not found. Install LLVM/Clang tools for static analysis." -ForegroundColor Yellow
+        Write-Host "On Windows: choco install llvm or download from https://llvm.org/builds/" -ForegroundColor Gray
+        return $false
+    }
+
+    # Ensure we have a compile_commands.json
+    $compileCommandsPath = Join-Path $RepoRoot 'build\compile_commands.json'
+    if (!(Test-Path $compileCommandsPath)) {
+        Write-Host "compile_commands.json not found. Configuring project..." -ForegroundColor Yellow
+        Configure -Generator 'Ninja'  # Ninja generates compile_commands.json
+    }
+
+    if (!(Test-Path $compileCommandsPath)) {
+        Write-Host "Warning: Could not generate compile_commands.json. Linting may be less effective." -ForegroundColor Yellow
+    }
+
+    # Find source files to lint
+    $sourceFiles = Get-ChildItem -Path $RepoRoot -Filter '*.cpp' -Recurse | Where-Object {
+        $_.FullName -notlike "*\build\*" -and
+        $_.FullName -notlike "*\vcpkg\*" -and
+        $_.FullName -notlike "*\.git\*"
+    }
+
+    if ($sourceFiles.Count -eq 0) {
+        Write-Host "No C++ source files found to analyze." -ForegroundColor Yellow
+        return $true
+    }
+
+    Write-Host "Analyzing $($sourceFiles.Count) source files..." -ForegroundColor Gray
+
+    $issues = 0
+    $warnings = 0
+    $errors = 0
+
+    foreach ($file in $sourceFiles) {
+        $relativePath = $file.FullName.Replace($RepoRoot + "\", "")
+        Write-Host "  Analyzing: $relativePath" -ForegroundColor Gray
+
+        try {
+            $buildPath = Join-Path $RepoRoot 'build'
+            $output = & clang-tidy $file.FullName -p $buildPath 2>&1
+
+            if ($LASTEXITCODE -ne 0 -or $output -match "error:|warning:") {
+                # Parse output for issues
+                $fileIssues = ($output | Select-String "error:|warning:").Count
+                $fileWarnings = ($output | Select-String "warning:").Count
+                $fileErrors = ($output | Select-String "error:").Count
+
+                if ($fileIssues -gt 0) {
+                    Write-Host "    Found $fileIssues issue(s)" -ForegroundColor Yellow
+                    $issues += $fileIssues
+                    $warnings += $fileWarnings
+                    $errors += $fileErrors
+
+                    # Show some details
+                    $output | Select-String "error:|warning:" | Select-Object -First 3 | ForEach-Object {
+                        Write-Host "      $($_.Line)" -ForegroundColor Gray
+                    }
+                }
+            }
+        } catch {
+            Write-Host "    Exception analyzing $($file.Name): $($_.Exception.Message)" -ForegroundColor Red
+            $errors++
+        }
+    }
+
+    Write-Host ""
+    Write-Host "STATIC ANALYSIS COMPLETE:" -ForegroundColor Cyan
+    Write-Host "  Files analyzed: $($sourceFiles.Count)" -ForegroundColor White
+    Write-Host "  Total issues: $issues" -ForegroundColor $(if ($issues -eq 0) { "Green" } else { "Yellow" })
+    if ($warnings -gt 0) { Write-Host "  Warnings: $warnings" -ForegroundColor Yellow }
+    if ($errors -gt 0) { Write-Host "  Errors: $errors" -ForegroundColor Red }
+
+    if ($issues -eq 0) {
+        Write-Host "  ✓ No static analysis issues found" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "  ⚠ Issues found - review output above" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+function Invoke-QualityCheck {
+    Write-Host "=== COMPREHENSIVE CODE QUALITY CHECK ===" -ForegroundColor Cyan
+    Write-Host ""
+
+    $formatOk = Test-CodeFormat
+    Write-Host ""
+
+    $lintOk = Invoke-Linting
+    Write-Host ""
+
+    Write-Host "=== QUALITY CHECK SUMMARY ===" -ForegroundColor Cyan
+    Write-Host "  Code formatting: $(if ($formatOk) { '✓ PASS' } else { '✗ FAIL' })" -ForegroundColor $(if ($formatOk) { "Green" } else { "Red" })
+    Write-Host "  Static analysis: $(if ($lintOk) { '✓ PASS' } else { '✗ FAIL' })" -ForegroundColor $(if ($lintOk) { "Green" } else { "Red" })
+    Write-Host ""
+
+    if ($formatOk -and $lintOk) {
+        Write-Host "🎉 ALL QUALITY CHECKS PASSED" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "❌ QUALITY ISSUES FOUND" -ForegroundColor Red
+        if (-not $formatOk) { Write-Host "   Run '.\dev.ps1 format' to fix formatting" -ForegroundColor Yellow }
+        if (-not $lintOk) { Write-Host "   Review static analysis warnings above" -ForegroundColor Yellow }
+        return $false
+    }
 }
 
 # Validate service configuration file
 function Test-Config {
     param([string] $ConfigFile = (Join-Path $RepoRoot 'service_config.json'))
-    
+
     if (!(Test-Path $ConfigFile)) {
         Write-Error "Configuration file not found: $ConfigFile"
         return $false
     }
-    
+
     try {
         $content = Get-Content $ConfigFile -Raw | ConvertFrom-Json
         Write-Host "Configuration file validated: $ConfigFile" -ForegroundColor Green
@@ -250,35 +515,48 @@ function Test-Config {
 function Test-Dependencies {
     $missing = @()
     $optional_missing = @()
-    
+
     # Required dependencies
     if (!(Have 'cmake')) { $missing += 'cmake' }
-    if (!(Have 'cl') -and !(Have 'gcc') -and !(Have 'clang')) { 
-        $missing += 'Visual Studio Build Tools, GCC, or Clang compiler' 
+    if (!(Have 'cl') -and !(Have 'gcc') -and !(Have 'clang')) {
+        $missing += 'Visual Studio Build Tools, GCC, or Clang compiler'
     }
-    
+
     # Optional but recommended
     if (!(Have 'python')) { $optional_missing += 'python (for config validation)' }
     if (!(Have 'ninja')) { $optional_missing += 'ninja (faster builds)' }
     if (!(Have 'git')) { $optional_missing += 'git (version control)' }
-    
+    if (!(Have 'clang-format')) { $optional_missing += 'clang-format (code formatting)' }
+    if (!(Have 'clang-tidy')) { $optional_missing += 'clang-tidy (static analysis)' }
+
     # Check for vcpkg (common on Windows)
     $vcpkgPath = Join-Path $RepoRoot 'vcpkg'
     if (!(Test-Path $vcpkgPath)) {
         $optional_missing += 'vcpkg (dependency management - install in project root)'
     }
-    
+
     if ($missing.Count -gt 0) {
         Write-Host "Error: Missing required dependencies:" -ForegroundColor Red
         $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+        Write-Host ""
+        Write-Host "Installation suggestions:" -ForegroundColor Yellow
+        Write-Host "  - CMake: Download from https://cmake.org/download/ or 'choco install cmake'" -ForegroundColor Gray
+        Write-Host "  - Visual Studio: Install 'Desktop development with C++' workload" -ForegroundColor Gray
+        Write-Host "  - Or install Build Tools: https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022" -ForegroundColor Gray
         return $false
     }
-    
+
     if ($optional_missing.Count -gt 0) {
         Write-Host "Warning: Missing optional dependencies:" -ForegroundColor Yellow
         $optional_missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+        Write-Host ""
+        Write-Host "Installation suggestions:" -ForegroundColor Gray
+        Write-Host "  - LLVM tools: 'choco install llvm' or download from https://llvm.org/builds/" -ForegroundColor Gray
+        Write-Host "  - Python: 'choco install python' or download from https://python.org/" -ForegroundColor Gray
+        Write-Host "  - Ninja: 'choco install ninja' or download from https://ninja-build.org/" -ForegroundColor Gray
+        Write-Host ""
     }
-    
+
     Write-Host "Dependencies check passed" -ForegroundColor Green
     return $true
 }
@@ -286,7 +564,7 @@ function Test-Dependencies {
 # Comprehensive health check
 function Invoke-HealthCheck {
     Write-Host "=== System Health Check ===" -ForegroundColor Cyan
-    
+
     # Check dependencies
     Write-Host "Checking dependencies..." -ForegroundColor Gray
     if (Test-Dependencies) {
@@ -294,7 +572,7 @@ function Invoke-HealthCheck {
     } else {
         Write-Host "✗ Dependencies issues found" -ForegroundColor Red
     }
-    
+
     # Check configuration
     Write-Host "Checking configuration..." -ForegroundColor Gray
     if (Test-Config) {
@@ -302,7 +580,7 @@ function Invoke-HealthCheck {
     } else {
         Write-Host "✗ Configuration issues found" -ForegroundColor Red
     }
-    
+
     # Check build status
     Write-Host "Checking build status..." -ForegroundColor Gray
     $missing_exes = @()
@@ -313,18 +591,18 @@ function Invoke-HealthCheck {
             $missing_exes += $exe
         }
     }
-    
+
     if ($missing_exes.Count -eq 0) {
         Write-Host "✓ All executables built" -ForegroundColor Green
     } else {
         Write-Host "✗ Missing executables: $($missing_exes -join ', ')" -ForegroundColor Red
         Write-Host "  Run '.\dev.ps1 build' to build them" -ForegroundColor Yellow
     }
-    
+
     # Check running processes
     Write-Host "Checking running processes..." -ForegroundColor Gray
-    $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object { 
-        @('telemetry_service','uav_sim','camera_ui','mapping_ui') -contains $_.Name 
+    $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        @('telemetry_service','uav_sim','camera_ui','mapping_ui') -contains $_.Name
     }
     if ($procs) {
         Write-Host "✓ Project processes running:" -ForegroundColor Green
@@ -332,7 +610,7 @@ function Invoke-HealthCheck {
     } else {
         Write-Host "ℹ No project processes currently running" -ForegroundColor Blue
     }
-    
+
     # Check listening ports
     Write-Host "Checking network ports..." -ForegroundColor Gray
     $ports = @(5555,5556,5557,5558,5559,5565,5569,5575,5579)
@@ -347,7 +625,7 @@ function Invoke-HealthCheck {
     } catch {
         Write-Host "ℹ Cannot check network ports (requires admin privileges)" -ForegroundColor Blue
     }
-    
+
     Write-Host "=== Health Check Complete ===" -ForegroundColor Cyan
 }
 
@@ -356,26 +634,26 @@ function Show-Info {
     Write-Host "=== Project Information ===" -ForegroundColor Cyan
     Write-Host "Project Root: $RepoRoot"
     Write-Host "Build Directory: $(Join-Path $RepoRoot 'build')"
-    
+
     try {
         $branch = git branch --show-current 2>$null
         if ($branch) { Write-Host "Current Branch: $branch" }
         else { Write-Host "Current Branch: Not a git repo" }
-        
+
         $commit = git log -1 --oneline 2>$null
         if ($commit) { Write-Host "Last Commit: $commit" }
         else { Write-Host "Last Commit: N/A" }
     } catch {
         Write-Host "Git Status: Not available"
     }
-    
+
     Write-Host ""
     Write-Host "=== System Information ===" -ForegroundColor Cyan
     Write-Host "OS: $($PSVersionTable.OS -replace "`n", " ")"
     Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
     Write-Host "Architecture: $($env:PROCESSOR_ARCHITECTURE)"
     Write-Host "CPU Cores: $($env:NUMBER_OF_PROCESSORS)"
-    
+
     try {
         $memory = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
         if ($memory) {
@@ -385,16 +663,16 @@ function Show-Info {
     } catch {
         Write-Host "Total RAM: Unknown"
     }
-    
+
     Write-Host ""
     Write-Host "=== Build Tools ===" -ForegroundColor Cyan
-    
+
     $cmake = Get-Command cmake -ErrorAction SilentlyContinue
     if ($cmake) { Write-Host "CMake: $(cmake --version | Select-Object -First 1)" }
     else { Write-Host "CMake: Not found" }
-    
+
     $compiler = $null
-    if (Get-Command cl -ErrorAction SilentlyContinue) { 
+    if (Get-Command cl -ErrorAction SilentlyContinue) {
         $compiler = "MSVC (Visual Studio)"
     } elseif (Get-Command gcc -ErrorAction SilentlyContinue) {
         $compiler = "GCC $(gcc --version | Select-Object -First 1)"
@@ -402,15 +680,34 @@ function Show-Info {
         $compiler = "Clang $(clang --version | Select-Object -First 1)"
     }
     Write-Host "Compiler: $($compiler ?? 'Not found')"
-    
+
     $ninja = Get-Command ninja -ErrorAction SilentlyContinue
     if ($ninja) { Write-Host "Ninja: $(ninja --version)" }
     else { Write-Host "Ninja: Not found" }
-    
+
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) { Write-Host "Python: $(python --version)" }
     else { Write-Host "Python: Not found" }
-    
+
+    Write-Host ""
+    Write-Host "=== Code Quality Tools ===" -ForegroundColor Cyan
+
+    $clangFormat = Get-Command clang-format -ErrorAction SilentlyContinue
+    if ($clangFormat) {
+        $version = & clang-format --version 2>$null
+        Write-Host "clang-format: $version"
+    } else {
+        Write-Host "clang-format: Not found"
+    }
+
+    $clangTidy = Get-Command clang-tidy -ErrorAction SilentlyContinue
+    if ($clangTidy) {
+        $version = & clang-tidy --version 2>$null | Select-Object -First 1
+        Write-Host "clang-tidy: $version"
+    } else {
+        Write-Host "clang-tidy: Not found"
+    }
+
     Write-Host ""
     Write-Host "=== Configuration ===" -ForegroundColor Cyan
     $configPath = Join-Path $RepoRoot 'service_config.json'
@@ -425,7 +722,7 @@ function Show-Info {
     } else {
         Write-Host "Service Config: Not found"
     }
-    
+
     # Check for vcpkg
     $vcpkgPath = Join-Path $RepoRoot 'vcpkg'
     if (Test-Path $vcpkgPath) {
@@ -438,17 +735,17 @@ function Show-Info {
 # Watch for file changes and rebuild automatically
 function Invoke-WatchMode {
     param([string] $Generator)
-    
+
     Write-Host "Starting watch mode. Press Ctrl+C to stop." -ForegroundColor Green
     Write-Host "Watching for changes in: $RepoRoot" -ForegroundColor Gray
-    
+
     # Create FileSystemWatcher
     $watcher = New-Object System.IO.FileSystemWatcher
     $watcher.Path = $RepoRoot
     $watcher.IncludeSubdirectories = $true
     $watcher.Filter = "*.cpp"
     $watcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
-    
+
     # Create additional watchers for other file types
     $watchers = @($watcher)
     foreach ($ext in @("*.h", "*.hpp", "*.c", "*.cc", "*.cxx")) {
@@ -459,18 +756,18 @@ function Invoke-WatchMode {
         $w.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
         $watchers += $w
     }
-    
+
     # Define the action
     $action = {
         $path = $Event.SourceEventArgs.FullPath
         $name = $Event.SourceEventArgs.Name
         $changeType = $Event.SourceEventArgs.ChangeType
-        
+
         Write-Host "[$((Get-Date).ToString('HH:mm:ss'))] File changed: $name" -ForegroundColor Yellow
-        
+
         # Debounce rapid changes
         Start-Sleep -Milliseconds 500
-        
+
         Write-Host "Rebuilding..." -ForegroundColor Cyan
         try {
             if ($Generator) { Configure -Generator $Generator }
@@ -481,14 +778,14 @@ function Invoke-WatchMode {
             Write-Host "Build failed at $((Get-Date).ToString('HH:mm:ss')): $($_.Exception.Message)" -ForegroundColor Red
         }
     }
-    
+
     # Register event handlers
     $jobs = @()
     foreach ($w in $watchers) {
         $w.EnableRaisingEvents = $true
         $jobs += Register-ObjectEvent -InputObject $w -EventName "Changed" -Action $action
     }
-    
+
     try {
         Write-Host "Watching for changes... (Press Ctrl+C to stop)" -ForegroundColor Green
         while ($true) {
@@ -527,7 +824,7 @@ function Configure {
     if ($EnableWarnings) { Write-Host "  - Compiler warnings enabled" -ForegroundColor Gray }
     if ($DebugInfo) { Write-Host "  - Debug information enabled" -ForegroundColor Gray }
     if ($WarningsAsErrors) { Write-Host "  - Treating warnings as errors" -ForegroundColor Gray }
-    
+
     $cmakePath = Get-CmakePath
     if (-not $cmakePath) { throw "CMake not found. Please install it and ensure it's in your PATH." }
     $buildDir = Join-Path $RepoRoot 'build'
@@ -540,12 +837,12 @@ function Configure {
         if (-not $Env:VCPKG_TARGET_TRIPLET) { $toolchainArg += '-DVCPKG_TARGET_TRIPLET=x64-windows' }
     }
     $extra = @('-DCMAKE_BUILD_TYPE=' + $BuildType)
-    
+
     # Add new build options
     $extra += @("-DENABLE_WARNINGS=" + $(if ($EnableWarnings) { "ON" } else { "OFF" }))
     $extra += @("-DBUILD_WITH_DEBUG_INFO=" + $(if ($DebugInfo) { "ON" } else { "OFF" }))
     $extra += @("-DTREAT_WARNINGS_AS_ERRORS=" + $(if ($WarningsAsErrors) { "ON" } else { "OFF" }))
-    
+
     if ($Generator -like 'Visual Studio*' -and -not $env:CMAKE_GENERATOR_PLATFORM) {
         # Ensure 64-bit build
         $extra += '-A'; $extra += 'x64'
@@ -572,7 +869,7 @@ function Invoke-Tests {
         Write-Error "Build directory not found. Run '.\dev.ps1 configure' first."
         return
     }
-    
+
     Write-Host "Running tests..." -ForegroundColor Cyan
     $ctestFile = Join-Path $buildDir 'CTestTestfile.cmake'
     if (Test-Path $ctestFile) {
@@ -591,7 +888,7 @@ function Invoke-Tests {
 # Run a comprehensive demo/smoke test
 function Invoke-DemoTest {
     Write-Host "Starting comprehensive demo test..." -ForegroundColor Cyan
-    
+
     # Ensure executables exist
     $exes = @('telemetry_service/telemetry_service', 'uav_sim/uav_sim', 'camera_ui/camera_ui', 'mapping_ui/mapping_ui')
     foreach ($exe in $exes) {
@@ -601,43 +898,43 @@ function Invoke-DemoTest {
             return
         }
     }
-    
+
     # Stop any existing processes
     Kill-Procs
-    
+
     # Clear background process tracking
     $global:BackgroundProcesses = @()
-    
+
     Write-Host "Starting telemetry service..." -ForegroundColor Green
     $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
     $serviceProcess = Start-Process -FilePath (Get-ExePath 'telemetry_service/telemetry_service') -PassThru -NoNewWindow
     $global:BackgroundProcesses += $serviceProcess
-    
+
     Start-Sleep -Seconds 2
-    
+
     if ($serviceProcess.HasExited) {
         Write-Error "Service failed to start"
         Cleanup-Background
         return
     }
-    
+
     Write-Host "Starting UIs briefly (with required protocols)..." -ForegroundColor Green
     $cameraProcess = Start-Process -FilePath (Get-ExePath 'camera_ui/camera_ui') -ArgumentList '--protocol', 'tcp' -PassThru -NoNewWindow
     $mappingProcess = Start-Process -FilePath (Get-ExePath 'mapping_ui/mapping_ui') -ArgumentList '--protocol', 'udp' -PassThru -NoNewWindow
     $global:BackgroundProcesses += $cameraProcess, $mappingProcess
-    
+
     Start-Sleep -Milliseconds 500
-    
+
     Write-Host "Starting UAV simulator briefly..." -ForegroundColor Green
     $uavProcess = Start-Process -FilePath (Get-ExePath 'uav_sim/uav_sim') -ArgumentList 'UAV_1' -PassThru -NoNewWindow
     $global:BackgroundProcesses += $uavProcess
-    
+
     Start-Sleep -Seconds 3
-    
+
     # Stop all processes using our cleanup function
     Write-Host "Stopping test processes..." -ForegroundColor Yellow
     Cleanup-Background
-    
+
     # Show log tail
     $logPath = Join-Path $RepoRoot 'telemetry_service/telemetry_log.txt'
     if (Test-Path $logPath) {
@@ -646,8 +943,87 @@ function Invoke-DemoTest {
     } else {
         Write-Host "LOG_NOT_FOUND" -ForegroundColor Yellow
     }
-    
+
     Write-Host "Demo test completed." -ForegroundColor Green
+}
+
+# Test cross-target subscription functionality
+function Invoke-CrossTargetTest {
+    Write-Host "=== CROSS-TARGET SUBSCRIPTION TEST ===" -ForegroundColor Cyan
+    Write-Host "Testing cross-target data subscription capabilities..." -ForegroundColor Gray
+    Write-Host ""
+
+    # Ensure executables exist
+    $exes = @('telemetry_service/telemetry_service', 'uav_sim/uav_sim', 'camera_ui/camera_ui', 'mapping_ui/mapping_ui')
+    foreach ($exe in $exes) {
+        $path = Get-ExePath $exe
+        if (!(Test-Path $path)) {
+            Write-Error "Missing $exe. Run '.\dev.ps1 build' first."
+            return $false
+        }
+    }
+
+    # Stop any existing processes
+    Kill-Procs
+    $global:BackgroundProcesses = @()
+
+    try {
+        # Start telemetry service
+        Write-Host "[1/4] Starting telemetry service..." -ForegroundColor Green
+        $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
+        $serviceProcess = Start-Process -FilePath (Get-ExePath 'telemetry_service/telemetry_service') -PassThru -NoNewWindow
+        $global:BackgroundProcesses += $serviceProcess
+
+        Start-Sleep -Seconds 2
+
+        if ($serviceProcess.HasExited) {
+            Write-Error "Service failed to start"
+            return $false
+        }
+
+        # Start camera_ui with cross-target mode
+        Write-Host "[2/4] Starting camera_ui with cross-target subscription..." -ForegroundColor Green
+        $cameraProcess = Start-Process -FilePath (Get-ExePath 'camera_ui/camera_ui') -ArgumentList '--protocol', 'tcp', '--cross-target' -PassThru -NoNewWindow
+        $global:BackgroundProcesses += $cameraProcess
+
+        Start-Sleep -Milliseconds 500
+
+        # Start mapping_ui with all-targets mode
+        Write-Host "[3/4] Starting mapping_ui with all-targets subscription..." -ForegroundColor Green
+        $mappingProcess = Start-Process -FilePath (Get-ExePath 'mapping_ui/mapping_ui') -ArgumentList '--protocol', 'udp', '--all-targets' -PassThru -NoNewWindow
+        $global:BackgroundProcesses += $mappingProcess
+
+        Start-Sleep -Milliseconds 500
+
+        # Start UAV simulator to generate data
+        Write-Host "[4/4] Starting UAV simulator to generate test data..." -ForegroundColor Green
+        $uavProcess = Start-Process -FilePath (Get-ExePath 'uav_sim/uav_sim') -ArgumentList 'UAV_1' -PassThru -NoNewWindow
+        $global:BackgroundProcesses += $uavProcess
+
+        # Let them run for a few seconds to exchange data
+        Write-Host ""
+        Write-Host "Running cross-target test for 5 seconds..." -ForegroundColor Cyan
+        for ($i = 5; $i -gt 0; $i--) {
+            Write-Host "  $i..." -ForegroundColor Gray
+            Start-Sleep -Seconds 1
+        }
+
+        Write-Host ""
+        Write-Host "✓ Cross-target subscription test completed" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "TEST CONFIGURATION:" -ForegroundColor Cyan
+        Write-Host "  - camera_ui: TCP with cross-target subscription (receives mapping data)" -ForegroundColor Gray
+        Write-Host "  - mapping_ui: UDP with all-targets subscription (receives all data types)" -ForegroundColor Gray
+        Write-Host "  - UAV simulator: Generating telemetry data for all targets" -ForegroundColor Gray
+        Write-Host ""
+
+        return $true
+
+    } finally {
+        # Cleanup
+        Write-Host "Stopping test processes..." -ForegroundColor Yellow
+        Cleanup-Background
+    }
 }
 
 function Clean {
@@ -665,7 +1041,7 @@ function Clean {
 function Run-One {
     param([string] $name, [string[]] $arguments = @())
     $env:SERVICE_CONFIG = Join-Path $RepoRoot 'service_config.json'
-    
+
     # Validate UI component arguments
     if ($name -eq "camera_ui" -or $name -eq "mapping_ui") {
         if ($arguments.Count -eq 0 -or $arguments -notcontains "--protocol") {
@@ -676,7 +1052,7 @@ function Run-One {
             Write-Host "  .\dev.ps1 run mapping_ui --protocol udp" -ForegroundColor Gray
             return
         }
-        
+
         # Find protocol value
         $protocolIndex = [Array]::IndexOf($arguments, "--protocol")
         if ($protocolIndex -ge 0 -and $protocolIndex + 1 -lt $arguments.Count) {
@@ -690,7 +1066,7 @@ function Run-One {
             return
         }
     }
-    
+
     # Validate UAV simulator arguments
     if ($name -eq "uav_sim") {
         if ($arguments.Count -eq 0) {
@@ -702,7 +1078,7 @@ function Run-One {
             return
         }
     }
-    
+
     switch ($name) {
         'telemetry_service' { & (Get-ExePath 'telemetry_service/telemetry_service') @arguments }
         'uav_sim'           { & (Get-ExePath 'uav_sim/uav_sim') @arguments }
@@ -774,14 +1150,14 @@ function Demo {
 
 function Install-Project {
     param([string] $Prefix = "C:\Program Files\TelemetryService")
-    
+
     Ensure-BuildDirs
     $cmakePath = Get-CmakePath
     if (-not $cmakePath) { throw "CMake not found." }
-    
+
     Write-Host "Installing project to: $Prefix" -ForegroundColor Cyan
     $buildDir = Join-Path $RepoRoot 'build'
-    
+
     if ($Prefix -like "C:\Program Files\*") {
         # Requires admin for system directories
         $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
@@ -791,14 +1167,14 @@ function Install-Project {
             return
         }
     }
-    
+
     & $cmakePath --install $buildDir --prefix $Prefix
 }
 
 function Package-Project {
     Ensure-BuildDirs
     $buildDir = Join-Path $RepoRoot 'build'
-    
+
     Write-Host "Creating distribution packages..." -ForegroundColor Cyan
     Push-Location $buildDir
     try {
@@ -807,7 +1183,7 @@ function Package-Project {
             throw "CPack not found. Please ensure CMake is properly installed."
         }
         & cpack
-        
+
         Write-Host "Packages created in: $buildDir" -ForegroundColor Green
         Get-ChildItem $buildDir -Filter "*.zip" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
         Get-ChildItem $buildDir -Filter "*.exe" | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Gray }
@@ -821,17 +1197,18 @@ if (-not $Command) {
     Write-Host @"
 Available commands:
   Build Commands:    configure | build | rebuild | clean | watch
+  Code Quality:      format | check-format | lint | quality
   Runtime Commands:  run | up | down | status | logs
-  Testing:           demo | test | health
+  Testing:           demo | test | test-cross-target | health
   Information:       info | deps | validate
-  
+
 Use '.\dev.ps1 <command> -?' for detailed help on each command.
 "@ -ForegroundColor Cyan
     exit 0
 }
 
 switch ($Command) {
-    'configure'      { 
+    'configure'      {
         # Use script parameters if provided, otherwise use Args
         $generatorToUse = if ($Generator) { $Generator } elseif ($Args.Count -gt 0) { $Args[0] } else { $null }
         $buildTypeToUse = if ($BuildType -and $BuildType -ne "Release") { $BuildType } elseif ($Args.Count -gt 1) { $Args[1] } else { "Release" }
@@ -841,22 +1218,27 @@ switch ($Command) {
     'build-targets'  { if (-not $Args) { throw 'Specify one or more CMake targets' } else { Build -Targets $Args } }
     'clean'          { Clean }
     'rebuild'        { Clean; Configure; Build }
-    'watch'          { 
+    'watch'          {
         $generator = if ($Args.Count -gt 0) { $Args[0] } else { $null }
-        Invoke-WatchMode -Generator $generator 
+        Invoke-WatchMode -Generator $generator
     }
-    'run'            { 
-        if (-not $Args) { throw 'Specify component: telemetry_service|uav_sim|camera_ui|mapping_ui' } 
-        else { Run-One -name $Args[0] -arguments $Args[1..($Args.Length-1)] } 
+    'format'         { Format-Code | Out-Null }
+    'check-format'   { Test-CodeFormat | Out-Null }
+    'lint'           { Invoke-Linting | Out-Null }
+    'quality'        { Invoke-QualityCheck | Out-Null }
+    'run'            {
+        if (-not $Args) { throw 'Specify component: telemetry_service|uav_sim|camera_ui|mapping_ui' }
+        else { Run-One -name $Args[0] -arguments $Args[1..($Args.Length-1)] }
     }
     'demo'           { Demo }
     'test'           { Invoke-Tests }
+    'test-cross-target' { Invoke-CrossTargetTest | Out-Null }
     'health'         { Invoke-HealthCheck }
     'info'           { Show-Info }
     'deps'           { Test-Dependencies | Out-Null }
-    'validate'       { 
+    'validate'       {
         $configFile = if ($Args.Count -gt 0) { $Args[0] } else { $null }
-        Test-Config -ConfigFile $configFile | Out-Null 
+        Test-Config -ConfigFile $configFile | Out-Null
     }
     'up'             { Up -Uavs $Args }
     'down'           { Down }

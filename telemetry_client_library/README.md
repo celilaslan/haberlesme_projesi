@@ -1,309 +1,272 @@
 # Telemetry Client Library
 
-A comprehensive C++ shared library (.so/.dll) that provides both basic and advanced APIs for communicating with the telemetry service. This library offers everything from simple telemetry reception to advanced fleet management, data analysis, and real-time monitoring capabilities.
+A simple C++ library for connecting to the UAV telemetry service and receiving real-time telemetry data. This library hides the complexity of ZeroMQ and Boost.Asio networking, providing a clean API for UI applications.
 
 ## Features
 
-### Basic Features
-- **Simple API**: Clean, intuitive interface for telemetry communication
-- **Protocol Support**: TCP (ZeroMQ), UDP (Boost.Asio), or both simultaneously
-- **Filtering**: Subscribe to specific UAVs or data types (mapping/camera)
-- **Command Sending**: Send commands to UAVs via the telemetry service
+- **Easy-to-use API**: Simple connect, subscribe, and receive pattern
+- **Dual Protocol Support**: TCP (ZeroMQ) for reliable communication, UDP for low-latency
+- **Wildcard Subscriptions**: Subscribe to multiple topics with pattern matching
+- **Command Support**: Send commands to UAVs (TCP only)
 - **Thread-Safe**: Safe to use from multiple threads
-- **Cross-Platform**: Works on Linux and Windows
-- **Error Handling**: Comprehensive error reporting and callbacks
-
-### Advanced Features ✨
-- **Asynchronous Commands**: Send commands with response callbacks and timeout handling
-- **Fleet Management**: Multi-UAV coordination and status monitoring
-- **Data Analysis**: Real-time quality metrics, bandwidth monitoring, and historical data
-- **Event System**: Subscribe to UAV events (connection, disconnection, emergencies)
-- **Security**: Authentication, encryption, and permission-based access control
-- **Performance Monitoring**: CPU, memory, and throughput metrics
-- **Data Recording/Replay**: Record telemetry sessions and replay for analysis
-- **Mock UAV Simulation**: Built-in UAV simulator for testing and development
-- **Network Resilience**: Automatic failover, backup connections, and quality monitoring
-- **Advanced Configuration**: Operation modes, protocol optimization, and dynamic settings
+- **Cross-Platform**: Works on Linux, Windows, and macOS
 
 ## Quick Start
 
-### 1. Build the Library
-
-```bash
-# From the project root
-./dev.sh build
-```
-
-This builds the shared library and example applications.
-
-### 2. Simple Usage Example
+### Basic Usage
 
 ```cpp
 #include "TelemetryClient.h"
 #include <iostream>
 
-using namespace TelemetryAPI;
-
-void onTelemetryReceived(const TelemetryData& data) {
-    std::cout << "UAV: " << data.uav_name
-              << " Data: " << data.raw_data << std::endl;
-}
-
 int main() {
-    TelemetryClient client;
+    // Create client with unique ID
+    TelemetryAPI::TelemetryClient client("my_ui_app");
 
-    // Initialize and connect to service
-    if (!client.initialize("localhost")) {
-        std::cerr << "Failed to initialize: " << client.getLastError() << std::endl;
-        return 1;
+    // Set up data callback
+    client.setTelemetryCallback([](const std::string& topic, const std::vector<uint8_t>& data) {
+        std::cout << "Received " << data.size() << " bytes on topic: " << topic << std::endl;
+    });
+
+    // Connect to service
+    if (client.connectFromConfig()) {
+        // Subscribe to all camera data
+        client.subscribe("telemetry.*.camera.*");
+
+        // Keep running...
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+
+        client.disconnect();
     }
 
-    // Start receiving telemetry data
-    if (!client.startReceiving(Protocol::TCP_ONLY, onTelemetryReceived)) {
-        std::cerr << "Failed to start: " << client.getLastError() << std::endl;
-        return 1;
-    }
-
-    // Send a command to UAV_1
-    client.sendCommand("UAV_1", "status report", "MyApp");
-
-    // Keep running...
-    std::this_thread::sleep_for(std::chrono::seconds(30));
-
-    client.stopReceiving();
     return 0;
 }
 ```
 
-### 3. Link Against the Library
+### Advanced Usage with Command Sending
 
-```cmake
-# CMakeLists.txt
-find_package(TelemetryClient REQUIRED)
-target_link_libraries(your_app TelemetryClient::telemetry_client)
-```
+```cpp
+#include "TelemetryClient.h"
+#include <iostream>
 
-Or manually:
-```bash
-g++ -std=c++17 your_app.cpp -ltelemetry_client -o your_app
+int main() {
+    TelemetryAPI::TelemetryClient client("control_panel");
+
+    // Connection status callback
+    client.setConnectionCallback([](bool connected, const std::string& error) {
+        if (connected) {
+            std::cout << "Connected to telemetry service" << std::endl;
+        } else {
+            std::cout << "Disconnected: " << error << std::endl;
+        }
+    });
+
+    // Telemetry data callback with packet parsing
+    client.setTelemetryCallback([](const std::string& topic, const std::vector<uint8_t>& data) {
+        const auto* header = TelemetryAPI::TelemetryClient::parseHeader(data);
+        if (header) {
+            std::cout << "Topic: " << topic << std::endl;
+            std::cout << "Target: " << TelemetryAPI::TelemetryClient::getTargetName(header->targetID) << std::endl;
+            std::cout << "Type: " << TelemetryAPI::TelemetryClient::getPacketTypeName(header->packetType) << std::endl;
+        }
+    });
+
+    // Connect using TCP for command support
+    if (client.connect("localhost", 5556, TelemetryAPI::Protocol::TCP)) {
+        // Subscribe to all telemetry
+        client.subscribe("telemetry.*");
+
+        // Send a command to UAV_1
+        client.sendCommand("UAV_1", "GET_STATUS");
+
+        // Keep running...
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+
+        client.disconnect();
+    }
+
+    return 0;
+}
 ```
 
 ## API Reference
 
-### Core Classes
+### TelemetryClient Class
 
-#### `TelemetryClient`
-Main client class for telemetry communication.
+#### Constructor
+```cpp
+TelemetryClient(const std::string& client_id)
+```
+Creates a new telemetry client with the specified unique identifier.
 
-**Key Methods:**
-- `bool initialize(host, config_file)` - Initialize client with service connection
-- `bool startReceiving(protocol, callback, error_callback)` - Start receiving data
-- `bool sendCommand(uav_name, command, client_name)` - Send command to UAV
-- `bool subscribeToUAV(uav_name, data_type)` - Filter by specific UAV
-- `bool subscribeToDataType(data_type)` - Filter by data type
-- `void stopReceiving()` - Stop and cleanup
+#### Connection Methods
 
-#### `TelemetryData`
-Structure containing received telemetry data.
+**connect()**
+```cpp
+bool connect(const std::string& host, int port, Protocol protocol = Protocol::TCP)
+```
+Connect to telemetry service at specific host and port.
 
-**Fields:**
-- `std::string uav_name` - UAV identifier (e.g., "UAV_1")
-- `DataType data_type` - MAPPING, CAMERA, or UNKNOWN
-- `std::string raw_data` - Raw telemetry data
-- `Protocol received_via` - TCP_ONLY, UDP_ONLY, or BOTH
-- `uint64_t timestamp_ms` - Reception timestamp
+**connectFromConfig()**
+```cpp
+bool connectFromConfig(const std::string& config_file = "service_config.json", Protocol protocol = Protocol::TCP)
+```
+Connect using configuration file (recommended).
 
-### Enums
+**disconnect()**
+```cpp
+void disconnect()
+```
+Disconnect from service and stop all background threads.
 
-#### `Protocol`
-- `TCP_ONLY` - Use TCP (ZeroMQ) for reliable communication
-- `UDP_ONLY` - Use UDP for low-latency communication
-- `BOTH` - Use both protocols simultaneously
+**isConnected()**
+```cpp
+bool isConnected() const
+```
+Check current connection status.
 
-#### `DataType`
-- `MAPPING` - Mapping/navigation data
-- `CAMERA` - Camera/vision data
-- `UNKNOWN` - Unknown or mixed data
+#### Subscription Methods
+
+**subscribe()**
+```cpp
+bool subscribe(const std::string& topic)
+```
+Subscribe to telemetry topic with wildcard support.
+
+**unsubscribe()**
+```cpp
+bool unsubscribe(const std::string& topic)
+```
+Unsubscribe from telemetry topic.
+
+#### Command Methods
+
+**sendCommand()** (TCP only)
+```cpp
+bool sendCommand(const std::string& uav_name, const std::string& command)
+```
+Send command to specific UAV.
+
+#### Callback Methods
+
+**setTelemetryCallback()**
+```cpp
+void setTelemetryCallback(TelemetryCallback callback)
+```
+Set callback for received telemetry data.
+
+**setConnectionCallback()**
+```cpp
+void setConnectionCallback(ConnectionCallback callback)
+```
+Set callback for connection status changes.
+
+### Topic Patterns
+
+The library supports wildcard patterns in topic subscriptions:
+
+- `"telemetry.*"` - All telemetry data
+- `"telemetry.UAV_1.*"` - All data from UAV_1
+- `"telemetry.*.camera.*"` - All camera data from all UAVs
+- `"telemetry.*.*.location"` - All location data
+- `"telemetry.UAV_1.camera.location"` - Specific data type
+
+### Protocols
+
+#### TCP (ZeroMQ)
+- **Reliable delivery**: Messages guaranteed to arrive
+- **Command support**: Can send commands to UAVs
+- **Subscription filtering**: Done at transport level
+- **Default port**: 5556 (subscriber), 5557 (commands)
+
+#### UDP (Boost.Asio)
+- **Low latency**: Faster message delivery
+- **Telemetry only**: No command support
+- **Client-side filtering**: Receives all subscribed data
+- **Default port**: 5558
 
 ### Utility Functions
 
-- `std::string getLibraryVersion()` - Get library version
-- `bool testServiceConnection(host, port, timeout)` - Test connectivity
-- `bool parseTelemetryMessage(raw_message, uav_name, numeric_code)` - Parse telemetry format
-
-## Example Applications
-
-The library includes several example applications:
-
-### simple_receiver
-Basic telemetry data receiver.
-```bash
-./telemetry_client_library/examples/simple_receiver --protocol tcp
-./telemetry_client_library/examples/simple_receiver --protocol udp
-./telemetry_client_library/examples/simple_receiver --protocol both
-```
-
-### advanced_client
-Interactive client with filtering and command sending.
-```bash
-./telemetry_client_library/examples/advanced_client --protocol both
-```
-
-Commands:
-- `filter uav UAV_1` - Filter for specific UAV
-- `filter type mapping` - Filter for mapping data only
-- `send UAV_1 takeoff` - Send command to UAV
-- `debug on` - Enable debug output
-
-### command_sender
-Dedicated command sending utility.
-```bash
-# Single command
-./telemetry_client_library/examples/command_sender --uav UAV_1 --command "takeoff"
-
-# Interactive mode
-./telemetry_client_library/examples/command_sender
-```
-
-### advanced_telemetry_client ✨
-**NEW**: Comprehensive demonstration of all advanced features.
-```bash
-./telemetry_client_library/examples/advanced_telemetry_client [service_host]
-```
-
-This advanced example demonstrates:
-- **Fleet Management**: Multi-UAV coordination and status monitoring
-- **Asynchronous Commands**: Non-blocking command execution with callbacks
-- **Data Recording**: Automatic telemetry session recording
-- **Performance Monitoring**: Real-time metrics and network statistics
-- **Mock UAV Simulation**: Built-in test UAV with configurable network conditions
-- **Event Handling**: Real-time notifications for UAV events
-- **Data Quality Analysis**: Packet loss, latency, and freshness metrics
-
-Example output:
-```
-=== FLEET STATUS ===
-Active UAVs: 3/3
-Overall Health: 87.5%
-  UAV_1: ONLINE (Health: 92.3%)
-  UAV_2: ONLINE (Health: 85.1%)
-  UAV_3: OFFLINE (Health: 45.2%)
-
-=== PERFORMANCE METRICS ===
-CPU Usage: 5.2%
-Memory Usage: 84 MB
-Messages/sec: 156
-Avg Processing Time: 1.23 ms
-```
-
-## Advanced API Classes
-
-The library automatically loads configuration from:
-1. `SERVICE_CONFIG` environment variable
-2. `service_config.json` in current directory
-3. Default ports if no config found
-
-Default ports:
-- TCP Publish: 5557
-- TCP Command: 5558
-- UDP Camera: 5570
-- UDP Mapping: 5571
-
-## Error Handling
-
-The library provides comprehensive error handling:
-
+**parseHeader()**
 ```cpp
-// Error callback for async errors
-void onError(const std::string& error_message) {
-    std::cerr << "Async error: " << error_message << std::endl;
-}
-
-client.startReceiving(Protocol::TCP_ONLY, onTelemetry, onError);
-
-// Synchronous error checking
-if (!client.sendCommand("UAV_1", "test")) {
-    std::cout << "Error: " << client.getLastError() << std::endl;
-}
+static const PacketHeader* parseHeader(const std::vector<uint8_t>& data)
 ```
+Extract packet header from telemetry data.
 
-## Threading
+**getTargetName()**
+```cpp
+static std::string getTargetName(uint8_t targetId)
+```
+Convert target ID to human-readable name.
 
-The library is thread-safe and uses background threads for:
-- TCP telemetry reception (ZeroMQ subscriber)
-- UDP telemetry reception (Boost.Asio async I/O)
-- Command sending (ZeroMQ push socket)
+**getPacketTypeName()**
+```cpp
+static std::string getPacketTypeName(uint8_t packetType)
+```
+Convert packet type ID to human-readable name.
 
-All callbacks are invoked from background threads, so ensure your callback functions are thread-safe.
+## Building
 
-## Building and Installation
+The library is built automatically as part of the main project:
 
-### Development Build
 ```bash
-# Configure and build
-./dev.sh configure
-./dev.sh build
-
-# Run examples
-./dev.sh run simple_receiver --protocol tcp
+mkdir build
+cd build
+cmake ..
+make telemetry_client
 ```
 
-### System Installation
+### Example Application
+
+Build and run the example:
+
 ```bash
-# Install library and headers
-sudo make install
-
-# Or using the dev script
-./dev.sh install /usr/local
+make example_client
+./telemetry_client_library/example_client
 ```
-
-### Package Creation
-```bash
-# Create distribution packages
-./dev.sh package
-```
-
-## Platform Support
-
-- **Linux**: Builds as `libtelemetry_client.so`
-- **Windows**: Builds as `telemetry_client.dll`
-- **macOS**: Builds as `libtelemetry_client.dylib`
 
 ## Dependencies
 
-The library encapsulates these dependencies (not exposed to users):
-- ZeroMQ (for TCP communication)
-- Boost.Asio (for UDP communication)
-- nlohmann/json (for configuration parsing)
+- **ZeroMQ**: TCP communication and subscription management
+- **Boost.Asio**: UDP communication
+- **nlohmann/json**: Configuration file parsing
+- **C++17**: Required for modern C++ features
 
-## License
+## Thread Safety
 
-Same license as the main telemetry project.
+- All public methods are thread-safe
+- Callbacks are called from background threads
+- Use proper synchronization in your callback functions
 
-## Troubleshooting
+## Error Handling
 
-### Common Issues
+- Connection errors are reported via ConnectionCallback
+- Failed operations return false
+- Exceptions are caught internally and converted to error callbacks
 
-1. **"Failed to initialize"**
-   - Check if `service_config.json` exists
-   - Verify service hostname is correct
-   - Ensure telemetry service is running
+## Configuration File
 
-2. **"Failed to start receiving"**
-   - Check if ports are available
-   - Verify firewall settings
-   - Try different protocol (TCP vs UDP)
+The library can automatically read connection settings from `service_config.json`:
 
-3. **"No telemetry data received"**
-   - Ensure UAV simulators are running
-   - Check if telemetry service is running
-   - Verify port configuration matches
-
-### Debug Mode
-
-Enable debug mode to see detailed networking information:
-```cpp
-client.setDebugMode(true);
+```json
+{
+  "ui_ports": {
+    "tcp_subscribe_port": 5556,
+    "tcp_command_port": 5557,
+    "udp_publish_port": 5558
+  },
+  "service": {
+    "ip": "localhost"
+  }
+}
 ```
 
-This will print connection details, received messages, and error information.
+## Examples Directory
+
+See `example_client.cpp` for a comprehensive example showing:
+- Connection establishment
+- Multiple subscription patterns
+- Telemetry data parsing
+- Command sending
+- Error handling
+- Clean shutdown

@@ -9,6 +9,7 @@
 
 #include "UdpManager.h"
 
+#include <sstream>
 #include "Logger.h"
 #include "TelemetryPackets.h"
 
@@ -86,8 +87,11 @@ void UdpServer::doReceive() {
 
 /**
  * @brief Constructor - initializes UDP manager with configuration
- * @param config Configuration containing UAV settings
+ * @param config Configuration containing UAV and UI port settings
  * @param callback Function to call when UDP messages are received
+ *
+ * Initializes the UDP manager with the necessary configuration and sets up
+ * the callback for handling incoming telemetry messages.
  */
 UdpManager::UdpManager(const Config& config, UdpMessageCallback callback)
     : config_(config), messageCallback_(std::move(callback)) {}
@@ -102,14 +106,14 @@ UdpManager::~UdpManager() {
     // Explicit socket cleanup
     std::lock_guard<std::mutex> lock(socketMutex_);
     try {
-        if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
-            cameraPublishSocket_->close();
+        if (publishSocket_ && publishSocket_->is_open()) {
+            publishSocket_->close();
         }
-        if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
-            mappingPublishSocket_->close();
+        if (subscriptionSocket_ && subscriptionSocket_->is_open()) {
+            subscriptionSocket_->close();
         }
-        cameraPublishSocket_.reset();
-        mappingPublishSocket_.reset();
+        publishSocket_.reset();
+        subscriptionSocket_.reset();
         servers_.clear();
     } catch (const std::exception& e) {
         Logger::error("UDP cleanup error: " + std::string(e.what()));
@@ -141,27 +145,24 @@ void UdpManager::start() {
             }
         }
 
-        // Set up UDP multicast publishing sockets for UI communication
-        cameraPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
-        mappingPublishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
+        // Set up UDP publishing socket for UI communication
+        publishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
 
-        // Use multicast addresses instead of unicast to allow multiple subscribers
-        cameraEndpoint_ =
-            udp::endpoint(boost::asio::ip::address::from_string("239.0.0.1"), config_.getUiPorts().udp_camera_port);
-        mappingEndpoint_ =
-            udp::endpoint(boost::asio::ip::address::from_string("239.0.0.2"), config_.getUiPorts().udp_mapping_port);
-        Logger::statusWithDetails("UDP", StatusMessage("UI Camera Publisher socket created"),
-                                  DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_camera_port)));
-        Logger::statusWithDetails("UDP", StatusMessage("UI Mapping Publisher socket created"),
-                                  DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_mapping_port)));
-    } catch (const std::exception& e) {
+        // Set up subscription management socket for receiving subscription requests from UI
+        subscriptionSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), config_.getUiPorts().udp_publish_port));
+
+        Logger::statusWithDetails("UDP", StatusMessage("UI Publisher bound"),
+                                  DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_publish_port)));
+
+        // Start receiving subscription requests
+        startSubscriptionReceive();    } catch (const std::exception& e) {
         Logger::error("UDP setup failed: " + std::string(e.what()));
         running_ = false;
         throw;
     }
 
-    // Start the I/O service thread if we have any UDP servers or publishing is enabled
-    if (!servers_.empty() || cameraPublishSocket_ || mappingPublishSocket_) {
+    // Start the I/O service thread if we have any UDP servers or publishing socket
+    if (!servers_.empty() || publishSocket_) {
         serviceThread_ = std::thread([this]() {
             while (running_) {
                 try {
@@ -212,33 +213,39 @@ void UdpManager::join() {
 }
 
 /**
- * @brief Publish telemetry data to UI components via UDP
- * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+ * @brief Publish telemetry data to subscribed UI components via UDP
+ * @param topic The topic being published (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
  * @param data The binary telemetry data to send
  *
- * Routing behavior:
- * - Target topics (target.camera.*, target.mapping.*) go only to their designated UI
- * - Type topics are routed based on their specific type:
- *   - type.location.*: primarily to mapping UI, also to camera UI for cross-subscription
- *   - type.status.*: primarily to camera UI, also to mapping UI for cross-subscription
+ * Sends telemetry data only to UI clients that have subscribed to this topic.
+ * This provides the same subscription functionality as TCP but over UDP.
+ * Thread-safe through mutex protection.
  */
 void UdpManager::publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data) {
     try {
         std::lock_guard<std::mutex> lock(socketMutex_);
+        if (publishSocket_ && running_) {
+            // Get subscribers for this topic
+            std::vector<udp::endpoint> subscribers = getSubscribers(topic);
 
-        // Format message as "topic|data" for easy parsing by UI components
-        std::vector<uint8_t> message;
-        message.reserve(topic.size() + 1 + data.size());
+            if (subscribers.empty()) {
+                return; // No subscribers, don't send anything
+            }
 
-        // Add topic as text
-        message.insert(message.end(), topic.begin(), topic.end());
-        // Add separator
-        message.push_back('|');
-        // Add binary data
-        message.insert(message.end(), data.begin(), data.end());
+            // Format message as "topic|data" for parsing by UI components (same as TCP)
+            std::vector<uint8_t> message;
+            message.reserve(topic.size() + 1 + data.size());
+            message.insert(message.end(), topic.begin(), topic.end());
+            message.push_back('|');
+            message.insert(message.end(), data.begin(), data.end());
 
-        // Helper function to decode packet info from binary data
-        auto getPacketInfo = [](const std::vector<uint8_t>& data) -> std::string {
+            // Send to each subscribed client
+            for (const auto& subscriber : subscribers) {
+                publishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), subscriber);
+            }
+
+            // Decode packet info from binary data (same format as TCP)
+            std::string packetInfo = "";
             if (data.size() >= sizeof(PacketHeader)) {
                 const PacketHeader* header = reinterpret_cast<const PacketHeader*>(data.data());
 
@@ -256,67 +263,172 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::vector<ui
                     default: typeName = "Unknown(" + std::to_string(header->packetType) + ")"; break;
                 }
 
-                return " - Target: " + targetName + ", Type: " + typeName;
+                packetInfo = " - Target: " + targetName + ", Type: " + typeName;
             }
-            return "";
-        };
 
-        // Helper function to create hex dump
-        auto getHexDump = [](const std::vector<uint8_t>& data) -> std::string {
-            std::string hexData = "";
-            size_t hexLimit = std::min(data.size(), static_cast<size_t>(32));
-            for (size_t i = 0; i < hexLimit; ++i) {
-                char hex[4];
-                snprintf(hex, sizeof(hex), "%02X ", data[i]);
-                hexData += hex;
-            }
-            if (data.size() > 32) hexData += "...";
-            return " | Hex: " + hexData;
-        };
-
-        // Route based on topic type
-        if (topic.find("target.camera.") == 0) {
-            // Target-based routing: camera UI gets its targeted data
-            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
-                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + getPacketInfo(data) + getHexDump(data));
-            }
-        } else if (topic.find("target.mapping.") == 0) {
-            // Target-based routing: mapping UI gets its targeted data
-            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
-                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + getPacketInfo(data) + getHexDump(data));
-            }
-        } else if (topic.find("type.location.") == 0) {
-            // Location data: primarily for mapping UI, but camera UI can subscribe if needed
-            std::string packetInfo = getPacketInfo(data);
-            std::string hexInfo = getHexDump(data);
-            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
-                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
-            }
-            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
-                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
-            }
-        } else if (topic.find("type.status.") == 0) {
-            // Status data: primarily for camera UI, but mapping UI can subscribe if needed
-            std::string packetInfo = getPacketInfo(data);
-            std::string hexInfo = getHexDump(data);
-            if (cameraPublishSocket_ && cameraPublishSocket_->is_open()) {
-                cameraPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), cameraEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
-            }
-            if (mappingPublishSocket_ && mappingPublishSocket_->is_open()) {
-                mappingPublishSocket_->send_to(boost::asio::buffer(message.data(), message.size()), mappingEndpoint_);
-                Logger::info("UDP Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo + hexInfo);
-            }
-        } else {
-            Logger::error("Unknown topic format for UDP publish: " + topic);
-            return;
+            Logger::info("UDP Published [" + topic + "] to " + std::to_string(subscribers.size()) + " subscribers: " +
+                        std::to_string(data.size()) + " bytes" + packetInfo);
         }
-
     } catch (const std::exception& e) {
         Logger::error("UDP publish error: " + std::string(e.what()));
     }
 }
+
+// === Simple Subscription Management Implementation ===
+
+void UdpManager::startSubscriptionReceive() {
+    if (!subscriptionSocket_) return;
+
+    // Create buffers for receiving subscription requests (each call gets its own buffer)
+    auto subscriptionBuffer = std::make_shared<std::array<uint8_t, 1024>>();
+    auto senderEndpoint = std::make_shared<udp::endpoint>();
+
+    subscriptionSocket_->async_receive_from(
+        boost::asio::buffer(*subscriptionBuffer), *senderEndpoint,
+        [this, subscriptionBuffer, senderEndpoint](boost::system::error_code error, std::size_t bytes_received) {
+            if (!error && bytes_received > 0) {
+                try {
+                    std::vector<uint8_t> received_data(subscriptionBuffer->begin(),
+                                                     subscriptionBuffer->begin() + bytes_received);
+                    handleSubscriptionRequest(received_data, *senderEndpoint);
+                } catch (const std::exception& e) {
+                    Logger::error("Subscription request processing error: " + std::string(e.what()));
+                }
+            }
+
+            // Continue receiving if still running
+            if (running_) {
+                startSubscriptionReceive();
+            }
+        });
+}
+
+void UdpManager::handleSubscriptionRequest(const std::vector<uint8_t>& data, const udp::endpoint& sender) {
+    try {
+        // Simple protocol: "SUBSCRIBE|topic|client_id" or "UNSUBSCRIBE|topic|client_id"
+        std::string message(data.begin(), data.end());
+
+        size_t firstPipe = message.find('|');
+        if (firstPipe == std::string::npos) return;
+
+        size_t secondPipe = message.find('|', firstPipe + 1);
+        if (secondPipe == std::string::npos) return;
+
+        std::string command = message.substr(0, firstPipe);
+        std::string topic = message.substr(firstPipe + 1, secondPipe - firstPipe - 1);
+        std::string client_id = message.substr(secondPipe + 1);
+
+        std::lock_guard<std::mutex> lock(subscriptionMutex_);
+
+        if (command == "SUBSCRIBE") {
+            clients_[client_id] = sender;
+            subscriptions_[topic].insert(client_id);
+            Logger::info("UDP Client " + client_id + " subscribed to: " + topic);
+        } else if (command == "UNSUBSCRIBE") {
+            subscriptions_[topic].erase(client_id);
+            if (subscriptions_[topic].empty()) {
+                subscriptions_.erase(topic);
+            }
+            Logger::info("UDP Client " + client_id + " unsubscribed from: " + topic);
+        }
+    } catch (const std::exception& e) {
+        Logger::error("Failed to parse subscription request: " + std::string(e.what()));
+    }
+}
+
+std::vector<udp::endpoint> UdpManager::getSubscribers(const std::string& topic) const {
+    std::lock_guard<std::mutex> lock(subscriptionMutex_);
+    std::vector<udp::endpoint> result;
+    std::unordered_set<std::string> matched_clients;
+
+    // Check all subscription patterns for wildcard matches
+    for (const auto& subscription : subscriptions_) {
+        const std::string& pattern = subscription.first;
+        const std::unordered_set<std::string>& client_ids = subscription.second;
+
+        // Check if topic matches this pattern (exact match or wildcard)
+        if (matchesWildcardPattern(pattern, topic)) {
+            for (const auto& client_id : client_ids) {
+                // Avoid duplicate clients
+                if (matched_clients.find(client_id) == matched_clients.end()) {
+                    auto client_it = clients_.find(client_id);
+                    if (client_it != clients_.end()) {
+                        result.push_back(client_it->second);
+                        matched_clients.insert(client_id);
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+std::string UdpManager::endpointToString(const udp::endpoint& endpoint) const {
+    return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());
+}
+
+bool UdpManager::matchesWildcardPattern(const std::string& pattern, const std::string& topic) const {
+    // Handle exact match
+    if (pattern == topic) {
+        return true;
+    }
+
+    // Handle wildcard patterns (* means match any segment)
+    // Pattern: "telemetry.*" matches "telemetry.UAV_1.camera.location"
+    // Pattern: "telemetry.*.camera.*" matches "telemetry.UAV_1.camera.location"
+    // Pattern: "telemetry.UAV_1.*" matches "telemetry.UAV_1.camera.location"
+
+    // Split pattern and topic by dots
+    std::vector<std::string> pattern_parts;
+    std::vector<std::string> topic_parts;
+
+    // Split pattern
+    std::stringstream pattern_stream(pattern);
+    std::string pattern_part;
+    while (std::getline(pattern_stream, pattern_part, '.')) {
+        pattern_parts.push_back(pattern_part);
+    }
+
+    // Split topic
+    std::stringstream topic_stream(topic);
+    std::string topic_part;
+    while (std::getline(topic_stream, topic_part, '.')) {
+        topic_parts.push_back(topic_part);
+    }
+
+    // Match parts
+    size_t pattern_idx = 0;
+    size_t topic_idx = 0;
+
+    while (pattern_idx < pattern_parts.size() && topic_idx < topic_parts.size()) {
+        const std::string& pattern_segment = pattern_parts[pattern_idx];
+
+        if (pattern_segment == "*") {
+            // Wildcard matches any single segment
+            pattern_idx++;
+            topic_idx++;
+        } else {
+            // Exact segment match required
+            if (pattern_segment == topic_parts[topic_idx]) {
+                pattern_idx++;
+                topic_idx++;
+            } else {
+                return false; // Segment mismatch
+            }
+        }
+    }
+
+    // Handle trailing wildcards in pattern
+    while (pattern_idx < pattern_parts.size() && pattern_parts[pattern_idx] == "*") {
+        pattern_idx++;
+        if (topic_idx < topic_parts.size()) {
+            topic_idx++;
+        }
+    }
+
+    // Match successful if both pattern and topic are fully consumed
+    return (pattern_idx == pattern_parts.size() && topic_idx == topic_parts.size());
+}
+
+

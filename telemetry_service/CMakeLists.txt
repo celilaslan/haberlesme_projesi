@@ -7,12 +7,12 @@
 # source files that handle different aspects of the system.
 #
 # COMPONENTS:
-#   - main.cpp             : Main entry point and signal handling
-#   - Logger.cpp           : Thread-safe logging system
-#   - Config.cpp           : JSON configuration file parsing
-#   - TcpManager.cpp       : TCP (ZeroMQ) communication management
-#   - UdpManager.cpp       : UDP (Boost.Asio) communication management
-#   - TelemetryService.cpp : Main service coordination logic
+#   - main.cpp                  : Main entry point and signal handling
+#   - Logger.cpp                : Thread-safe logging system
+#   - Config.cpp                : JSON configuration file parsing
+#   - TcpManager.cpp            : TCP (ZeroMQ) communication management
+#   - UdpManager.cpp            : UDP (Boost.Asio) communication management
+#   - TelemetryService.cpp      : Main service coordination logic
 # ============================================================================
 
 # Create the telemetry service executable

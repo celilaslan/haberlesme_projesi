@@ -2,8 +2,8 @@
  * @file UdpManager.h
  * @brief UDP communication manager for the telemetry service
  *
- * This file defines classes for managing UDP-based telemetry communication.
- * It provides an alternative to TCP for UAVs that prefer UDP for
+ * This file defines classes for managing UDP-based telemetry communication,
+ * providing an alternative to TCP for UAVs that prefer UDP for
  * lower latency or simpler networking requirements.
  */
 
@@ -19,6 +19,8 @@
 #include <thread>
 #include <vector>
 #include <cstdio>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "Config.h"
 
@@ -129,8 +131,8 @@ class UdpManager {
      * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
      * @param data The binary telemetry data to send
      *
-     * Sends telemetry data to UI components using UDP multicast.
-     * The message format includes both topic and data.
+     * Sends telemetry data to UI endpoints using UDP multicast.
+     * This method is thread-safe and can be called from callback functions.
      */
     void publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data);
 
@@ -144,11 +146,24 @@ class UdpManager {
     std::vector<std::unique_ptr<UdpServer>> servers_;  ///< UDP servers for each UAV
     std::thread serviceThread_;                        ///< Background thread running I/O context
 
-    // UDP publishing for UI components
-    std::unique_ptr<udp::socket> cameraPublishSocket_;   ///< Socket for publishing camera data to UI
-    std::unique_ptr<udp::socket> mappingPublishSocket_;  ///< Socket for publishing mapping data to UI
-    udp::endpoint cameraEndpoint_;                       ///< Endpoint for camera UI UDP communication
-    udp::endpoint mappingEndpoint_;                      ///< Endpoint for mapping UI UDP communication
+    // Publishing socket
+    std::unique_ptr<udp::socket> publishSocket_;  ///< Socket for publishing telemetry data to UI
+    udp::endpoint publishEndpoint_;               ///< Multicast endpoint for UI communication
+
+    // Simple subscription management
+    std::unique_ptr<udp::socket> subscriptionSocket_;  ///< Socket for receiving subscription requests
+    mutable std::mutex subscriptionMutex_;             ///< Mutex for subscription data
+    std::unordered_map<std::string, std::unordered_set<std::string>> subscriptions_;  ///< topic -> set of client_endpoints
+    std::unordered_map<std::string, udp::endpoint> clients_;  ///< client_id -> endpoint
+
+    // Helper methods for subscription
+    void startSubscriptionReceive();
+    void handleSubscriptionRequest(const std::vector<uint8_t>& data, const udp::endpoint& sender);
+    std::vector<udp::endpoint> getSubscribers(const std::string& topic) const;
+    std::string endpointToString(const udp::endpoint& endpoint) const;
+
+    // Wildcard pattern matching for efficient subscriptions
+    bool matchesWildcardPattern(const std::string& pattern, const std::string& topic) const;
 };
 
 #endif  // UDPMANAGER_H

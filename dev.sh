@@ -4,7 +4,7 @@ set -euo pipefail
 # Cleanup background processes on script exit
 trap 'cleanup_background 2>/dev/null || true' EXIT
 
-# Fast dev helper for this repo
+# Enhanced dev helper for this repo
 # Usage:
 #   ./dev.sh <command> [options]
 #
@@ -21,9 +21,16 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 #   install [build_dir] [prefix] - Install the project to the specified prefix.
 #   package [build_dir]     - Create distribution packages.
 #
+# Code Quality Commands:
+#   format [file]           - Format all C++ files or specific file using clang-format.
+#   lint [file]             - Run static analysis on all files or specific file using clang-tidy.
+#   quality-check [file]    - Run both format check and lint on all files or specific file.
+#   fix-format [file]       - Auto-fix formatting issues in all files or specific file.
+#
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
 #     <target>: telemetry_service, uav_sim, camera_ui, mapping_ui
+#     For UI apps, use: --protocol tcp|udp [--all-targets|--cross-target] [--send UAV_NAME]
 #
 #   up [UAVs...] [args...]  - Launch service, UIs, and specified UAVs in new terminals.
 #                             Any extra arguments are passed to all UAV simulators.
@@ -35,6 +42,7 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 #   demo                    - Run a quick, self-contained test of the system.
 #   test [build_dir]        - Run project tests or smoke test if no tests available.
 #   protocol-test           - Comprehensive test of all protocol combinations.
+#   cross-target-test       - Test cross-target subscription functionality.
 #   health                  - Comprehensive system health check.
 #   logs [-f]               - Show the tail of the service log file (-f to follow).
 #
@@ -57,18 +65,47 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 # Examples:
 #   ./dev.sh configure build Debug    # Configure for debug build
 #   ./dev.sh build
+#   ./dev.sh format                   # Format all C++ files
+#   ./dev.sh lint src/main.cpp        # Lint specific file
+#   ./dev.sh quality-check            # Full code quality check
 #   ./dev.sh health                   # Check system health
 #   ./dev.sh watch                    # Auto-rebuild on changes
 #   ./dev.sh run telemetry_service
 #   ./dev.sh run uav_sim UAV_1 --protocol udp
-#   ./dev.sh run camera_ui --protocol tcp
-#   ./dev.sh run mapping_ui --protocol udp
+#   ./dev.sh run camera_ui --protocol tcp --cross-target
+#   ./dev.sh run mapping_ui --protocol udp --all-targets --send UAV_1
 #   ./dev.sh up UAV_1 UAV_2 --protocol udp
+#   ./dev.sh cross-target-test        # Test new cross-target features
 #   ./dev.sh down
 #   ./dev.sh logs -f
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DEFAULT_BUILD_DIR="${ROOT_DIR}/build"
+
+# Colors for enhanced output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Enhanced logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
 
 usage() {
   sed -n '2,60p' "$0"
@@ -97,7 +134,7 @@ validate_config() {
   return 0
 }
 
-# Check for required dependencies
+# Check for required dependencies (enhanced with clang tools)
 check_dependencies() {
   local missing=()
   local optional_missing=()
@@ -111,6 +148,9 @@ check_dependencies() {
   # Optional but recommended
   if ! have python3; then optional_missing+=("python3 (for config validation)"); fi
   if ! have ninja; then optional_missing+=("ninja (faster builds)"); fi
+  if ! have clang-format; then optional_missing+=("clang-format (for code formatting)"); fi
+  if ! have clang-tidy; then optional_missing+=("clang-tidy (for static analysis)"); fi
+  if ! have inotifywait; then optional_missing+=("inotify-tools (for watch mode)"); fi
 
   # Check for required libraries (more robust check)
   local zmq_found=false
@@ -141,19 +181,317 @@ check_dependencies() {
   fi
 
   if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "Error: Missing required dependencies:" >&2
-    printf "  - %s\n" "${missing[@]}" >&2
+    log_error "Missing required dependencies:"
+    printf "  - %s
+" "${missing[@]}" >&2
     return 1
   fi
 
   if [[ ${#optional_missing[@]} -gt 0 ]]; then
-    echo "Warning: Missing optional dependencies:" >&2
-    printf "  - %s\n" "${optional_missing[@]}" >&2
+    log_warning "Missing optional dependencies (install for enhanced features):"
+    printf "  - %s
+" "${optional_missing[@]}" >&2
+    echo ""
+    log_info "Install all optional tools with:"
+    echo "  sudo apt-get install clang-format clang-tidy inotify-tools ninja-build python3"
   fi
 
-  echo "Dependencies check passed"
+  log_success "Dependencies check passed"
   return 0
 }
+
+# ================================
+# CODE QUALITY FUNCTIONS
+# ================================
+
+# Check if clang tools are available
+check_clang_tools() {
+    local missing_tools=()
+
+    if ! have clang-format; then
+        missing_tools+=("clang-format")
+    fi
+
+    if ! have clang-tidy; then
+        missing_tools+=("clang-tidy")
+    fi
+
+    if [[ ${#missing_tools[@]} -ne 0 ]]; then
+        log_warning "Missing code quality tools: ${missing_tools[*]}"
+        log_info "Install with: sudo apt install clang-format clang-tidy"
+        return 1
+    fi
+
+    return 0
+}
+
+# Create clang configuration files if they don't exist
+setup_clang_configs() {
+    # Create .clang-format file if it doesn't exist
+    if [[ ! -f "$ROOT_DIR/.clang-format" ]]; then
+        log_info "Creating .clang-format configuration..."
+        cat > "$ROOT_DIR/.clang-format" << 'EOF'
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 120
+PointerAlignment: Left
+ReferenceAlignment: Left
+NamespaceIndentation: All
+SortIncludes: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+EOF
+        log_success "Created .clang-format configuration"
+    fi
+
+    # Create .clang-tidy file if it doesn't exist
+    if [[ ! -f "$ROOT_DIR/.clang-tidy" ]]; then
+        log_info "Creating .clang-tidy configuration..."
+        cat > "$ROOT_DIR/.clang-tidy" << 'EOF'
+Checks: >
+  -*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  -readability-braces-around-statements,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -modernize-use-trailing-return-type,
+  -readability-isolate-declaration
+
+WarningsAsErrors: false
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+CheckOptions:
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+EOF
+        log_success "Created .clang-tidy configuration"
+    fi
+}
+
+# Format C++ code using clang-format
+format_code() {
+    local target_file="$1"
+
+    if ! check_clang_tools; then
+        log_error "clang-format not available"
+        return 1
+    fi
+
+    setup_clang_configs
+
+    if [[ -n "$target_file" ]]; then
+        # Format single file
+        if [[ ! -f "$target_file" ]]; then
+            log_error "File not found: $target_file"
+            return 1
+        fi
+
+        if [[ ! "$target_file" =~ \.(cpp|h|hpp)$ ]]; then
+            log_error "File is not a C++ source file: $target_file"
+            return 1
+        fi
+
+        log_info "Formatting file: $target_file"
+        clang-format -i "$target_file"
+        log_success "Formatted: $(basename "$target_file")"
+    else
+        # Format all files
+        log_info "Formatting all C++ source files..."
+
+        # Find all C++ source files
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$ROOT_DIR" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
+
+        if [[ ${#cpp_files[@]} -eq 0 ]]; then
+            log_warning "No C++ files found to format"
+            return 0
+        fi
+
+        log_info "Found ${#cpp_files[@]} C++ files to format"
+
+        # Format files
+        for file in "${cpp_files[@]}"; do
+            clang-format -i "$file"
+            echo "  Formatted: $(basename "$file")"
+        done
+
+        log_success "Code formatting completed"
+    fi
+}
+
+# Check code formatting without modifying files
+check_format() {
+    local target_file="$1"
+
+    if ! check_clang_tools; then
+        log_error "clang-format not available"
+        return 1
+    fi
+
+    if [[ -n "$target_file" ]]; then
+        # Check single file
+        if [[ ! -f "$target_file" ]]; then
+            log_error "File not found: $target_file"
+            return 1
+        fi
+
+        log_info "Checking formatting for: $target_file"
+        if clang-format --dry-run --Werror "$target_file" &> /dev/null; then
+            log_success "File is properly formatted: $(basename "$target_file")"
+            return 0
+        else
+            log_error "File needs formatting: $target_file"
+            log_info "Run './dev.sh fix-format $target_file' to fix formatting"
+            return 1
+        fi
+    else
+        # Check all files
+        log_info "Checking code formatting..."
+
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$ROOT_DIR" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) -not -path "*/build/*" -print0)
+
+        local unformatted_files=()
+        for file in "${cpp_files[@]}"; do
+            if ! clang-format --dry-run --Werror "$file" &> /dev/null; then
+                unformatted_files+=("$file")
+            fi
+        done
+
+        if [[ ${#unformatted_files[@]} -eq 0 ]]; then
+            log_success "All files are properly formatted"
+            return 0
+        else
+            log_error "Found ${#unformatted_files[@]} unformatted files:"
+            for file in "${unformatted_files[@]}"; do
+                echo "  - $file"
+            done
+            log_info "Run './dev.sh fix-format' to fix formatting issues"
+            return 1
+        fi
+    fi
+}
+
+# Run static analysis using clang-tidy
+lint_code() {
+    local target_file="$1"
+
+    if ! check_clang_tools; then
+        log_error "clang-tidy not available"
+        return 1
+    fi
+
+    if [[ ! -d "$DEFAULT_BUILD_DIR" ]]; then
+        log_error "Build directory not found. Run './dev.sh configure' first."
+        return 1
+    fi
+
+    if [[ ! -f "$DEFAULT_BUILD_DIR/compile_commands.json" ]]; then
+        log_error "compile_commands.json not found. Rebuilding with CMAKE_EXPORT_COMPILE_COMMANDS=ON"
+        configure "$DEFAULT_BUILD_DIR"
+    fi
+
+    setup_clang_configs
+
+    if [[ -n "$target_file" ]]; then
+        # Lint single file
+        if [[ ! -f "$target_file" ]]; then
+            log_error "File not found: $target_file"
+            return 1
+        fi
+
+        if [[ ! "$target_file" =~ \.cpp$ ]]; then
+            log_error "File is not a C++ source file (.cpp): $target_file"
+            return 1
+        fi
+
+        log_info "Analyzing file: $target_file"
+        if clang-tidy "$target_file" -p "$DEFAULT_BUILD_DIR" --quiet; then
+            log_success "Static analysis completed for: $(basename "$target_file")"
+            return 0
+        else
+            log_warning "Static analysis found issues in: $(basename "$target_file")"
+            return 1
+        fi
+    else
+        # Lint all files
+        log_info "Running static analysis with clang-tidy..."
+
+        # Find source files to analyze
+        local cpp_files=()
+        while IFS= read -r -d '' file; do
+            cpp_files+=("$file")
+        done < <(find "$ROOT_DIR" -type f -name "*.cpp" -not -path "*/build/*" -print0)
+
+        if [[ ${#cpp_files[@]} -eq 0 ]]; then
+            log_warning "No C++ source files found to analyze"
+            return 0
+        fi
+
+        log_info "Analyzing ${#cpp_files[@]} source files..."
+
+        local exit_code=0
+        for file in "${cpp_files[@]}"; do
+            echo "  Analyzing: $(basename "$file")"
+            if ! clang-tidy "$file" -p "$DEFAULT_BUILD_DIR" --quiet; then
+                exit_code=1
+            fi
+        done
+
+        if [[ $exit_code -eq 0 ]]; then
+            log_success "Static analysis completed without issues"
+        else
+            log_warning "Static analysis found issues (see output above)"
+        fi
+
+        return $exit_code
+    fi
+}
+
+# Run comprehensive code quality check
+quality_check() {
+    local target_file="$1"
+
+    if [[ -n "$target_file" ]]; then
+        log_info "Running code quality check for: $target_file"
+        echo ""
+        if check_format "$target_file" && lint_code "$target_file"; then
+            log_success "Code quality check passed for: $(basename "$target_file")"
+        else
+            log_error "Code quality check failed for: $(basename "$target_file")"
+            return 1
+        fi
+    else
+        log_info "Running comprehensive code quality check..."
+        echo ""
+        if check_format && lint_code; then
+            log_success "All code quality checks passed!"
+        else
+            log_error "Code quality checks failed"
+            return 1
+        fi
+    fi
+}
+
+# ================================
+# END CODE QUALITY FUNCTIONS
+# ================================
 
 # Gracefully stop any existing service/UI/sim instances to avoid conflicts
 kill_existing_procs() {
@@ -336,6 +674,7 @@ configure() {
   cmake_args+=("-DENABLE_WARNINGS=$enable_warnings")
   cmake_args+=("-DBUILD_WITH_DEBUG_INFO=$debug_info")
   cmake_args+=("-DTREAT_WARNINGS_AS_ERRORS=$warnings_as_errors")
+  cmake_args+=("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON")  # Always enable for clang-tidy
 
   # Use Ninja if available for faster builds
   if have ninja; then
@@ -344,6 +683,7 @@ configure() {
   fi
 
   cmake "${cmake_args[@]}"
+  log_success "Configuration completed"
 }
 
 build() {
@@ -605,13 +945,13 @@ protocol_test() {
   set -euo pipefail
   trap 'kill_existing_procs || true' EXIT
 
-  echo "=== Comprehensive Protocol Testing ==="
+  log_info "Starting comprehensive protocol testing..."
 
   # Ensure executables exist
   for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
     if [[ ! -x "$ROOT_DIR/$exe" ]]; then
-      echo "Missing $exe. Run './dev.sh build' first.";
-      exit 2;
+      log_error "Missing $exe. Run './dev.sh build' first."
+      exit 2
     fi
   done
 
@@ -619,29 +959,29 @@ protocol_test() {
   kill_existing_procs
 
   # Start service
-  echo "Starting telemetry service..."
+  log_info "Starting telemetry service..."
   "$ROOT_DIR/telemetry_service/telemetry_service" &
   svc=$!
   sleep 1
 
   if ! kill -0 "$svc" 2>/dev/null; then
-    echo "Service failed to start"
+    log_error "Service failed to start"
     exit 1
   fi
 
-  echo "Testing TCP Protocol..."
+  log_info "Testing TCP Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_1 --protocol tcp || true
   sleep 0.5
 
-  echo "Testing UDP Protocol..."
+  log_info "Testing UDP Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_2 --protocol udp || true
   sleep 0.5
 
-  echo "Testing Default (Both) Protocol..."
+  log_info "Testing Default (Both) Protocol..."
   timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_3 || true
   sleep 0.5
 
-  echo "Testing UI Applications..."
+  log_info "Testing UI Applications..."
   (timeout 2s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp || true) &
   (timeout 2s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp || true) &
   wait || true
@@ -650,7 +990,7 @@ protocol_test() {
   kill -INT $svc || true
   wait $svc || true
 
-  echo "=== Protocol Testing Complete ==="
+  log_success "Protocol testing complete"
 
   # Show test summary
   echo "✅ Tests Completed:"
@@ -665,6 +1005,82 @@ protocol_test() {
   if [[ -f "$LOG" ]]; then
     echo "--- Recent Log Entries ---"
     tail -n 15 "$LOG" | grep -E "(TCP|UDP|UAV_[1-3])" || true
+  fi
+
+  # Final cleanup
+  kill_existing_procs || true
+}
+
+# Test cross-target subscription functionality
+cross_target_test() {
+  set -euo pipefail
+  trap 'kill_existing_procs || true' EXIT
+
+  log_info "Starting cross-target subscription testing..."
+
+  # Ensure executables exist
+  for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
+    if [[ ! -x "$ROOT_DIR/$exe" ]]; then
+      log_error "Missing $exe. Run './dev.sh build' first."
+      exit 2
+    fi
+  done
+
+  # Stop any existing processes
+  kill_existing_procs
+
+  # Start service
+  log_info "Starting telemetry service..."
+  "$ROOT_DIR/telemetry_service/telemetry_service" &
+  svc=$!
+  sleep 1
+
+  if ! kill -0 "$svc" 2>/dev/null; then
+    log_error "Service failed to start"
+    exit 1
+  fi
+
+  log_info "Testing cross-target modes..."
+
+  # Test camera UI with cross-target mode
+  log_info "Testing camera UI --cross-target mode..."
+  (timeout 3s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp --cross-target || true) &
+  cam_pid=$!
+
+  # Test mapping UI with all-targets mode
+  log_info "Testing mapping UI --all-targets mode..."
+  (timeout 3s "$ROOT_DIR/mapping_ui/mapping_ui" --protocol udp --all-targets || true) &
+  map_pid=$!
+
+  sleep 0.5
+
+  # Start UAV simulators to generate telemetry for different targets
+  log_info "Starting UAV simulators..."
+  (timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_1 --protocol tcp || true) &
+  (timeout 3s "$ROOT_DIR/uav_sim/uav_sim" UAV_2 --protocol udp || true) &
+
+  # Wait for test completion
+  wait $cam_pid || true
+  wait $map_pid || true
+
+  # Stop service
+  kill -INT $svc || true
+  wait $svc || true
+
+  log_success "Cross-target testing complete"
+
+  # Show test summary
+  echo "✅ Cross-Target Tests Completed:"
+  echo "   - Camera UI with --cross-target (receives mapping + general data)"
+  echo "   - Mapping UI with --all-targets (receives all telemetry)"
+  echo "   - UAV_1 with TCP protocol"
+  echo "   - UAV_2 with UDP protocol"
+
+  # Show log summary
+  LOG="$ROOT_DIR/telemetry_service/telemetry_log.txt"
+  if [[ -f "$LOG" ]]; then
+    echo "--- Cross-Target Test Log Entries ---"
+    tail -n 20 "$LOG" | grep -E "(subscribe|camera|mapping|general)" || true
   fi
 
   # Final cleanup
@@ -704,9 +1120,11 @@ run() {
   # Validate UI application arguments
   if [[ "$target" == "camera_ui" || "$target" == "mapping_ui" ]]; then
     if [[ $# -eq 0 ]]; then
-      echo "Error: $target requires --protocol parameter (tcp or udp)" >&2
-      echo "Example: ./dev.sh run $target --protocol tcp" >&2
-      echo "         ./dev.sh run $target --protocol udp" >&2
+      log_error "$target requires --protocol parameter (tcp or udp)"
+      echo "Examples:"
+      echo "  ./dev.sh run $target --protocol tcp"
+      echo "  ./dev.sh run $target --protocol udp --cross-target"
+      echo "  ./dev.sh run $target --protocol tcp --all-targets --send UAV_1"
       exit 1
     fi
 
@@ -720,15 +1138,22 @@ run() {
     done
 
     if [[ "$has_protocol" == "false" ]]; then
-      echo "Warning: $target typically requires --protocol tcp or --protocol udp" >&2
+      log_warning "$target typically requires --protocol tcp or --protocol udp"
+      echo "Available options:"
+      echo "  --protocol tcp|udp     : Communication protocol"
+      echo "  --cross-target         : Subscribe to multiple target types"
+      echo "  --all-targets          : Subscribe to ALL telemetry data"
+      echo "  --send UAV_NAME        : Enable command sending to UAV"
     fi
   fi
 
   # Validate UAV simulator arguments
   if [[ "$target" == "uav_sim" && $# -eq 0 ]]; then
-    echo "Error: uav_sim requires a UAV name (e.g., UAV_1, UAV_2, UAV_3)" >&2
-    echo "Example: ./dev.sh run uav_sim UAV_1" >&2
-    echo "         ./dev.sh run uav_sim UAV_1 --protocol tcp" >&2
+    log_error "uav_sim requires a UAV name (e.g., UAV_1, UAV_2, UAV_3)"
+    echo "Examples:"
+    echo "  ./dev.sh run uav_sim UAV_1"
+    echo "  ./dev.sh run uav_sim UAV_1 --protocol tcp"
+    echo "  ./dev.sh run uav_sim UAV_2 --protocol udp"
     exit 1
   fi
 
@@ -745,6 +1170,11 @@ case "$cmd" in
   run)       shift; run "$@" ;;
   test)      shift; test_project "$@" ;;
   protocol-test) protocol_test ;;
+  cross-target-test) cross_target_test ;;
+  format)    shift; check_format "$@" ;;
+  fix-format) shift; format_code "$@" ;;
+  lint)      shift; lint_code "$@" ;;
+  quality-check) shift; quality_check "$@" ;;
   watch)     shift; watch_mode "$@" ;;
   health)    health_check ;;
   info)      show_info ;;
@@ -755,7 +1185,7 @@ case "$cmd" in
   logs)
     shift || true
     LOG="$ROOT_DIR/telemetry_service/telemetry_log.txt"
-    if [[ ! -f "$LOG" ]]; then echo "No log found at $LOG"; exit 1; fi
+    if [[ ! -f "$LOG" ]]; then log_error "No log found at $LOG"; exit 1; fi
     if [[ "${1:-}" == "-f" ]]; then
       tail -n 20 -f "$LOG"
     else
@@ -767,7 +1197,7 @@ case "$cmd" in
     shift || true
     # Ensure executables exist
     for exe in telemetry_service/telemetry_service uav_sim/uav_sim camera_ui/camera_ui mapping_ui/mapping_ui; do
-      if [[ ! -x "$ROOT_DIR/$exe" ]]; then echo "Missing $exe. Run './dev.sh build' first."; exit 2; fi
+      if [[ ! -x "$ROOT_DIR/$exe" ]]; then log_error "Missing $exe. Run './dev.sh build' first."; exit 2; fi
     done
     # Stop any existing processes first
     kill_existing_procs || true
@@ -777,8 +1207,8 @@ case "$cmd" in
     wait_for_port 5557 15 || true
     wait_for_port 5558 15 || true
     sleep 0.2
-    open_term "camera_ui (TCP)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp"
-    open_term "mapping_ui (UDP)" "$ROOT_DIR/mapping_ui/mapping_ui --protocol udp"
+    open_term "camera_ui (TCP + cross-target)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp --cross-target"
+    open_term "mapping_ui (UDP + all-targets)" "$ROOT_DIR/mapping_ui/mapping_ui --protocol udp --all-targets"
 
     # Separate UAV names from other arguments
     local uav_names=()

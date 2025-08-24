@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -121,8 +122,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         }
         tcp_ports.push_back(config_.getUiPorts().tcp_publish_port);
         tcp_ports.push_back(config_.getUiPorts().tcp_command_port);
-        udp_ports.push_back(config_.getUiPorts().udp_camera_port);
-        udp_ports.push_back(config_.getUiPorts().udp_mapping_port);
+        udp_ports.push_back(config_.getUiPorts().udp_publish_port);
 
         Logger::serviceStarted(static_cast<int>(config_.getUAVs().size()), tcp_ports, udp_ports);
 
@@ -195,11 +195,11 @@ void TelemetryService::onZmqMessage(const std::string& uav_name, const std::vect
  * @param uav_name Name of the UAV that sent the data
  * @param protocol The protocol used (TCP or UDP)
  *
- * This method implements simple dual-topic routing:
+ * This method implements hierarchical topic routing with wildcard support:
  * 1. Parses the binary packet header to determine target and type
  * 2. Uses the UAV name directly from service_config.json
- * 3. Creates target and type topics for flexible subscription
- * 4. Routes the complete binary packet to both topics
+ * 3. Creates a single hierarchical topic for efficient routing
+ * 4. Routes the complete binary packet to matching wildcard subscriptions
  */
 void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
                                                   const std::string& protocol) {
@@ -246,25 +246,18 @@ void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& da
         Logger::info("Received " + type_name + " packet for " + target_name + " from " + uav_name + " (" +
                      std::to_string(data.size()) + " bytes)");
 
-        // Create topic names using dot-separated convention for clean routing
-        std::string target_topic = "target." + target_name + "." + uav_name;    // e.g., "target.camera.UAV_1"
-        std::string type_topic = "type." + type_name + "." + uav_name;           // e.g., "type.location.UAV_1"
+        // Create hierarchical topic for efficient wildcard subscriptions
+        // Format: telemetry.{UAV_name}.{target}.{type}
+        std::string topic = "telemetry." + uav_name + "." + target_name + "." + type_name;
+        // Example: "telemetry.UAV_1.camera.location"
 
-        // Route to UIs using the same protocol as the source, with validation
+        // Route to UIs using the same protocol as the source
         if (protocol == "TCP" && tcpManager_) {
-            // Target routing: Send to intended target UI
-            tcpManager_->publishTelemetry(target_topic, data);            // e.g., "target.camera.UAV_1"
-
-            // Type routing: Allow cross-subscription to specific packet types
-            if (target_topic != type_topic) {  // Avoid duplicate sends
-                tcpManager_->publishTelemetry(type_topic, data);          // e.g., "type.location.UAV_1"
-            }
+            // Single topic publish - ZeroMQ handles wildcard subscriptions natively
+            tcpManager_->publishTelemetry(topic, data);
         } else if (protocol == "UDP" && udpManager_) {
-            // For UDP, provide both target and type routing
-            udpManager_->publishTelemetry(target_topic, data);
-            if (target_topic != type_topic) {
-                udpManager_->publishTelemetry(type_topic, data);
-            }
+            // Single topic publish - UDP manager handles wildcard pattern matching
+            udpManager_->publishTelemetry(topic, data);
         } else {
             Logger::error("Cannot publish telemetry - manager not available for protocol: " + protocol);
         }

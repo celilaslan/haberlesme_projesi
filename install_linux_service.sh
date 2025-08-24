@@ -5,21 +5,24 @@ set -euo pipefail
 # TELEMETRY SERVICE INSTALLATION SCRIPT
 # ============================================================================
 #
-# This script automates the installation of the telemetry service as a
-# systemd service on Linux systems. It handles:
+# This script automates the installation and uninstallation of the telemetry
+# service as a systemd service on Linux systems. It handles:
 # - Building the project
 # - Installing the executable to /usr/local/bin
 # - Setting up configuration in /etc/telemetry_service
 # - Creating log directories with proper permissions
 # - Installing and enabling the systemd service
+# - Complete uninstallation of all components
 #
 # USAGE:
-#   sudo ./install_linux_service.sh
+#   sudo ./install_linux_service.sh           # Install the service
+#   sudo ./install_linux_service.sh --uninstall   # Uninstall the service
+#   sudo ./install_linux_service.sh --help        # Show help
 #
 # REQUIREMENTS:
 #   - Root privileges (run with sudo)
 #   - Systemd-based Linux distribution
-#   - Build dependencies already installed
+#   - Build dependencies already installed (for installation only)
 # ============================================================================
 
 # --- Configuration Variables ---
@@ -41,6 +44,215 @@ SERVICE_FILE="telemetry_service.service"
 SOURCE_EXE="${REPO_ROOT}/telemetry_service/${EXE_NAME}"
 SOURCE_CONFIG="${REPO_ROOT}/${CONFIG_NAME}"
 SOURCE_SERVICE_FILE="${REPO_ROOT}/telemetry_service/${SERVICE_FILE}"
+
+# --- Helper Functions ---
+
+show_help() {
+    echo "TELEMETRY SERVICE INSTALLER/UNINSTALLER"
+    echo ""
+    echo "USAGE:"
+    echo "  sudo $0                    # Install the telemetry service"
+    echo "  sudo $0 --uninstall       # Uninstall the telemetry service"
+    echo "  sudo $0 --help            # Show this help message"
+    echo ""
+    echo "INSTALLATION:"
+    echo "  - Builds the project automatically"
+    echo "  - Installs executable to /usr/local/bin"
+    echo "  - Sets up configuration in /etc/telemetry_service"
+    echo "  - Creates log directory in /var/log/telemetry_service"
+    echo "  - Installs and enables systemd service"
+    echo ""
+    echo "UNINSTALLATION:"
+    echo "  - Stops and disables the systemd service"
+    echo "  - Removes all installed files and directories"
+    echo "  - Optionally preserves logs (user confirmation)"
+    echo ""
+    echo "REQUIREMENTS:"
+    echo "  - Root privileges (run with sudo)"
+    echo "  - Systemd-based Linux distribution"
+    echo "  - Build dependencies (for installation only)"
+}
+
+# Uninstall function
+uninstall_service() {
+    echo "============================================================================"
+    echo "TELEMETRY SERVICE UNINSTALLER"
+    echo "============================================================================"
+    echo "This will remove the telemetry service and all associated files."
+    echo ""
+
+    # Check what's currently installed
+    local installed_files=()
+    local service_status=""
+
+    if [[ -f "${INSTALL_BIN_DIR}/${EXE_NAME}" ]]; then
+        installed_files+=("Executable: ${INSTALL_BIN_DIR}/${EXE_NAME}")
+    fi
+
+    if [[ -d "$INSTALL_CONFIG_DIR" ]]; then
+        installed_files+=("Configuration: ${INSTALL_CONFIG_DIR}/")
+    fi
+
+    if [[ -f "${SYSTEMD_DIR}/${SERVICE_FILE}" ]]; then
+        installed_files+=("Service file: ${SYSTEMD_DIR}/${SERVICE_FILE}")
+        if systemctl is-active "${SERVICE_FILE}" >/dev/null 2>&1; then
+            service_status="running"
+        elif systemctl is-enabled "${SERVICE_FILE}" >/dev/null 2>&1; then
+            service_status="enabled"
+        else
+            service_status="installed"
+        fi
+    fi
+
+    if [[ -d "$LOG_DIR" ]]; then
+        installed_files+=("Log directory: ${LOG_DIR}/")
+    fi
+
+    if [[ ${#installed_files[@]} -eq 0 ]]; then
+        echo "No telemetry service installation found."
+        echo "Nothing to uninstall."
+        return 0
+    fi
+
+    echo "FOUND INSTALLATION:"
+    for file in "${installed_files[@]}"; do
+        echo "  - $file"
+    done
+
+    if [[ -n "$service_status" ]]; then
+        echo "Service status: $service_status"
+    fi
+
+    echo ""
+    read -p "Do you want to proceed with uninstallation? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Uninstallation cancelled."
+        return 0
+    fi
+
+    echo ""
+    echo "Starting uninstallation..."
+
+    # Step 1: Stop and disable service
+    if [[ -f "${SYSTEMD_DIR}/${SERVICE_FILE}" ]]; then
+        echo "[1/5] Stopping and disabling systemd service..."
+
+        if systemctl is-active "${SERVICE_FILE}" >/dev/null 2>&1; then
+            echo "  Stopping service..."
+            systemctl stop "${SERVICE_FILE}"
+        fi
+
+        if systemctl is-enabled "${SERVICE_FILE}" >/dev/null 2>&1; then
+            echo "  Disabling service..."
+            systemctl disable "${SERVICE_FILE}"
+        fi
+
+        echo "  Removing service file..."
+        rm -f "${SYSTEMD_DIR}/${SERVICE_FILE}"
+
+        echo "  Reloading systemd..."
+        systemctl daemon-reload
+
+        echo "✓ Service stopped and removed"
+    else
+        echo "[1/5] No systemd service found, skipping..."
+    fi
+
+    # Step 2: Remove executable
+    if [[ -f "${INSTALL_BIN_DIR}/${EXE_NAME}" ]]; then
+        echo "[2/5] Removing executable..."
+        rm -f "${INSTALL_BIN_DIR}/${EXE_NAME}"
+        echo "✓ Executable removed"
+    else
+        echo "[2/5] No executable found, skipping..."
+    fi
+
+    # Step 3: Remove configuration
+    if [[ -d "$INSTALL_CONFIG_DIR" ]]; then
+        echo "[3/5] Removing configuration directory..."
+        rm -rf "$INSTALL_CONFIG_DIR"
+        echo "✓ Configuration removed"
+    else
+        echo "[3/5] No configuration found, skipping..."
+    fi
+
+    # Step 4: Handle log directory with user confirmation
+    if [[ -d "$LOG_DIR" ]]; then
+        echo "[4/5] Handling log directory..."
+        local log_size=$(du -sh "$LOG_DIR" 2>/dev/null | cut -f1 || echo "unknown")
+        echo "  Log directory size: $log_size"
+        echo "  Location: $LOG_DIR"
+        echo ""
+        read -p "Remove log directory and all logs? [y/N]: " remove_logs
+        if [[ "$remove_logs" =~ ^[Yy]$ ]]; then
+            rm -rf "$LOG_DIR"
+            echo "✓ Log directory removed"
+        else
+            echo "✓ Log directory preserved"
+        fi
+    else
+        echo "[4/5] No log directory found, skipping..."
+    fi
+
+    # Step 5: Final cleanup
+    echo "[5/5] Final system cleanup..."
+    systemctl daemon-reload
+    echo "✓ System cleanup completed"
+
+    echo ""
+    echo "============================================================================"
+    echo "UNINSTALLATION COMPLETE"
+    echo "============================================================================"
+    echo "The telemetry service has been successfully removed from the system."
+    echo ""
+    echo "REMOVED COMPONENTS:"
+    for file in "${installed_files[@]}"; do
+        if [[ "$file" =~ "Log directory" ]] && [[ "$remove_logs" != "y" && "$remove_logs" != "Y" ]]; then
+            echo "  - $file (preserved)"
+        else
+            echo "  - $file"
+        fi
+    done
+    echo ""
+    echo "The system is now clean of telemetry service components."
+    echo "============================================================================"
+}
+
+# --- Command Line Argument Parsing ---
+
+# Parse command line arguments
+case "${1:-}" in
+    --uninstall)
+        # Check for root privileges
+        if [[ $EUID -ne 0 ]]; then
+            echo "ERROR: Uninstallation requires root privileges."
+            echo "USAGE: sudo $0 --uninstall"
+            exit 1
+        fi
+
+        # Check if systemd is available
+        if ! command -v systemctl >/dev/null 2>&1; then
+            echo "ERROR: systemctl not found. This script requires a systemd-based Linux distribution."
+            exit 1
+        fi
+
+        uninstall_service
+        exit 0
+        ;;
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    "")
+        # Continue with installation (default behavior)
+        ;;
+    *)
+        echo "ERROR: Unknown option: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
 
 # --- Pre-flight Checks ---
 
@@ -226,12 +438,6 @@ echo "    sudo chown -R telemetry:telemetry ${INSTALL_CONFIG_DIR}"
 echo "  Then uncomment the User/Group lines in ${SYSTEMD_DIR}/${SERVICE_FILE}"
 echo ""
 echo "UNINSTALLATION:"
-echo "  To remove the service:"
-echo "    sudo systemctl stop ${SERVICE_FILE}"
-echo "    sudo systemctl disable ${SERVICE_FILE}"
-echo "    sudo rm ${SYSTEMD_DIR}/${SERVICE_FILE}"
-echo "    sudo rm ${INSTALL_BIN_DIR}/${EXE_NAME}"
-echo "    sudo rm -rf ${INSTALL_CONFIG_DIR}"
-echo "    sudo rm -rf ${LOG_DIR}  # (optional - removes logs)"
-echo "    sudo systemctl daemon-reload"
+echo "  To completely remove the service and all files:"
+echo "    sudo $0 --uninstall"
 echo "============================================================================"

@@ -40,27 +40,64 @@ bool Config::loadFromFile(const std::string& path) {
     for (const auto& uav_json : json_data["uavs"]) {
         UAVConfig uav;
 
-        // Extract required UAV fields
+        // Extract required UAV fields with validation
+        if (!uav_json.contains("name") || !uav_json.contains("ip")) {
+            throw std::runtime_error("UAV configuration missing required 'name' or 'ip' field");
+        }
         uav.name = uav_json["name"];
         uav.ip = uav_json["ip"];
 
-        // Extract TCP port configuration
+        // Extract TCP ports configuration with validation
+        if (!uav_json.contains("tcp_telemetry_port") || !uav_json.contains("tcp_command_port")) {
+            throw std::runtime_error("UAV '" + uav.name + "' missing required TCP ports configuration");
+        }
         uav.tcp_telemetry_port = uav_json["tcp_telemetry_port"];
         uav.tcp_command_port = uav_json["tcp_command_port"];
 
-        // Extract UDP telemetry port
+        // Extract UDP telemetry port with validation
+        if (!uav_json.contains("udp_telemetry_port")) {
+            throw std::runtime_error("UAV '" + uav.name + "' missing required UDP telemetry port configuration");
+        }
         uav.udp_telemetry_port = uav_json["udp_telemetry_port"];
+
+        // Validate port ranges
+        auto validatePort = [&](int port, const std::string& portName) {
+            if (port < 1 || port > 65535) {
+                throw std::runtime_error("UAV '" + uav.name + "' has invalid " + portName + ": " + std::to_string(port) + " (must be 1-65535)");
+            }
+        };
+        validatePort(uav.tcp_telemetry_port, "tcp_telemetry_port");
+        validatePort(uav.tcp_command_port, "tcp_command_port");
+        validatePort(uav.udp_telemetry_port, "udp_telemetry_port");
 
         uavs.push_back(uav);
     }
 
-    // Load UI port configuration
-    uiPorts.tcp_command_port = json_data["ui_ports"]["tcp_command_port"];
-    uiPorts.tcp_publish_port = json_data["ui_ports"]["tcp_publish_port"];
+    // Load UI port configuration with validation
+    if (!json_data.contains("ui_ports")) {
+        throw std::runtime_error("Configuration missing required 'ui_ports' section");
+    }
+    const auto& ui_ports_json = json_data["ui_ports"];
 
-    // Load UDP ports
-    uiPorts.udp_camera_port = json_data["ui_ports"]["udp_camera_port"];
-    uiPorts.udp_mapping_port = json_data["ui_ports"]["udp_mapping_port"];
+    if (!ui_ports_json.contains("tcp_command_port") ||
+        !ui_ports_json.contains("tcp_publish_port") ||
+        !ui_ports_json.contains("udp_publish_port")) {
+        throw std::runtime_error("UI ports configuration missing required fields");
+    }
+
+    uiPorts.tcp_command_port = ui_ports_json["tcp_command_port"];
+    uiPorts.tcp_publish_port = ui_ports_json["tcp_publish_port"];
+    uiPorts.udp_publish_port = ui_ports_json["udp_publish_port"];
+
+    // Validate UI port ranges
+    auto validateUIPort = [](int port, const std::string& portName) {
+        if (port < 1 || port > 65535) {
+            throw std::runtime_error("UI port '" + portName + "' has invalid value: " + std::to_string(port) + " (must be 1-65535)");
+        }
+    };
+    validateUIPort(uiPorts.tcp_command_port, "tcp_command_port");
+    validateUIPort(uiPorts.tcp_publish_port, "tcp_publish_port");
+    validateUIPort(uiPorts.udp_publish_port, "udp_publish_port");
 
     // Load log file path if specified
     if (json_data.contains("log_file")) {

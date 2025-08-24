@@ -37,10 +37,9 @@ struct UAVConfig {
  * All ports are required and must be specified in the JSON configuration.
  */
 struct UIConfig {
-    int tcp_command_port{0};  ///< Port for receiving commands from UI components via TCP
-    int tcp_publish_port{0};  ///< Port for publishing telemetry data to UI components via TCP
-    int udp_camera_port{0};   ///< Port for publishing camera telemetry data via UDP
-    int udp_mapping_port{0};  ///< Port for publishing mapping telemetry data via UDP
+    int tcp_command_port{0};      ///< Port for receiving commands from UI components via TCP
+    int tcp_publish_port{0};      ///< Port for publishing telemetry data to UI components via TCP
+    int udp_publish_port{0};      ///< Port for UDP subscription management and publishing
 };
 
 /**

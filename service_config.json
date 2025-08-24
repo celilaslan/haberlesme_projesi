@@ -25,8 +25,7 @@
   "ui_ports": {
     "tcp_command_port": 5558,
     "tcp_publish_port": 5557,
-    "udp_camera_port": 5570,
-    "udp_mapping_port": 5571
+    "udp_publish_port": 5572
   },
   "log_file": "telemetry_log.txt"
 }
