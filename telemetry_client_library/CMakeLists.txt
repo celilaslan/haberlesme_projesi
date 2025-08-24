@@ -14,11 +14,6 @@ cmake_minimum_required(VERSION 3.12)
 # Create the shared library
 add_library(telemetry_client SHARED
     ${CMAKE_CURRENT_LIST_DIR}/src/TelemetryClient.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/TelemetryClientAdvanced.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/DataAnalyzer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/FleetManager.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/DataBuffer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/MockUAV.cpp
 )
 
 # Set target properties for shared library
@@ -79,9 +74,4 @@ install(TARGETS telemetry_client
 )
 
 # Note: Packaging removed - library used internally within same project
-
-# Build examples if requested
-option(BUILD_TELEMETRY_CLIENT_EXAMPLES "Build telemetry client examples" ON)
-if(BUILD_TELEMETRY_CLIENT_EXAMPLES)
-    add_subdirectory(examples)
-endif()
+# Packaging can be added if distribution is needed in the future

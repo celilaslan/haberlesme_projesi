@@ -131,11 +131,11 @@ namespace TelemetryAPI {
                 running_ = true;
 
                 // Start appropriate receiver threads based on protocol
-                if (protocol == Protocol::TCP_ONLY || protocol == Protocol::BOTH) {
+                if (protocol == Protocol::TCP || protocol == Protocol::BOTH) {
                     tcp_thread_ = std::thread(&Impl::tcpReceiverLoop, this);
                 }
 
-                if (protocol == Protocol::UDP_ONLY || protocol == Protocol::BOTH) {
+                if (protocol == Protocol::UDP || protocol == Protocol::BOTH) {
                     udp_thread_ = std::thread(&Impl::udpReceiverLoop, this);
                 }
 
@@ -393,10 +393,10 @@ namespace TelemetryAPI {
             oss << ", Protocol: ";
 
             switch (protocol_) {
-                case Protocol::TCP_ONLY:
+                case Protocol::TCP:
                     oss << "TCP";
                     break;
-                case Protocol::UDP_ONLY:
+                case Protocol::UDP:
                     oss << "UDP";
                     break;
                 case Protocol::BOTH:
@@ -428,7 +428,7 @@ namespace TelemetryAPI {
         std::string last_error_;
 
         // Protocol and callbacks
-        Protocol protocol_ = Protocol::TCP_ONLY;
+        Protocol protocol_ = Protocol::TCP;
         TelemetryCallback telemetry_callback_;
         ErrorCallback error_callback_;
 
@@ -564,7 +564,7 @@ namespace TelemetryAPI {
                     std::string topic(static_cast<char*>(topic_msg.data()), topic_msg.size());
                     std::string data(static_cast<char*>(data_msg.data()), data_msg.size());
 
-                    processTelemetryData(topic, data, Protocol::TCP_ONLY);
+                    processTelemetryData(topic, data, Protocol::TCP);
                 }
             } catch (const std::exception& e) {
                 if (error_callback_ && running_) {
@@ -623,7 +623,7 @@ namespace TelemetryAPI {
                                                                      std::size_t length) {
                             if (!error_code && length > 0 && running_) {
                                 std::string message(camera_buffer->data(), length);
-                                parseUdpMessage(message, Protocol::UDP_ONLY);
+                                parseUdpMessage(message, Protocol::UDP);
                             }
                             if (running_) {
                                 start_camera_receive();  // Continue receiving
@@ -640,7 +640,7 @@ namespace TelemetryAPI {
                                                                        std::size_t length) {
                             if (!error_code && length > 0 && running_) {
                                 std::string message(mapping_buffer->data(), length);
-                                parseUdpMessage(message, Protocol::UDP_ONLY);
+                                parseUdpMessage(message, Protocol::UDP);
                             }
                             if (running_) {
                                 start_mapping_receive();  // Continue receiving
