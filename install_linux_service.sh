@@ -5,7 +5,7 @@ set -euo pipefail
 # TELEMETRY SERVICE INSTALLATION SCRIPT
 # ============================================================================
 #
-# This script automates the installation of the telemetry service as a 
+# This script automates the installation of the telemetry service as a
 # systemd service on Linux systems. It handles:
 # - Building the project
 # - Installing the executable to /usr/local/bin
@@ -27,10 +27,10 @@ set -euo pipefail
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # Installation paths following Linux Filesystem Hierarchy Standard (FHS)
-INSTALL_BIN_DIR="/usr/local/bin"        # Executable installation directory
+INSTALL_BIN_DIR="/usr/local/bin"             # Executable installation directory
 INSTALL_CONFIG_DIR="/etc/telemetry_service"  # Configuration directory
-LOG_DIR="/var/log/telemetry_service"    # Log file directory
-SYSTEMD_DIR="/etc/systemd/system"       # Systemd service file directory
+LOG_DIR="/var/log/telemetry_service"         # Log file directory
+SYSTEMD_DIR="/etc/systemd/system"            # Systemd service file directory
 
 # File names
 EXE_NAME="telemetry_service"
@@ -46,7 +46,7 @@ SOURCE_SERVICE_FILE="${REPO_ROOT}/telemetry_service/${SERVICE_FILE}"
 
 # Check for root privileges (required for system-wide installation)
 if [[ $EUID -ne 0 ]]; then
-   echo "ERROR: This script must be run as root (use sudo)." 
+   echo "ERROR: This script must be run as root (use sudo)."
    echo "USAGE: sudo ./install_linux_service.sh"
    exit 1
 fi

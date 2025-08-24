@@ -88,14 +88,14 @@ void TcpManager::start() {
             config_msg += command_addr;
 
             std::string uav_msg = "UAV " + uav.name + " configured";
-            Logger::statusWithDetails("ZMQ", StatusMessage(uav_msg), DetailMessage(config_msg));
+            Logger::statusWithDetails("TCP", StatusMessage(uav_msg), DetailMessage(config_msg));
         }
     } catch (const zmq::error_t& e) {
-        Logger::error("ZMQ socket setup failed: " + std::string(e.what()));
+        Logger::error("TCP socket setup failed: " + std::string(e.what()));
         running = false;
         throw;
     } catch (const std::exception& e) {
-        Logger::error("Unexpected error during ZMQ setup: " + std::string(e.what()));
+        Logger::error("Unexpected error during TCP setup: " + std::string(e.what()));
         running = false;
         throw;
     }
@@ -211,9 +211,9 @@ void TcpManager::receiverLoop() {
             }
         }
     } catch (const std::exception& e) {
-        Logger::error("ZMQ receiver loop error: " + std::string(e.what()));
+        Logger::error("TCP receiver loop error: " + std::string(e.what()));
     }
-    Logger::status("ZMQ", "Receiver thread stopped");
+    Logger::status("TCP", "Receiver thread stopped");
 }
 
 /**
@@ -252,7 +252,7 @@ void TcpManager::processIncomingTelemetry(size_t socket_index) {
         std::string uav_name =
             (socket_index < config.getUAVs().size()) ? config.getUAVs()[socket_index].name : "UNKNOWN";
 
-                // Call the registered callback with UAV name directly
+        // Call the registered callback with UAV name directly
         if (messageCallback_) {
             messageCallback_(uav_name, data);
         }
@@ -293,9 +293,9 @@ void TcpManager::forwarderLoop() {
             }
         }
     } catch (const std::exception& e) {
-        Logger::error("ZMQ forwarder loop error: " + std::string(e.what()));
+        Logger::error("TCP forwarder loop error: " + std::string(e.what()));
     }
-    Logger::status("ZMQ", "Forwarder thread stopped");
+    Logger::status("TCP", "Forwarder thread stopped");
 }
 
 /**

@@ -3,8 +3,8 @@
  * @brief Implementation of UDP communication management
  *
  * This file contains the implementation of UDP-based telemetry communication,
- * providing an alternative to ZeroMQ for UAVs that require lower latency
- * or have simpler networking requirements.
+ * providing an alternative to TCP for UAVs that prefer UDP for
+ * lower latency or simpler networking requirements.
  */
 
 #include "UdpManager.h"
@@ -17,7 +17,7 @@
 /**
  * @brief Constructor - initializes UDP server for one UAV
  * @param io_context Boost.Asio I/O context for async operations
- * @param address IP address to bind to (e.g., "localhost" or "0.0.0.0")
+ * @param address IP address to bind to
  * @param port UDP port number to listen on
  * @param uav_name Identifier for the UAV this server handles
  * @param callback Function to call when messages are received

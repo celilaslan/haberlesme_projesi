@@ -11,7 +11,7 @@
 #   /etc/systemd/system/telemetry_service.service
 #
 # MANUAL COMMANDS:
-#   sudo systemctl daemon-reload           # Reload after changes
+#   sudo systemctl daemon-reload                      # Reload after changes
 #   sudo systemctl enable telemetry_service.service   # Enable auto-start
 #   sudo systemctl start telemetry_service.service    # Start service
 #   sudo systemctl status telemetry_service.service   # Check status
@@ -21,7 +21,6 @@
 [Unit]
 # Service description and documentation
 Description=Multi-UAV Telemetry Service
-Documentation=https://github.com/your-repo/haberlesme_projesi/blob/main/README.md
 
 # Service dependencies - wait for network to be available
 After=network.target network-online.target

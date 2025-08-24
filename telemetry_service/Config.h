@@ -24,8 +24,8 @@
 struct UAVConfig {
     std::string name;           ///< Unique identifier for the UAV (e.g., "UAV_1")
     std::string ip;             ///< IP address or hostname of the UAV
-    int tcp_telemetry_port{0};  ///< TCP/ZeroMQ port for receiving telemetry data
-    int tcp_command_port{0};    ///< TCP/ZeroMQ port for sending commands to UAV
+    int tcp_telemetry_port{0};  ///< TCP port for receiving telemetry data
+    int tcp_command_port{0};    ///< TCP port for sending commands to UAV
     int udp_telemetry_port{0};  ///< UDP port for receiving telemetry data
 };
 
@@ -37,8 +37,8 @@ struct UAVConfig {
  * All ports are required and must be specified in the JSON configuration.
  */
 struct UIConfig {
-    int tcp_command_port{0};  ///< Port for receiving commands from UI components (TCP)
-    int tcp_publish_port{0};  ///< Port for publishing telemetry data to UI components (TCP)
+    int tcp_command_port{0};  ///< Port for receiving commands from UI components via TCP
+    int tcp_publish_port{0};  ///< Port for publishing telemetry data to UI components via TCP
     int udp_camera_port{0};   ///< Port for publishing camera telemetry data via UDP
     int udp_mapping_port{0};  ///< Port for publishing mapping telemetry data via UDP
 };

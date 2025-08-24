@@ -3,7 +3,7 @@
  * @brief Header file for the main TelemetryService class
  *
  * This file defines the TelemetryService class which coordinates the entire telemetry system.
- * It manages both ZeroMQ and UDP communication channels and handles message routing between
+ * It manages both TCP and UDP communication channels and handles message routing between
  * UAVs and UI components.
  */
 
@@ -27,7 +27,7 @@
  *
  * The TelemetryService class is responsible for:
  * - Loading configuration from JSON files
- * - Managing ZeroMQ and UDP communication channels
+ * - Managing TCP and UDP communication channels
  * - Processing and routing telemetry messages between UAVs and UI components
  * - Logging service activities
  * - Coordinating graceful shutdown
@@ -81,12 +81,14 @@ class TelemetryService {
      *
      * This method:
      * 1. Parses the binary packet header to determine target and type
-     * 2. Uses the UAV name directly (no extraction needed)
+     * 2. Uses the UAV name directly
      * 3. Creates appropriate topic names for flexible routing
      * 4. Routes the complete binary packet to UI components
      */
     void processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
-                                    const std::string& protocol);    /**
+                                    const std::string& protocol);
+
+    /**
      * @brief Resolves the configuration file path
      * @return Full path to the configuration file
      *

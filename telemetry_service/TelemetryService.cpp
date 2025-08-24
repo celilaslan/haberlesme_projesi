@@ -32,7 +32,7 @@
  * UDP communication uses Boost.Asio and doesn't require ZeroMQ initialization.
  */
 TelemetryService::TelemetryService() try : zmqContext_(1) {
-    // ZMQ context initialized successfully for TCP communication
+// ZMQ context initialized successfully for TCP communication
 } catch (const zmq::error_t& e) {
     throw std::runtime_error("Failed to initialize ZMQ context for TCP: " + std::string(e.what()));
 } catch (const std::exception& e) {
@@ -71,7 +71,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         // Initialize logging system and log startup information
         Logger::init(log_path.string());
         Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"),
-                                  DetailMessage("Multi-UAV Telemetry Service v1.0"));
+                                  DetailMessage("Multi-UAV Telemetry Service"));
         Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
         // Create managers with proper error handling
@@ -79,7 +79,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         bool udp_started = false;
 
         try {
-            // Create ZeroMQ manager with callback for incoming messages
+            // Create TCP manager with callback for incoming messages
             tcpManager_ = std::make_unique<TcpManager>(
                 zmqContext_, config_,
                 [this](const std::string& source, const std::vector<uint8_t>& data) { this->onZmqMessage(source, data); });

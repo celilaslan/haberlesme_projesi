@@ -88,7 +88,7 @@ class TcpManager {
 
     /**
      * @brief Publish telemetry data to UI subscribers
-     * @param topic The topic to publish on (e.g., "camera_UAV_1")
+     * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
      * @param data The binary telemetry data to publish
      *
      * Sends telemetry data to all UI components subscribed to the given topic.

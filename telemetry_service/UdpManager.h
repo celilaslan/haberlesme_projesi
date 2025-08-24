@@ -41,7 +41,7 @@ class UdpServer {
     /**
      * @brief Constructor - sets up UDP server for one UAV
      * @param io_context Boost.Asio I/O context for async operations
-     * @param address IP address to bind to (usually "0.0.0.0" for all interfaces)
+     * @param address IP address to bind to
      * @param port UDP port number to listen on
      * @param uav_name Name of the UAV this server handles
      * @param callback Function to call when messages are received
@@ -126,7 +126,7 @@ class UdpManager {
 
     /**
      * @brief Publish telemetry data to UI components via UDP
-     * @param topic The topic to publish on (e.g., "camera_UAV_1")
+     * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
      * @param data The binary telemetry data to send
      *
      * Sends telemetry data to UI components using UDP multicast.
