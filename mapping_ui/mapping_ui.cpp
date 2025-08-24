@@ -3,7 +3,7 @@
  * @brief Mapping UI application for receiving and displaying mapping telemetry data
  *
  * This application uses the TelemetryClient library to connect to the telemetry service
- * and subscribe to mapping-related telemetry data from UAVs. It supports both TCP and UDP
+ * and subscribe to mapping-targeted telemetry data from UAVs. It supports both TCP and UDP
  * protocols via the simplified library API and can send commands back to UAVs.
  */
 
@@ -67,24 +67,7 @@ std::string GetTimestamp() {
     return oss.str();
 }
 
-/**
- * @brief Telemetry data callback function
- * @param data Received telemetry data from the service
- *
- * This function is called by the TelemetryClient whenever mapping telemetry
- * data is received. It filters for mapping data and displays it with timestamps.
- */
-void onTelemetryReceived(const TelemetryData& data) {
-    // Only display mapping data (filtering is also done at subscription level)
-    if (data.data_type == DataType::MAPPING) {
-        std::string protocol_str = (data.received_via == Protocol::TCP_ONLY)   ? "TCP"
-                                   : (data.received_via == Protocol::UDP_ONLY) ? "UDP"
-                                                                               : "MIXED";
 
-        std::cout << "[" << GetTimestamp() << "] " << "UAV: " << data.uav_name << " | " << "Type: MAPPING | "
-                  << "Protocol: " << protocol_str << " | " << "Data: " << data.raw_data << std::endl;
-    }
-}
 
 /**
  * @brief Error callback function for telemetry client
@@ -111,7 +94,6 @@ int main(int argc, char* argv[]) {
     std::string protocol = "both";  // Default to both protocols
     bool enableSender = false;
     std::string target;
-    std::string filter_uav;
 
     for (int i = 1; i < argc; i++) {
         if (std::string(argv[i]) == "--protocol" && i + 1 < argc) {
@@ -119,15 +101,12 @@ int main(int argc, char* argv[]) {
         } else if (std::string(argv[i]) == "--send" && i + 1 < argc) {
             enableSender = true;
             target = argv[++i];
-        } else if (std::string(argv[i]) == "--uav" && i + 1 < argc) {
-            filter_uav = argv[++i];
         } else if (std::string(argv[i]) == "--help") {
             std::cout << "Mapping UI - Telemetry Client Library Demo\n";
             std::cout << "Usage: " << argv[0] << " [options]\n";
             std::cout << "Options:\n";
             std::cout << "  --protocol tcp|udp|both : Communication protocol (default: both)\n";
             std::cout << "  --send UAV_NAME         : Enable command sending to specified UAV\n";
-            std::cout << "  --uav UAV_NAME          : Filter telemetry to specific UAV only\n";
             std::cout << "  --help                  : Show this help message\n";
             return 0;
         }
@@ -136,9 +115,9 @@ int main(int argc, char* argv[]) {
     // Validate protocol argument
     Protocol client_protocol;
     if (protocol == "tcp") {
-        client_protocol = Protocol::TCP_ONLY;
+        client_protocol = Protocol::TCP;
     } else if (protocol == "udp") {
-        client_protocol = Protocol::UDP_ONLY;
+        client_protocol = Protocol::UDP
     } else if (protocol == "both") {
         client_protocol = Protocol::BOTH;
     } else {
@@ -148,9 +127,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << "=== Mapping UI - Using TelemetryClient Library ===\n";
     std::cout << "Protocol: " << protocol << "\n";
-    if (!filter_uav.empty()) {
-        std::cout << "Filtering UAV: " << filter_uav << "\n";
-    }
     if (enableSender) {
         std::cout << "Command target: " << target << "\n";
     }
@@ -178,26 +154,18 @@ int main(int argc, char* argv[]) {
     }
 
     // Start receiving telemetry data
-    if (!client.startReceiving(client_protocol, onTelemetryReceived, onTelemetryError)) {
+    if () {
         std::cerr << "Failed to start receiving telemetry data\n";
         return 1;
     }
 
     std::cout << "✓ Started receiving telemetry data\n";
 
-    // Subscribe to mapping data only
-    if (!client.subscribeToDataType(DataType::MAPPING)) {
-        std::cerr << "Warning: Failed to subscribe to mapping data type\n";
+    // Subscribe to mapping targeted telemetry data
+    if () {
+        std::cerr << "Warning: Failed to subscribe to mapping targeted data type\n";
     }
 
-    // If filtering by specific UAV, subscribe to it
-    if (!filter_uav.empty()) {
-        if (!client.subscribeToUAV(filter_uav, DataType::MAPPING)) {
-            std::cerr << "Warning: Failed to subscribe to UAV " << filter_uav << "\n";
-        } else {
-            std::cout << "✓ Filtering mapping data from " << filter_uav << "\n";
-        }
-    }
 
     std::cout << client.getConnectionStatus() << "\n\n";
 
