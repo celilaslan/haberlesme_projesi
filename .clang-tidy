@@ -6,17 +6,72 @@ Checks: >
   bugprone-*,
   clang-analyzer-*,
   cppcoreguidelines-*,
+  hicpp-*,
+  misc-*,
+  portability-*,
   -readability-braces-around-statements,
   -readability-magic-numbers,
   -cppcoreguidelines-avoid-magic-numbers,
-  -modernize-use-trailing-return-type
+  -modernize-use-trailing-return-type,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -misc-non-private-member-variables-in-classes,
+  -cppcoreguidelines-non-private-member-variables-in-classes
 
 WarningsAsErrors: false
 HeaderFilterRegex: '.*'
+FormatStyle: file
 CheckOptions:
+  # Naming conventions
   - key: readability-identifier-naming.VariableCase
     value: lower_case
   - key: readability-identifier-naming.FunctionCase
     value: camelBack
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.MacroCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberSuffix
+    value: '_'
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+
+  # Function length limits
+  - key: readability-function-size.LineThreshold
+    value: '80'
+  - key: readability-function-size.StatementThreshold
+    value: '50'
+  - key: readability-function-size.BranchThreshold
+    value: '12'
+  - key: readability-function-size.ParameterThreshold
+    value: '8'
+
+  # Performance settings
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: 'std::shared_ptr;std::unique_ptr'
+
+  # Modernize settings
+  - key: modernize-loop-convert.MaxCopySize
+    value: '16'
+  - key: modernize-loop-convert.MinConfidence
+    value: 'reasonable'
+
+  # Readability settings
+  - key: readability-implicit-bool-conversion.AllowPointerConditions
+    value: 'true'
+  - key: readability-implicit-bool-conversion.AllowIntegerConditions
+    value: 'false'
