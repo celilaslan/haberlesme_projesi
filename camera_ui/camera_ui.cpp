@@ -330,18 +330,11 @@ int main(int argc, char* argv[]) {
             std::cout << "❌ Failed to subscribe to all telemetry" << std::endl;
         }
     } else {
-        // Default: Camera data only
+        // Default: Camera data only (all data types from camera target)
         if (client.subscribe("telemetry.*.camera.*")) {
             std::cout << "✅ Subscribed to camera telemetry: telemetry.*.camera.*" << std::endl;
         } else {
             std::cout << "❌ Failed to subscribe to camera telemetry" << std::endl;
-        }
-
-        // Also subscribe to location data for camera context
-        if (client.subscribe("telemetry.*.*.location")) {
-            std::cout << "✅ Subscribed to location data: telemetry.*.*.location" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to location data" << std::endl;
         }
     }
 

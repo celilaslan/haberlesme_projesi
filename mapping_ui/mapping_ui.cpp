@@ -358,18 +358,11 @@ int main(int argc, char* argv[]) {
             std::cout << "❌ Failed to subscribe to all telemetry" << std::endl;
         }
     } else {
-        // Default: Mapping data only
+        // Default: Mapping data only (all data types from mapping target)
         if (client.subscribe("telemetry.*.mapping.*")) {
             std::cout << "✅ Subscribed to mapping telemetry: telemetry.*.mapping.*" << std::endl;
         } else {
             std::cout << "❌ Failed to subscribe to mapping telemetry" << std::endl;
-        }
-
-        // Also subscribe to location data for mapping context (essential for mapping)
-        if (client.subscribe("telemetry.*.*.location")) {
-            std::cout << "✅ Subscribed to location data: telemetry.*.*.location" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to location data" << std::endl;
         }
     }
 
