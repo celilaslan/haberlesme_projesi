@@ -128,16 +128,20 @@ public:
         running_ = false;
         connected_ = false;
 
-        // Stop networking
+        // First, signal shutdown and wait for thread to finish
+        if (receive_thread_.joinable()) {
+            // For UDP, we need to interrupt the io_context to wake up the receive loop
+            if (protocol_ == Protocol::UDP && io_context_) {
+                io_context_->stop();
+            }
+            receive_thread_.join();
+        }
+
+        // Now safely cleanup networking resources
         if (protocol_ == Protocol::TCP) {
             disconnectTCP();
         } else {
             disconnectUDP();
-        }
-
-        // Wait for background thread to finish
-        if (receive_thread_.joinable()) {
-            receive_thread_.join();
         }
 
         if (connection_callback_) {
@@ -502,15 +506,7 @@ private:
 
     void disconnectUDP() {
         try {
-            // Give the receive loop time to exit gracefully before stopping io_context
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-            // Stop the io_context
-            if (io_context_) {
-                io_context_->stop();
-            }
-
-            // Close sockets safely
+            // Close sockets safely (thread is already joined at this point)
             if (udp_socket_ && udp_socket_->is_open()) {
                 udp_socket_->close();
             }
@@ -518,7 +514,7 @@ private:
                 subscription_socket_->close();
             }
 
-            // Reset the smart pointers
+            // Reset the smart pointers - thread is guaranteed to be stopped now
             udp_socket_.reset();
             subscription_socket_.reset();
             io_context_.reset();
