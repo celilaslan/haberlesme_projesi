@@ -30,7 +30,7 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
 #     <target>: telemetry_service, uav_sim, camera_ui, mapping_ui
-#     For UI apps, use: --protocol tcp|udp [--location-only|--status-only|--all-targets] [--send UAV_NAME]
+#     For UI apps, use: --protocol tcp|udp [--location-only|--status-only|--all-targets] [--send UAV_NAME] [--debug]
 #
 #   up [UAVs...] [args...]  - Launch service, UIs, and specified UAVs in new terminals.
 #                             Any extra arguments are passed to all UAV simulators.
@@ -1143,6 +1143,7 @@ run() {
       echo "  --protocol tcp|udp     : Communication protocol"
       echo "  --location-only        : Subscribe only to location data from all targets"
       echo "  --status-only          : Subscribe only to status data from all targets"
+      echo "  --debug                : Enable debug output to see internal filtering"
       echo "  --all-targets          : Subscribe to all telemetry from all targets"
       echo "  --all-targets          : Subscribe to ALL telemetry data"
       echo "  --send UAV_NAME        : Enable command sending to UAV"

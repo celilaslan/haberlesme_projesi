@@ -9,6 +9,7 @@
 
 #include <sys/select.h>
 #include <unistd.h>
+#include <cstdlib>  // for setenv
 
 #include <atomic>
 #include <chrono>
@@ -180,6 +181,7 @@ int main(int argc, char* argv[]) {
     bool enableAllTargets = false;  // Enable receiving all target types
     bool locationOnly = false;      // Subscribe only to location data
     bool statusOnly = false;        // Subscribe only to status data
+    bool debugMode = false;         // Enable debug output
     std::string target_uav;
 
     for (int i = 1; i < argc; i++) {
@@ -194,6 +196,8 @@ int main(int argc, char* argv[]) {
             locationOnly = true;
         } else if (std::string(argv[i]) == "--status-only") {
             statusOnly = true;
+        } else if (std::string(argv[i]) == "--debug") {
+            debugMode = true;
         } else if (std::string(argv[i]) == "--help") {
             std::cout << "Mapping UI - UAV Location Tracking\n";
             std::cout << "Usage: " << argv[0] << " [options]\n";
@@ -203,6 +207,7 @@ int main(int argc, char* argv[]) {
             std::cout << "  --all-targets      : Subscribe to ALL target types (camera, mapping)\n";
             std::cout << "  --location-only    : Subscribe only to location data (telemetry.*.*.location)\n";
             std::cout << "  --status-only      : Subscribe only to status data (telemetry.*.*.status)\n";
+            std::cout << "  --debug            : Enable debug output to see internal filtering\n";
             std::cout << "  --help             : Show this help message\n";
             std::cout << "\nSubscription modes:\n";
             std::cout << "  Default: Mapping data only (telemetry.*.mapping.*)\n";
@@ -251,7 +256,15 @@ int main(int argc, char* argv[]) {
     } else {
         std::cout << "Mode: Mapping-only monitoring" << std::endl;
     }
+    if (debugMode) {
+        std::cout << "Debug: Enabled (will show internal filtering messages)" << std::endl;
+    }
     std::cout << std::endl;
+
+    // Enable debug mode if requested
+    if (debugMode) {
+        setenv("TELEMETRY_DEBUG", "1", 1);  // Set environment variable for library
+    }
 
     // Create telemetry client
     TelemetryClient client("mapping_ui");

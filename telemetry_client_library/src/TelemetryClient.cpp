@@ -13,6 +13,7 @@
 #include <boost/asio.hpp>
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>  // for getenv
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -24,6 +25,18 @@
 
 using boost::asio::ip::udp;
 using json = nlohmann::json;
+
+// Debug utility function - controlled by TELEMETRY_DEBUG environment variable
+static void debugLog(const std::string& message) {
+    static bool debug_enabled = []() {
+        const char* env_debug = std::getenv("TELEMETRY_DEBUG");
+        return env_debug != nullptr && (std::string(env_debug) == "1" || std::string(env_debug) == "true");
+    }();
+
+    if (debug_enabled) {
+        std::cerr << "DEBUG: " << message << std::endl;
+    }
+}
 
 namespace TelemetryAPI {
 
@@ -347,7 +360,7 @@ private:
     }
 
     void tcpReceiveLoop() {
-        std::cerr << "DEBUG: TCP receive loop started" << std::endl;
+        debugLog("TCP receive loop started");
         while (running_ && connected_) {
             try {
                 zmq::message_t topic_msg;
@@ -358,7 +371,7 @@ private:
                 int rc = zmq::poll(items, 1, std::chrono::milliseconds(100));
 
                 if (rc > 0 && (items[0].revents & ZMQ_POLLIN)) {
-                    std::cerr << "DEBUG: Message available on TCP socket" << std::endl;
+                    debugLog("Message available on TCP socket");
                     // Receive topic
                     if (subscriber_socket_->recv(topic_msg, zmq::recv_flags::dontwait)) {
                         // Receive data (if available)
@@ -367,7 +380,7 @@ private:
                             std::vector<uint8_t> data(static_cast<uint8_t*>(data_msg.data()),
                                                     static_cast<uint8_t*>(data_msg.data()) + data_msg.size());
 
-                            std::cerr << "DEBUG: Received topic: " << topic << ", data size: " << data.size() << std::endl;
+                            debugLog("Received topic: " + topic + ", data size: " + std::to_string(data.size()));
 
                             // Check if this topic matches any of our wildcard subscriptions
                             bool shouldDeliver = false;
@@ -387,7 +400,7 @@ private:
                                 if (telemetry_callback_) {
                                     telemetry_callback_(topic, data);
                                 } else {
-                                    std::cerr << "DEBUG: No telemetry callback set!" << std::endl;
+                                    debugLog("No telemetry callback set!");
                                 }
                             }
                         }
@@ -395,7 +408,7 @@ private:
                 }
 
             } catch (const std::exception& e) {
-                std::cerr << "DEBUG: TCP receive error: " << e.what() << std::endl;
+                debugLog("TCP receive error: " + std::string(e.what()));
                 if (running_) {
                     // Only report error if we're supposed to be running
                     connected_ = false;
@@ -406,7 +419,7 @@ private:
                 }
             }
         }
-        std::cerr << "DEBUG: TCP receive loop ended" << std::endl;
+        debugLog("TCP receive loop ended");
     }
 
     // Helper function to match wildcard patterns (same logic as UDP server)
@@ -515,6 +528,7 @@ private:
     }
 
     bool subscribeUDP(const std::string& topic) {
+        debugLog("UDP subscribing to topic: " + topic);
         try {
             if (subscription_socket_ && udp_socket_) {
                 // Get the local endpoint where we're listening for published data
@@ -551,6 +565,7 @@ private:
     }
 
     bool unsubscribeUDP(const std::string& topic) {
+        debugLog("UDP unsubscribing from topic: " + topic);
         try {
             if (subscription_socket_) {
                 // Send unsubscription request: "UNSUBSCRIBE|topic|client_id"
@@ -583,6 +598,7 @@ private:
     }
 
     void udpReceiveLoop() {
+        debugLog("UDP receive loop started");
         while (running_ && connected_) {
             try {
                 // Create shared buffer for each async operation to avoid scope issues
@@ -594,6 +610,7 @@ private:
                     boost::asio::buffer(*buffer), *sender_endpoint,
                     [this, buffer](boost::system::error_code ec, std::size_t bytes_received) {
                         if (!ec && bytes_received > 0 && running_) {
+                            debugLog("Received UDP message, size: " + std::to_string(bytes_received));
                             // Parse message: "topic|data"
                             std::vector<uint8_t> received_data(buffer->begin(), buffer->begin() + bytes_received);
 
@@ -603,10 +620,14 @@ private:
                                 std::string topic(received_data.begin(), separator_it);
                                 std::vector<uint8_t> data(separator_it + 1, received_data.end());
 
+                                debugLog("Received UDP topic: " + topic + ", data size: " + std::to_string(data.size()));
+
                                 // Call user callback
                                 std::lock_guard<std::mutex> lock(callback_mutex_);
                                 if (telemetry_callback_) {
                                     telemetry_callback_(topic, data);
+                                } else {
+                                    debugLog("No UDP telemetry callback set!");
                                 }
                             }
                         }
@@ -616,7 +637,8 @@ private:
                 io_context_->run_for(std::chrono::milliseconds(100));
                 io_context_->restart();
 
-            } catch (const std::exception&) {
+            } catch (const std::exception& e) {
+                debugLog("UDP receive error: " + std::string(e.what()));
                 if (running_) {
                     connected_ = false;
                     if (connection_callback_) {
@@ -626,6 +648,7 @@ private:
                 }
             }
         }
+        debugLog("UDP receive loop ended");
     }
 };
 
