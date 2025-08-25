@@ -157,6 +157,7 @@ int main(int argc, char* argv[]) {
     bool locationOnly = false;      // Subscribe only to location data
     bool statusOnly = false;        // Subscribe only to status data
     bool debugMode = false;         // Enable debug output
+    bool interactiveMode = false;   // Enable interactive subscription management
     std::string target_uav;
 
     for (int i = 1; i < argc; i++) {
@@ -173,6 +174,8 @@ int main(int argc, char* argv[]) {
             statusOnly = true;
         } else if (std::string(argv[i]) == "--debug") {
             debugMode = true;
+        } else if (std::string(argv[i]) == "--interactive") {
+            interactiveMode = true;
         } else if (std::string(argv[i]) == "--help") {
             std::cout << "Camera UI - Telemetry Visualization\n";
             std::cout << "Usage: " << argv[0] << " [options]\n";
@@ -183,6 +186,7 @@ int main(int argc, char* argv[]) {
             std::cout << "  --location-only    : Subscribe only to location data (telemetry.*.*.location)\n";
             std::cout << "  --status-only      : Subscribe only to status data (telemetry.*.*.status)\n";
             std::cout << "  --debug            : Enable debug output to see internal filtering\n";
+            std::cout << "  --interactive      : Enable interactive subscription management\n";
             std::cout << "  --help             : Show this help message\n";
             std::cout << "\nSubscription modes:\n";
             std::cout << "  Default: Camera data only (telemetry.*.camera.*)\n";
@@ -366,11 +370,85 @@ int main(int argc, char* argv[]) {
 
     // Start command sender thread if enabled
     std::thread senderThread;
+    std::thread subscriptionThread;
     if (enableSender && client_protocol == Protocol::TCP) {
         senderThread = std::thread([&client, target_uav]() {
             std::string line;
             std::cout << std::endl;
             std::cout << "📡 Command interface enabled for " << target_uav << std::endl;
+            std::cout << "Type commands and press Enter (or Ctrl+C to exit):" << std::endl;
+            std::cout << "Special commands:" << std::endl;
+            std::cout << "  sub <topic>   - Subscribe to topic (e.g., 'sub telemetry.*.mapping.*')" << std::endl;
+            std::cout << "  unsub <topic> - Unsubscribe from topic" << std::endl;
+            std::cout << "  list          - List current subscriptions" << std::endl;
+            std::cout << "UAV commands: CAPTURE_PHOTO, START_RECORDING, etc." << std::endl;
+
+            while (g_running) {
+                // Check if input is available without blocking
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(STDIN_FILENO, &readfds);
+
+                struct timeval timeout;
+                timeout.tv_sec = 0;
+                timeout.tv_usec = 100000;  // 100ms timeout
+
+                int result = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &timeout);
+
+                if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
+                    if (std::getline(std::cin, line)) {
+                        if (!g_running) break;
+
+                        if (!line.empty()) {
+                            // Check for subscription management commands
+                            std::istringstream iss(line);
+                            std::string command, topic;
+                            iss >> command >> topic;
+
+                            if (command == "sub" && !topic.empty()) {
+                                if (client.subscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                }
+                            } else if (command == "unsub" && !topic.empty()) {
+                                if (client.unsubscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                }
+                            } else if (command == "list") {
+                                std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
+                                std::cout << "   (Note: Use --debug to see internal subscription details)" << std::endl;
+                            } else {
+                                // Regular UAV command
+                                if (client.sendCommand(target_uav, line)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Sent command to " << target_uav << ": " << line << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                }
+                            }
+                        }
+                    }
+                } else if (result < 0) {
+                    break;  // Error occurred
+                }
+            }
+        });
+    } else if (enableSender && client_protocol == Protocol::UDP) {
+        std::cout << "⚠️ Command sending not supported with UDP protocol" << std::endl;
+    }
+
+    // Start interactive subscription management thread if enabled (works with any protocol)
+    if (interactiveMode && !enableSender) {
+        subscriptionThread = std::thread([&client]() {
+            std::string line;
+            std::cout << std::endl;
+            std::cout << "📋 Interactive subscription management enabled" << std::endl;
+            std::cout << "Commands:" << std::endl;
+            std::cout << "  sub <topic>   - Subscribe to topic (e.g., 'sub telemetry.*.mapping.*')" << std::endl;
+            std::cout << "  unsub <topic> - Unsubscribe from topic" << std::endl;
+            std::cout << "  list          - List current subscriptions" << std::endl;
             std::cout << "Type commands and press Enter (or Ctrl+C to exit):" << std::endl;
 
             while (g_running) {
@@ -390,10 +468,27 @@ int main(int argc, char* argv[]) {
                         if (!g_running) break;
 
                         if (!line.empty()) {
-                            if (client.sendCommand(target_uav, line)) {
-                                std::cout << "✅ [" << GetTimestamp() << "] Sent command to " << target_uav << ": " << line << std::endl;
+                            std::istringstream iss(line);
+                            std::string command, topic;
+                            iss >> command >> topic;
+
+                            if (command == "sub" && !topic.empty()) {
+                                if (client.subscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                }
+                            } else if (command == "unsub" && !topic.empty()) {
+                                if (client.unsubscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                }
+                            } else if (command == "list") {
+                                std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
+                                std::cout << "   (Note: Use --debug to see internal subscription details)" << std::endl;
                             } else {
-                                std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                std::cout << "❓ Unknown command. Use: sub <topic>, unsub <topic>, or list" << std::endl;
                             }
                         }
                     }
@@ -402,8 +497,6 @@ int main(int argc, char* argv[]) {
                 }
             }
         });
-    } else if (enableSender && client_protocol == Protocol::UDP) {
-        std::cout << "⚠️ Command sending not supported with UDP protocol" << std::endl;
     }
 
     // Main loop - just wait for shutdown signal
@@ -414,9 +507,12 @@ int main(int argc, char* argv[]) {
     std::cout << std::endl;
     std::cout << "🔄 Shutting down Camera UI..." << std::endl;
 
-    // Wait for sender thread to finish
+    // Wait for threads to finish
     if (senderThread.joinable()) {
         senderThread.join();
+    }
+    if (subscriptionThread.joinable()) {
+        subscriptionThread.join();
     }
 
     // Disconnect from service

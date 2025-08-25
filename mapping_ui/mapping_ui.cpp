@@ -399,8 +399,12 @@ int main(int argc, char* argv[]) {
             std::string line;
             std::cout << std::endl;
             std::cout << "📡 Command interface enabled for " << target_uav << std::endl;
-            std::cout << "Sample commands: 'SET_WAYPOINT 41.0392 29.0352', 'GET_MISSION_STATUS', 'RETURN_HOME'" << std::endl;
             std::cout << "Type commands and press Enter (or Ctrl+C to exit):" << std::endl;
+            std::cout << "Special commands:" << std::endl;
+            std::cout << "  sub <topic>   - Subscribe to topic (e.g., 'sub telemetry.*.camera.*')" << std::endl;
+            std::cout << "  unsub <topic> - Unsubscribe from topic" << std::endl;
+            std::cout << "  list          - List current subscriptions" << std::endl;
+            std::cout << "Navigation commands: SET_WAYPOINT, RETURN_HOME, etc." << std::endl;
 
             while (g_running) {
                 // Check if input is available without blocking
@@ -419,10 +423,33 @@ int main(int argc, char* argv[]) {
                         if (!g_running) break;
 
                         if (!line.empty()) {
-                            if (client.sendCommand(target_uav, line)) {
-                                std::cout << "✅ [" << GetTimestamp() << "] Sent navigation command to " << target_uav << ": " << line << std::endl;
+                            // Check for subscription management commands
+                            std::istringstream iss(line);
+                            std::string command, topic;
+                            iss >> command >> topic;
+
+                            if (command == "sub" && !topic.empty()) {
+                                if (client.subscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                }
+                            } else if (command == "unsub" && !topic.empty()) {
+                                if (client.unsubscribe(topic)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                }
+                            } else if (command == "list") {
+                                std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
+                                std::cout << "   (Note: Use --debug to see internal subscription details)" << std::endl;
                             } else {
-                                std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                // Regular navigation command
+                                if (client.sendCommand(target_uav, line)) {
+                                    std::cout << "✅ [" << GetTimestamp() << "] Sent navigation command to " << target_uav << ": " << line << std::endl;
+                                } else {
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                }
                             }
                         }
                     }
