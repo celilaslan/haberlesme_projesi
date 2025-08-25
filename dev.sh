@@ -721,8 +721,6 @@ clean() {
   find "${ROOT_DIR}/uav_sim" -maxdepth 1 -type f -name "uav_sim" -executable -delete
   find "${ROOT_DIR}/camera_ui" -maxdepth 1 -type f -name "camera_ui" -executable -delete
   find "${ROOT_DIR}/mapping_ui" -maxdepth 1 -type f -name "mapping_ui" -executable -delete
-  # Remove example executables
-  find "${ROOT_DIR}/telemetry_client_library/examples" -maxdepth 1 -type f -executable -not -name "*.sh" -not -name "*.ps1" -delete
   echo "Clean complete."
 }
 
