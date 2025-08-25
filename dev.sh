@@ -282,7 +282,7 @@ EOF
 
 # Format C++ code using clang-format
 format_code() {
-    local target_file="$1"
+    local target_file="${1:-}"
 
     if ! check_clang_tools; then
         log_error "clang-format not available"
@@ -335,7 +335,7 @@ format_code() {
 
 # Check code formatting without modifying files
 check_format() {
-    local target_file="$1"
+    local target_file="${1:-}"
 
     if ! check_clang_tools; then
         log_error "clang-format not available"
@@ -390,7 +390,7 @@ check_format() {
 
 # Run static analysis using clang-tidy
 lint_code() {
-    local target_file="$1"
+    local target_file="${1:-}"
 
     if ! check_clang_tools; then
         log_error "clang-tidy not available"
@@ -466,7 +466,7 @@ lint_code() {
 
 # Run comprehensive code quality check
 quality_check() {
-    local target_file="$1"
+    local target_file="${1:-}"
 
     if [[ -n "$target_file" ]]; then
         log_info "Running code quality check for: $target_file"
@@ -1172,7 +1172,7 @@ case "$cmd" in
   test)      shift; test_project "$@" ;;
   protocol-test) protocol_test ;;
   cross-target-test) cross_target_test ;;
-  format)    shift; check_format "$@" ;;
+  format)    shift; format_code "$@" ;;
   fix-format) shift; format_code "$@" ;;
   lint)      shift; lint_code "$@" ;;
   quality-check) shift; quality_check "$@" ;;
