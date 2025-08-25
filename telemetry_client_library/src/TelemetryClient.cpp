@@ -489,15 +489,23 @@ private:
 
     void disconnectUDP() {
         try {
+            // Give the receive loop time to exit gracefully before stopping io_context
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+            // Stop the io_context
             if (io_context_) {
                 io_context_->stop();
             }
+
+            // Close sockets safely
             if (udp_socket_ && udp_socket_->is_open()) {
                 udp_socket_->close();
             }
             if (subscription_socket_ && subscription_socket_->is_open()) {
                 subscription_socket_->close();
             }
+
+            // Reset the smart pointers
             udp_socket_.reset();
             subscription_socket_.reset();
             io_context_.reset();
@@ -575,18 +583,19 @@ private:
     }
 
     void udpReceiveLoop() {
-        std::array<uint8_t, 2048> buffer;
-        udp::endpoint sender_endpoint;
-
         while (running_ && connected_) {
             try {
+                // Create shared buffer for each async operation to avoid scope issues
+                auto buffer = std::make_shared<std::array<uint8_t, 2048>>();
+                auto sender_endpoint = std::make_shared<udp::endpoint>();
+
                 // Use async_receive_from to receive from service
                 udp_socket_->async_receive_from(
-                    boost::asio::buffer(buffer), sender_endpoint,
-                    [this, &buffer](boost::system::error_code ec, std::size_t bytes_received) {
-                        if (!ec && bytes_received > 0) {
+                    boost::asio::buffer(*buffer), *sender_endpoint,
+                    [this, buffer](boost::system::error_code ec, std::size_t bytes_received) {
+                        if (!ec && bytes_received > 0 && running_) {
                             // Parse message: "topic|data"
-                            std::vector<uint8_t> received_data(buffer.begin(), buffer.begin() + bytes_received);
+                            std::vector<uint8_t> received_data(buffer->begin(), buffer->begin() + bytes_received);
 
                             // Find the separator
                             auto separator_it = std::find(received_data.begin(), received_data.end(), '|');
