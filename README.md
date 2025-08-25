@@ -103,8 +103,15 @@ The build system supports professional-grade configuration options:
 
 **Protocol Architecture:**
 - **TCP (ZeroMQ)**: Commands, responses, and telemetry data (secure, reliable)
-- **UDP (Boost.Asio)**: Additional telemetry streaming (lightweight, real-time)
+  - **Wildcard Support**: Uses prefix matching + TelemetryClient library filtering for advanced patterns
+  - **Pattern Examples**: `telemetry.*`, `telemetry.*.camera.*`, `telemetry.UAV_1.*`
+  - **Implementation**: ZeroMQ prefix subscription with TelemetryClient library wildcard filtering
+- **UDP (Boost.Asio)**: Additional telemetry streaming with server-side wildcard subscription support
+  - **Wildcard Support**: Server-side pattern matching with push-based delivery to registered clients
+  - **Pattern Examples**: Full wildcard matching including `telemetry.*.*.location`
+  - **Implementation**: Service-level subscription management with automatic port assignment
 - **Security**: UAVs do not accept commands via UDP (industry standard)
+- **Wildcard Subscriptions**: Advanced pattern matching for both protocols with different approaches
 
 The `uav_sim` supports protocol selection:
 - `--protocol tcp` - TCP only (ZeroMQ) - receives commands and sends telemetry via TCP
@@ -116,8 +123,13 @@ The `uav_sim` supports protocol selection:
 ./dev.sh run telemetry_service
 
 # 2) Start UI clients (protocol selection REQUIRED - enhanced validation)
-./dev.sh run camera_ui --protocol tcp      # For sending commands and receiving telemetry via TCP
-./dev.sh run mapping_ui --protocol udp     # For receiving telemetry via UDP only
+./dev.sh run camera_ui --protocol tcp      # For sending commands and receiving camera telemetry
+./dev.sh run mapping_ui --protocol udp     # For receiving mapping telemetry via UDP only
+
+# UI Data Filtering Options (NEW):
+./dev.sh run camera_ui --protocol tcp --location-only   # Only location data from all targets
+./dev.sh run camera_ui --protocol udp --status-only     # Only status data from all targets
+./dev.sh run mapping_ui --protocol tcp --all-targets    # All telemetry from all targets
 
 # 3) Start UAV sims (enhanced argument validation)
 ./dev.sh run uav_sim UAV_1 --protocol tcp    # TCP: receives commands + sends telemetry via TCP
@@ -174,7 +186,13 @@ The service writes logs to `log_file`. If relative, logs resolve next to the tel
 
 **Network Architecture**:
 - **TCP (ZeroMQ)**: Secure channel for commands and telemetry with PUB/SUB pattern for reliable message delivery
+  - **Subscription Method**: ZeroMQ prefix matching combined with TelemetryClient library wildcard filtering
+  - **Wildcard Implementation**: Converts patterns like `telemetry.*.camera.*` to prefix `telemetry.` + library filtering
+  - **Performance**: Efficient prefix matching at transport level, detailed filtering within TelemetryClient library
 - **UDP (Boost.Asio)**: Additional lightweight telemetry streaming with per-UAV dedicated ports for isolation
+  - **Subscription Method**: Server-side wildcard pattern matching with push-based delivery
+  - **Wildcard Implementation**: Full pattern matching at service level before transmission
+  - **Performance**: Reduces network traffic by filtering at source
 - **Security**: UAVs receive commands only via TCP (industry standard), but send telemetry via both protocols
 - **Thread Safety**: All network operations use atomic flags and non-blocking operations
 - **Fault Tolerance**: Each UAV gets its own UDP server for better fault isolation

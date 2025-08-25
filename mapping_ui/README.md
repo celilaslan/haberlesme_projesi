@@ -22,6 +22,19 @@ A specialized telemetry visualization application focused on navigation, locatio
 ./mapping_ui --protocol udp
 ```
 
+### Data Filtering Options
+```bash
+# Default: Mapping target data only
+./mapping_ui --protocol tcp
+
+# Filter by data type across all targets
+./mapping_ui --protocol udp --location-only    # Only location data from all UAVs
+./mapping_ui --protocol tcp --status-only      # Only status data from all UAVs
+
+# Monitor all telemetry from all targets
+./mapping_ui --protocol tcp --all-targets
+```
+
 ### Navigation Command Mode
 ```bash
 # Enable navigation command sending to specific UAV
@@ -38,6 +51,9 @@ A specialized telemetry visualization application focused on navigation, locatio
 ### Command Line Options
 - `--protocol tcp|udp` : Communication protocol (default: tcp)
 - `--send UAV_NAME` : Enable navigation command interface for specified UAV
+- `--location-only` : Subscribe only to location data from all targets
+- `--status-only` : Subscribe only to status data from all targets
+- `--all-targets` : Subscribe to all telemetry from all targets
 - `--help` : Show help message
 
 ## Telemetry Data Display
@@ -78,14 +94,21 @@ The Mapping UI subscribes to:
 ## Protocol Support
 
 ### TCP Mode (Default - Recommended)
-- **Reliable delivery**: Critical for navigation data
-- **Command support**: Full navigation command interface
-- **Subscription filtering**: Efficient data filtering at service level
+- **Reliable delivery**: Critical for navigation data integrity
+- **Command support**: Full navigation command interface for waypoints and mission control
+- **Wildcard subscriptions**: ZeroMQ prefix matching + TelemetryClient library filtering
+  - Efficient for patterns like `telemetry.*.mapping.*`
+  - Subscribes to `telemetry.` prefix, TelemetryClient library filters mapping topics internally
+  - Ensures no navigation data is lost due to network issues
+- **Mission critical**: Best for operations requiring guaranteed data delivery
 
 ### UDP Mode (Low Latency)
-- **Real-time updates**: Minimal latency for live tracking
-- **High frequency**: Suitable for rapid position updates
-- **No commands**: Position monitoring only
+- **Real-time updates**: Minimal latency for live position tracking
+- **High frequency**: Suitable for rapid position updates during dynamic missions
+- **Server-side filtering**: Service processes wildcard patterns before transmission
+  - Only relevant mapping/location data sent over network
+  - Optimal for bandwidth-constrained environments
+- **No commands**: Position monitoring only (security design)
 
 ## Navigation Commands
 

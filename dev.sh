@@ -30,7 +30,7 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 # Runtime Commands:
 #   run <target> [args...]  - Run a specific executable with arguments.
 #     <target>: telemetry_service, uav_sim, camera_ui, mapping_ui
-#     For UI apps, use: --protocol tcp|udp [--all-targets|--cross-target] [--send UAV_NAME]
+#     For UI apps, use: --protocol tcp|udp [--location-only|--status-only|--all-targets] [--send UAV_NAME]
 #
 #   up [UAVs...] [args...]  - Launch service, UIs, and specified UAVs in new terminals.
 #                             Any extra arguments are passed to all UAV simulators.
@@ -72,7 +72,7 @@ trap 'cleanup_background 2>/dev/null || true' EXIT
 #   ./dev.sh watch                    # Auto-rebuild on changes
 #   ./dev.sh run telemetry_service
 #   ./dev.sh run uav_sim UAV_1 --protocol udp
-#   ./dev.sh run camera_ui --protocol tcp --cross-target
+#   ./dev.sh run camera_ui --protocol tcp --location-only
 #   ./dev.sh run mapping_ui --protocol udp --all-targets --send UAV_1
 #   ./dev.sh up UAV_1 UAV_2 --protocol udp
 #   ./dev.sh cross-target-test        # Test new cross-target features
@@ -1043,8 +1043,8 @@ cross_target_test() {
   log_info "Testing cross-target modes..."
 
   # Test camera UI with cross-target mode
-  log_info "Testing camera UI --cross-target mode..."
-  (timeout 3s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp --cross-target || true) &
+  log_info "Testing camera UI --location-only mode..."
+  (timeout 3s "$ROOT_DIR/camera_ui/camera_ui" --protocol tcp --location-only || true) &
   cam_pid=$!
 
   # Test mapping UI with all-targets mode
@@ -1071,7 +1071,7 @@ cross_target_test() {
 
   # Show test summary
   echo "✅ Cross-Target Tests Completed:"
-  echo "   - Camera UI with --cross-target (receives mapping + general data)"
+  echo "   - Camera UI with --location-only (receives location data from all targets)"
   echo "   - Mapping UI with --all-targets (receives all telemetry)"
   echo "   - UAV_1 with TCP protocol"
   echo "   - UAV_2 with UDP protocol"
@@ -1123,7 +1123,7 @@ run() {
       log_error "$target requires --protocol parameter (tcp or udp)"
       echo "Examples:"
       echo "  ./dev.sh run $target --protocol tcp"
-      echo "  ./dev.sh run $target --protocol udp --cross-target"
+      echo "  ./dev.sh run $target --protocol udp --location-only"
       echo "  ./dev.sh run $target --protocol tcp --all-targets --send UAV_1"
       exit 1
     fi
@@ -1141,7 +1141,9 @@ run() {
       log_warning "$target typically requires --protocol tcp or --protocol udp"
       echo "Available options:"
       echo "  --protocol tcp|udp     : Communication protocol"
-      echo "  --cross-target         : Subscribe to multiple target types"
+      echo "  --location-only        : Subscribe only to location data from all targets"
+      echo "  --status-only          : Subscribe only to status data from all targets"
+      echo "  --all-targets          : Subscribe to all telemetry from all targets"
       echo "  --all-targets          : Subscribe to ALL telemetry data"
       echo "  --send UAV_NAME        : Enable command sending to UAV"
     fi
@@ -1207,7 +1209,7 @@ case "$cmd" in
     wait_for_port 5557 15 || true
     wait_for_port 5558 15 || true
     sleep 0.2
-    open_term "camera_ui (TCP + cross-target)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp --cross-target"
+    open_term "camera_ui (TCP + location-only)" "$ROOT_DIR/camera_ui/camera_ui --protocol tcp --location-only"
     open_term "mapping_ui (UDP + all-targets)" "$ROOT_DIR/mapping_ui/mapping_ui --protocol udp --all-targets"
 
     # Separate UAV names from other arguments

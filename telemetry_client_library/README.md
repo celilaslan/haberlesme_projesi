@@ -1,6 +1,11 @@
 # Telemetry Client Library
 
-A simple C++ library for connecting to the UAV telemetry service and receiving real-time telemetry data. This library hides the complexity of ZeroMQ and Boost.Asio networking, providing a clean API for UI applications.
+A simple C++ library for connecting to the UAV telemetry service and receiving real-time telemetry data. This library hides the complexity of ZeroMQ and Boost.Asio n- **Subscription method**: ZeroMQ prefix matching + TelemetryClient library wildcard filtering
+- **Wildcard implementation**:
+  - Converts `telemetry.*` to prefix `telemetry.`
+  - Converts `telemetry.*.camera.*` to prefix `telemetry.` + library internal filtering
+  - TelemetryClient library handles pattern matching for complex wildcards
+- **Performance**: Efficient prefix subscription, detailed filtering within librarying, providing a clean API for UI applications.
 
 ## Features
 
@@ -163,27 +168,59 @@ Set callback for connection status changes.
 
 ### Topic Patterns
 
-The library supports wildcard patterns in topic subscriptions:
+The library supports wildcard patterns in topic subscriptions with different implementations per protocol:
 
+**Common Patterns:**
 - `"telemetry.*"` - All telemetry data
 - `"telemetry.UAV_1.*"` - All data from UAV_1
 - `"telemetry.*.camera.*"` - All camera data from all UAVs
 - `"telemetry.*.*.location"` - All location data
 - `"telemetry.UAV_1.camera.location"` - Specific data type
 
+**TCP (ZeroMQ) Wildcard Implementation:**
+- **Method**: ZeroMQ prefix matching + TelemetryClient library filtering
+- **Behavior**: Library subscribes to broader prefix, then filters received data internally
+- **Example**: `telemetry.*.camera.*` becomes ZeroMQ subscription to `telemetry.` + library filtering
+- **Reason**: ZeroMQ only supports prefix matching natively, not complex wildcard patterns
+- **Performance**: May receive more data than needed, but reliable delivery guaranteed
+- **Use Case**: When reliability is critical and some extra bandwidth is acceptable
+
+**UDP Wildcard Implementation:**
+- **Method**: Server-side pattern matching before transmission
+- **Behavior**: Service filters before sending, client receives only matching data
+- **Example**: `telemetry.*.camera.*` is matched at service level, only matching topics sent
+- **Reason**: Full control over UDP implementation allows efficient server-side filtering
+- **Performance**: Minimal bandwidth usage, optimal for high-frequency data
+- **Use Case**: When low latency and minimal bandwidth are priorities
+
+**Why Different Approaches?**
+This hybrid design leverages the strengths of each protocol:
+- **TCP**: Uses ZeroMQ's reliable delivery with library-level wildcard enhancement
+- **UDP**: Custom implementation allows optimal bandwidth efficiency with server-side filtering
+- **Result**: Both protocols provide the same wildcard API to applications while optimizing for their respective strengths
+
 ### Protocols
 
 #### TCP (ZeroMQ)
 - **Reliable delivery**: Messages guaranteed to arrive
 - **Command support**: Can send commands to UAVs
-- **Subscription filtering**: Done at transport level
+- **Subscription method**: ZeroMQ prefix matching + client-side wildcard filtering
+- **Wildcard implementation**:
+  - Converts `telemetry.*` to prefix `telemetry.`
+  - Converts `telemetry.*.camera.*` to prefix `telemetry.` + client filtering
+  - Application-level pattern matching for complex wildcards
+- **Performance**: Efficient prefix subscription, detailed filtering after receipt
 - **Default port**: 5556 (subscriber), 5557 (commands)
 
 #### UDP (Boost.Asio)
 - **Low latency**: Faster message delivery
 - **Telemetry only**: No command support
-- **Client-side filtering**: Receives all subscribed data
-- **Default port**: 5558
+- **Subscription method**: Server-side wildcard pattern matching at service level
+- **Wildcard implementation**: Full pattern matching before transmission
+- **Performance**: Reduces network traffic by filtering at source
+- **Automatic port assignment**: Clients automatically get OS-assigned ports
+- **Option A Architecture**: Service publishes to registered client endpoints
+- **Default port**: 5572 (subscription management)
 
 ### Utility Functions
 
@@ -253,7 +290,7 @@ The library can automatically read connection settings from `service_config.json
   "ui_ports": {
     "tcp_subscribe_port": 5556,
     "tcp_command_port": 5557,
-    "udp_publish_port": 5558
+    "udp_publish_port": 5572
   },
   "service": {
     "ip": "localhost"

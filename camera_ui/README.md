@@ -22,6 +22,19 @@ A specialized telemetry visualization application focused on camera systems and 
 ./camera_ui --protocol udp
 ```
 
+### Data Filtering Options
+```bash
+# Default: Camera target data only
+./camera_ui --protocol tcp
+
+# Filter by data type across all targets
+./camera_ui --protocol udp --location-only    # Only location data from all UAVs
+./camera_ui --protocol tcp --status-only      # Only status data from all UAVs
+
+# Monitor all telemetry from all targets
+./camera_ui --protocol tcp --all-targets
+```
+
 ### Interactive Command Mode
 ```bash
 # Enable command sending to specific UAV
@@ -39,6 +52,9 @@ A specialized telemetry visualization application focused on camera systems and 
 ### Command Line Options
 - `--protocol tcp|udp` : Communication protocol (default: tcp)
 - `--send UAV_NAME` : Enable command interface for specified UAV
+- `--location-only` : Subscribe only to location data from all targets
+- `--status-only` : Subscribe only to status data from all targets
+- `--all-targets` : Subscribe to all telemetry from all targets
 - `--help` : Show help message
 
 ## Telemetry Data Display
@@ -68,14 +84,21 @@ The application subscribes to:
 ## Protocol Support
 
 ### TCP Mode (Default - Recommended)
-- **Reliable delivery**: No lost telemetry data
-- **Command support**: Full bidirectional communication
-- **Built-in filtering**: ZeroMQ handles subscription filtering
+- **Reliable delivery**: No lost telemetry data, critical for camera operations
+- **Command support**: Full bidirectional communication for camera control
+- **Wildcard subscriptions**: ZeroMQ prefix matching + TelemetryClient library filtering
+  - Efficient for patterns like `telemetry.*.camera.*`
+  - Subscribes to `telemetry.` prefix, TelemetryClient library filters `camera` topics internally
+  - Guarantees all relevant camera data is received
+- **Security**: Encrypted command channel for camera controls
 
 ### UDP Mode (Low Latency)
-- **Fast updates**: Minimal latency for real-time monitoring
-- **No commands**: Telemetry reception only
-- **Client filtering**: Application filters received data
+- **Fast updates**: Minimal latency for real-time camera monitoring
+- **No commands**: Telemetry reception only (security limitation)
+- **Server-side filtering**: Service filters wildcard patterns before transmission
+  - Only matching camera data sent over network
+  - Optimal bandwidth usage for high-frequency telemetry
+- **Real-time focus**: Best for live camera feed monitoring
 
 ## Sample Session
 
