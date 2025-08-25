@@ -12,6 +12,7 @@
 #include <atomic>
 #include <boost/asio.hpp>
 #include <chrono>
+#include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -299,8 +300,21 @@ private:
     bool subscribeTCP(const std::string& topic) {
         try {
             if (subscriber_socket_) {
-                subscriber_socket_->set(zmq::sockopt::subscribe, topic);
-                subscriptions_.insert(topic);
+                // ZeroMQ only supports prefix matching, not wildcard patterns
+                // Convert common wildcard patterns to appropriate prefixes
+                std::string zmq_topic = topic;
+
+                if (topic == "telemetry.*") {
+                    // Subscribe to all telemetry by using the prefix
+                    zmq_topic = "telemetry.";
+                } else if (topic.find("telemetry.*.") == 0) {
+                    // For patterns like "telemetry.*.camera.*" or "telemetry.*.mapping.*"
+                    // Subscribe to the broader prefix and filter on client side
+                    zmq_topic = "telemetry.";
+                }
+
+                subscriber_socket_->set(zmq::sockopt::subscribe, zmq_topic);
+                subscriptions_.insert(topic); // Keep original pattern for client-side filtering
                 return true;
             }
         } catch (const std::exception& e) {
@@ -313,7 +327,16 @@ private:
     bool unsubscribeTCP(const std::string& topic) {
         try {
             if (subscriber_socket_) {
-                subscriber_socket_->set(zmq::sockopt::unsubscribe, topic);
+                // Convert wildcard patterns to ZeroMQ prefixes for unsubscribe too
+                std::string zmq_topic = topic;
+
+                if (topic == "telemetry.*") {
+                    zmq_topic = "telemetry.";
+                } else if (topic.find("telemetry.*.") == 0) {
+                    zmq_topic = "telemetry.";
+                }
+
+                subscriber_socket_->set(zmq::sockopt::unsubscribe, zmq_topic);
                 subscriptions_.erase(topic);
                 return true;
             }
@@ -346,12 +369,26 @@ private:
 
                             std::cerr << "DEBUG: Received topic: " << topic << ", data size: " << data.size() << std::endl;
 
-                            // Call user callback
-                            std::lock_guard<std::mutex> lock(callback_mutex_);
-                            if (telemetry_callback_) {
-                                telemetry_callback_(topic, data);
-                            } else {
-                                std::cerr << "DEBUG: No telemetry callback set!" << std::endl;
+                            // Check if this topic matches any of our wildcard subscriptions
+                            bool shouldDeliver = false;
+                            {
+                                std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+                                for (const auto& subscription : subscriptions_) {
+                                    if (matchesWildcardPattern(subscription, topic)) {
+                                        shouldDeliver = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (shouldDeliver) {
+                                // Call user callback
+                                std::lock_guard<std::mutex> lock(callback_mutex_);
+                                if (telemetry_callback_) {
+                                    telemetry_callback_(topic, data);
+                                } else {
+                                    std::cerr << "DEBUG: No telemetry callback set!" << std::endl;
+                                }
                             }
                         }
                     }
@@ -372,15 +409,61 @@ private:
         std::cerr << "DEBUG: TCP receive loop ended" << std::endl;
     }
 
+    // Helper function to match wildcard patterns (same logic as UDP server)
+    bool matchesWildcardPattern(const std::string& pattern, const std::string& topic) const {
+        // Exact match
+        if (pattern == topic) {
+            return true;
+        }
+
+        // Handle "telemetry.*" as prefix match
+        if (pattern == "telemetry.*") {
+            return topic.rfind("telemetry.", 0) == 0;
+        }
+
+        // If no wildcard, must be exact match (already checked)
+        if (pattern.find('*') == std::string::npos) {
+            return false;
+        }
+
+        // Split by dots for segment matching
+        std::vector<std::string> pattern_parts;
+        std::stringstream pss(pattern);
+        std::string part;
+        while (std::getline(pss, part, '.')) {
+            pattern_parts.push_back(part);
+        }
+
+        std::vector<std::string> topic_parts;
+        std::stringstream tss(topic);
+        while (std::getline(tss, part, '.')) {
+            topic_parts.push_back(part);
+        }
+
+        // Must have same number of segments for exact wildcard matching
+        if (pattern_parts.size() != topic_parts.size()) {
+            return false;
+        }
+
+        // Compare each segment
+        for (size_t i = 0; i < pattern_parts.size(); ++i) {
+            if (pattern_parts[i] != "*" && pattern_parts[i] != topic_parts[i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // UDP Implementation
     bool connectUDP() {
         try {
             io_context_ = std::make_unique<boost::asio::io_context>();
 
-            // Socket for receiving published telemetry
+            // Socket for receiving published telemetry (random port, service will send to this endpoint)
             udp_socket_ = std::make_unique<udp::socket>(*io_context_, udp::endpoint(udp::v4(), 0));
 
-            // Socket for sending subscription requests
+            // Socket for sending subscription requests (also random port)
             subscription_socket_ = std::make_unique<udp::socket>(*io_context_, udp::endpoint(udp::v4(), 0));
 
             connected_ = true;
@@ -425,10 +508,29 @@ private:
 
     bool subscribeUDP(const std::string& topic) {
         try {
-            if (subscription_socket_) {
-                // Send subscription request: "SUBSCRIBE|topic|client_id"
-                std::string message = "SUBSCRIBE|" + topic + "|" + client_id_;
-                udp::endpoint service_endpoint(boost::asio::ip::address::from_string(host_), port_);
+            if (subscription_socket_ && udp_socket_) {
+                // Get the local endpoint where we're listening for published data
+                auto local_endpoint = udp_socket_->local_endpoint();
+
+                // Send subscription request: "SUBSCRIBE|topic|client_id|client_port"
+                std::string message = "SUBSCRIBE|" + topic + "|" + client_id_ + "|" + std::to_string(local_endpoint.port());
+
+                // Handle hostname resolution for UDP endpoint
+                boost::asio::ip::address addr;
+                if (host_ == "localhost") {
+                    addr = boost::asio::ip::address::from_string("127.0.0.1");
+                } else {
+                    try {
+                        addr = boost::asio::ip::address::from_string(host_);
+                    } catch (const std::exception&) {
+                        // If not a valid IP, try resolving as hostname
+                        boost::asio::ip::udp::resolver resolver(*io_context_);
+                        auto results = resolver.resolve(host_, std::to_string(port_));
+                        addr = results.begin()->endpoint().address();
+                    }
+                }
+
+                udp::endpoint service_endpoint(addr, port_);
                 subscription_socket_->send_to(boost::asio::buffer(message), service_endpoint);
                 subscriptions_.insert(topic);
                 return true;
@@ -445,7 +547,23 @@ private:
             if (subscription_socket_) {
                 // Send unsubscription request: "UNSUBSCRIBE|topic|client_id"
                 std::string message = "UNSUBSCRIBE|" + topic + "|" + client_id_;
-                udp::endpoint service_endpoint(boost::asio::ip::address::from_string(host_), port_);
+
+                // Handle hostname resolution for UDP endpoint
+                boost::asio::ip::address addr;
+                if (host_ == "localhost") {
+                    addr = boost::asio::ip::address::from_string("127.0.0.1");
+                } else {
+                    try {
+                        addr = boost::asio::ip::address::from_string(host_);
+                    } catch (const std::exception&) {
+                        // If not a valid IP, try resolving as hostname
+                        boost::asio::ip::udp::resolver resolver(*io_context_);
+                        auto results = resolver.resolve(host_, std::to_string(port_));
+                        addr = results.begin()->endpoint().address();
+                    }
+                }
+
+                udp::endpoint service_endpoint(addr, port_);
                 subscription_socket_->send_to(boost::asio::buffer(message), service_endpoint);
                 subscriptions_.erase(topic);
                 return true;
@@ -462,7 +580,7 @@ private:
 
         while (running_ && connected_) {
             try {
-                // Use non-blocking receive with timeout
+                // Use async_receive_from to receive from service
                 udp_socket_->async_receive_from(
                     boost::asio::buffer(buffer), sender_endpoint,
                     [this, &buffer](boost::system::error_code ec, std::size_t bytes_received) {
@@ -565,15 +683,14 @@ std::string TelemetryClient::getTargetName(uint8_t targetId) {
     switch (targetId) {
         case TargetIDs::CAMERA: return "Camera";
         case TargetIDs::MAPPING: return "Mapping";
-        case TargetIDs::GENERAL: return "General";
         default: return "Unknown(" + std::to_string(targetId) + ")";
     }
 }
 
 std::string TelemetryClient::getPacketTypeName(uint8_t packetType) {
     switch (packetType) {
-        case PacketTypes::LOCATION_PACKET: return "Location";
-        case PacketTypes::STATUS_PACKET: return "Status";
+        case PacketTypes::LOCATION: return "Location";
+        case PacketTypes::STATUS: return "Status";
         case PacketTypes::IMU_PACKET: return "IMU";
         case PacketTypes::BATTERY_PACKET: return "Battery";
         default: return "Unknown(" + std::to_string(packetType) + ")";

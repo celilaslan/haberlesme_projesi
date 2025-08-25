@@ -30,14 +30,14 @@
 #pragma pack(push, 1)
 
 // Target IDs - must match what service expects
-enum TargetIDs : uint8_t { CAMERA = 1, MAPPING = 2, GENERAL = 3 };
+enum TargetIDs : uint8_t { CAMERA = 1, MAPPING = 2 };
 
 // Packet Types - must match what service expects
-enum PacketTypes : uint8_t { LOCATION_PACKET = 4, STATUS_PACKET = 5, IMU_PACKET = 6, BATTERY_PACKET = 7 };
+enum PacketTypes : uint8_t { LOCATION = 4, STATUS = 5, IMU_PACKET = 6, BATTERY_PACKET = 7 };
 
 // Packet header structure (must match service)
 struct UAVPacketHeader {
-    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping, 3: General)
+    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping)
     uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
 };
 
@@ -76,7 +76,7 @@ UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
                                        float speed) {
     UAVLocationPacket packet = {};
     packet.header.targetID = targetID;
-    packet.header.packetType = LOCATION_PACKET;
+    packet.header.packetType = LOCATION;
 
     packet.payload.latitude = lat;
     packet.payload.longitude = lon;
@@ -91,7 +91,7 @@ UAVStatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mis
                                    float memory) {
     UAVStatusPacket packet = {};
     packet.header.targetID = targetID;
-    packet.header.packetType = STATUS_PACKET;
+    packet.header.packetType = STATUS;
 
     packet.payload.systemHealth = health;
     packet.payload.missionState = mission;

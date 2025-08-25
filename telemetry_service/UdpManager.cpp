@@ -30,17 +30,24 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& add
                      const std::string& uav_name, UdpMessageCallback callback)
     : socket_(io_context), uav_name_(uav_name), messageCallback_(std::move(callback)) {
     try {
-        // Resolve the IP address and port to a UDP endpoint
-        udp::resolver resolver(io_context);
-        udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), address, std::to_string(port));
-        udp::endpoint bind_endpoint = *endpoints.begin();
+        udp::endpoint bind_endpoint;
+
+        // Use 0.0.0.0 for wildcard address to bind to all interfaces
+        if (address == "*") {
+            bind_endpoint = udp::endpoint(udp::v4(), port);
+        } else {
+            // Resolve the specific IP address and port to a UDP endpoint
+            udp::resolver resolver(io_context);
+            udp::resolver::results_type endpoints = resolver.resolve(udp::v4(), address, std::to_string(port));
+            bind_endpoint = *endpoints.begin();
+        }
 
         // Create and bind the UDP socket
         socket_.open(udp::v4());
         socket_.bind(bind_endpoint);
 
         Logger::statusWithDetails("UDP", StatusMessage("Server bound for " + uav_name),
-                                  DetailMessage(address + ":" + std::to_string(port)));
+                                  DetailMessage((address == "*" ? "0.0.0.0" : address) + ":" + std::to_string(port)));
 
         // Start the asynchronous receive loop
         doReceive();
@@ -145,16 +152,16 @@ void UdpManager::start() {
             }
         }
 
-        // Set up UDP publishing socket for UI communication
+        // Set up UDP publishing socket (random port for sending data to clients)
         publishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
 
-        // Set up subscription management socket for receiving subscription requests from UI
+        // Set up subscription management socket (well-known port 5572 for receiving subscription requests)
         subscriptionSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), config_.getUiPorts().udp_publish_port));
 
         Logger::statusWithDetails("UDP", StatusMessage("UI Publisher bound"),
                                   DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_publish_port)));
 
-        // Start receiving subscription requests
+        // Start receiving subscription requests on the subscription socket
         startSubscriptionReceive();    } catch (const std::exception& e) {
         Logger::error("UDP setup failed: " + std::string(e.what()));
         running_ = false;
@@ -305,7 +312,7 @@ void UdpManager::startSubscriptionReceive() {
 
 void UdpManager::handleSubscriptionRequest(const std::vector<uint8_t>& data, const udp::endpoint& sender) {
     try {
-        // Simple protocol: "SUBSCRIBE|topic|client_id" or "UNSUBSCRIBE|topic|client_id"
+        // Enhanced protocol: "SUBSCRIBE|topic|client_id|client_port" or "UNSUBSCRIBE|topic|client_id"
         std::string message(data.begin(), data.end());
 
         size_t firstPipe = message.find('|');
@@ -316,14 +323,38 @@ void UdpManager::handleSubscriptionRequest(const std::vector<uint8_t>& data, con
 
         std::string command = message.substr(0, firstPipe);
         std::string topic = message.substr(firstPipe + 1, secondPipe - firstPipe - 1);
-        std::string client_id = message.substr(secondPipe + 1);
+
+        size_t thirdPipe = message.find('|', secondPipe + 1);
+        std::string client_id;
+        udp::endpoint client_endpoint = sender;  // Default to sender endpoint
+
+        if (thirdPipe != std::string::npos) {
+            // New format: "SUBSCRIBE|topic|client_id|client_port"
+            client_id = message.substr(secondPipe + 1, thirdPipe - secondPipe - 1);
+            std::string client_port_str = message.substr(thirdPipe + 1);
+
+            try {
+                int client_port = std::stoi(client_port_str);
+                // Create endpoint using sender's IP but client's specified port
+                client_endpoint = udp::endpoint(sender.address(), client_port);
+            } catch (const std::exception&) {
+                // If port parsing fails, use sender endpoint
+                client_endpoint = sender;
+            }
+        } else {
+            // Old format: "SUBSCRIBE|topic|client_id"
+            client_id = message.substr(secondPipe + 1);
+            client_endpoint = sender;
+        }
 
         std::lock_guard<std::mutex> lock(subscriptionMutex_);
 
         if (command == "SUBSCRIBE") {
-            clients_[client_id] = sender;
+            clients_[client_id] = client_endpoint;
             subscriptions_[topic].insert(client_id);
-            Logger::info("UDP Client " + client_id + " subscribed to: " + topic);
+            Logger::info("UDP Client " + client_id + " subscribed to: " + topic +
+                        " (endpoint: " + client_endpoint.address().to_string() + ":" +
+                        std::to_string(client_endpoint.port()) + ")");
         } else if (command == "UNSUBSCRIBE") {
             subscriptions_[topic].erase(client_id);
             if (subscriptions_[topic].empty()) {
@@ -369,66 +400,48 @@ std::string UdpManager::endpointToString(const udp::endpoint& endpoint) const {
 }
 
 bool UdpManager::matchesWildcardPattern(const std::string& pattern, const std::string& topic) const {
-    // Handle exact match
+    // Exact match
     if (pattern == topic) {
         return true;
     }
 
-    // Handle wildcard patterns (* means match any segment)
-    // Pattern: "telemetry.*" matches "telemetry.UAV_1.camera.location"
-    // Pattern: "telemetry.*.camera.*" matches "telemetry.UAV_1.camera.location"
-    // Pattern: "telemetry.UAV_1.*" matches "telemetry.UAV_1.camera.location"
+    // Handle "telemetry.*" as prefix match for --all-targets
+    if (pattern == "telemetry.*") {
+        return topic.rfind("telemetry.", 0) == 0;
+    }
 
-    // Split pattern and topic by dots
+    // If no wildcard, must be exact match (already checked)
+    if (pattern.find('*') == std::string::npos) {
+        return false;
+    }
+
+    // Split by dots for segment matching
     std::vector<std::string> pattern_parts;
+    std::stringstream pss(pattern);
+    std::string part;
+    while (std::getline(pss, part, '.')) {
+        pattern_parts.push_back(part);
+    }
+
     std::vector<std::string> topic_parts;
-
-    // Split pattern
-    std::stringstream pattern_stream(pattern);
-    std::string pattern_part;
-    while (std::getline(pattern_stream, pattern_part, '.')) {
-        pattern_parts.push_back(pattern_part);
+    std::stringstream tss(topic);
+    while (std::getline(tss, part, '.')) {
+        topic_parts.push_back(part);
     }
 
-    // Split topic
-    std::stringstream topic_stream(topic);
-    std::string topic_part;
-    while (std::getline(topic_stream, topic_part, '.')) {
-        topic_parts.push_back(topic_part);
+    // Must have same number of segments for exact wildcard matching
+    if (pattern_parts.size() != topic_parts.size()) {
+        return false;
     }
 
-    // Match parts
-    size_t pattern_idx = 0;
-    size_t topic_idx = 0;
-
-    while (pattern_idx < pattern_parts.size() && topic_idx < topic_parts.size()) {
-        const std::string& pattern_segment = pattern_parts[pattern_idx];
-
-        if (pattern_segment == "*") {
-            // Wildcard matches any single segment
-            pattern_idx++;
-            topic_idx++;
-        } else {
-            // Exact segment match required
-            if (pattern_segment == topic_parts[topic_idx]) {
-                pattern_idx++;
-                topic_idx++;
-            } else {
-                return false; // Segment mismatch
-            }
+    // Compare each segment
+    for (size_t i = 0; i < pattern_parts.size(); ++i) {
+        if (pattern_parts[i] != "*" && pattern_parts[i] != topic_parts[i]) {
+            return false;
         }
     }
 
-    // Handle trailing wildcards in pattern
-    while (pattern_idx < pattern_parts.size() && pattern_parts[pattern_idx] == "*") {
-        pattern_idx++;
-        if (topic_idx < topic_parts.size()) {
-            topic_idx++;
-        }
-    }
-
-    // Match successful if both pattern and topic are fully consumed
-    return (pattern_idx == pattern_parts.size() && topic_idx == topic_parts.size());
+    return true;
 }
 
 

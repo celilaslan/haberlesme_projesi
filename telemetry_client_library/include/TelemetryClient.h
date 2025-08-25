@@ -49,26 +49,25 @@ enum class Protocol {
  */
 #pragma pack(push, 1)
 struct PacketHeader {
-    uint8_t targetID;    ///< Target ID (1: Camera, 2: Mapping, 3: General)
+    uint8_t targetID;    ///< Target ID (1: Camera, 2: Mapping)
     uint8_t packetType;  ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
 };
 #pragma pack(pop)
 
 /**
- * @brief Target IDs for telemetry routing
+ * @brief Target IDs for telemetry routing (must match TelemetryPackets.h)
  */
 enum TargetIDs : uint8_t {
     CAMERA = 1,
-    MAPPING = 2,
-    GENERAL = 3
+    MAPPING = 2
 };
 
 /**
- * @brief Packet types for different telemetry data
+ * @brief Packet types for different telemetry data (must match TelemetryPackets.h)
  */
 enum PacketTypes : uint8_t {
-    LOCATION_PACKET = 4,
-    STATUS_PACKET = 5,
+    LOCATION = 4,    // Changed from LOCATION_PACKET to match service
+    STATUS = 5,      // Changed from STATUS_PACKET to match service
     IMU_PACKET = 6,
     BATTERY_PACKET = 7
 };

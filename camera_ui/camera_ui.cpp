@@ -152,8 +152,9 @@ int main(int argc, char* argv[]) {
     // Parse command line arguments
     std::string protocol = "tcp";  // Default to TCP
     bool enableSender = false;
-    bool enableAllTargets = false;  // New: Enable receiving all target types
-    bool enableCrossTarget = false; // New: Enable specific cross-target subscriptions
+    bool enableAllTargets = false;  // Enable receiving all target types
+    bool locationOnly = false;      // Subscribe only to location data
+    bool statusOnly = false;        // Subscribe only to status data
     std::string target_uav;
 
     for (int i = 1; i < argc; i++) {
@@ -164,26 +165,39 @@ int main(int argc, char* argv[]) {
             target_uav = argv[++i];
         } else if (std::string(argv[i]) == "--all-targets") {
             enableAllTargets = true;
-        } else if (std::string(argv[i]) == "--cross-target") {
-            enableCrossTarget = true;
+        } else if (std::string(argv[i]) == "--location-only") {
+            locationOnly = true;
+        } else if (std::string(argv[i]) == "--status-only") {
+            statusOnly = true;
         } else if (std::string(argv[i]) == "--help") {
             std::cout << "Camera UI - Telemetry Visualization\n";
             std::cout << "Usage: " << argv[0] << " [options]\n";
             std::cout << "Options:\n";
             std::cout << "  --protocol tcp|udp : Communication protocol (default: tcp)\n";
             std::cout << "  --send UAV_NAME    : Enable command sending to specified UAV\n";
-            std::cout << "  --all-targets      : Subscribe to ALL target types (camera, mapping, general)\n";
-            std::cout << "  --cross-target     : Subscribe to mapping and general data in addition to camera\n";
+            std::cout << "  --all-targets      : Subscribe to ALL target types (camera, mapping)\n";
+            std::cout << "  --location-only    : Subscribe only to location data (telemetry.*.*.location)\n";
+            std::cout << "  --status-only      : Subscribe only to status data (telemetry.*.*.status)\n";
             std::cout << "  --help             : Show this help message\n";
             std::cout << "\nSubscription modes:\n";
             std::cout << "  Default: Camera data only (telemetry.*.camera.*)\n";
-            std::cout << "  --cross-target: Camera + mapping + general data\n";
             std::cout << "  --all-targets: All telemetry data from all targets\n";
+            std::cout << "  --location-only: Location data from all UAVs (telemetry.*.*.location)\n";
+            std::cout << "  --status-only: Status data from all UAVs (telemetry.*.*.status)\n";
             return 0;
         }
     }
 
-    // Validate protocol argument
+    // Validate mutually exclusive options
+    int modeCount = 0;
+    if (enableAllTargets) modeCount++;
+    if (locationOnly) modeCount++;
+    if (statusOnly) modeCount++;
+
+    if (modeCount > 1) {
+        std::cerr << "Error: --all-targets, --location-only, and --status-only are mutually exclusive\n";
+        return 1;
+    }    // Validate protocol argument
     Protocol client_protocol;
     if (protocol == "tcp") {
         client_protocol = Protocol::TCP;
@@ -202,9 +216,11 @@ int main(int argc, char* argv[]) {
         std::cout << "Command target: " << target_uav << std::endl;
     }
     if (enableAllTargets) {
-        std::cout << "Mode: Monitoring ALL target types (camera, mapping, general)" << std::endl;
-    } else if (enableCrossTarget) {
-        std::cout << "Mode: Cross-target monitoring (camera + mapping + general)" << std::endl;
+        std::cout << "Mode: Monitoring ALL target types (camera, mapping)" << std::endl;
+    } else if (locationOnly) {
+        std::cout << "Mode: Location data only from all UAVs and targets" << std::endl;
+    } else if (statusOnly) {
+        std::cout << "Mode: Status data only from all UAVs and targets" << std::endl;
     } else {
         std::cout << "Mode: Camera-only monitoring" << std::endl;
     }
@@ -227,7 +243,7 @@ int main(int argc, char* argv[]) {
     });
 
     // Set up telemetry data callback
-    client.setTelemetryCallback([enableAllTargets, enableCrossTarget](const std::string& topic, const std::vector<uint8_t>& data) {
+    client.setTelemetryCallback([enableAllTargets, locationOnly, statusOnly](const std::string& topic, const std::vector<uint8_t>& data) {
         int count = g_packet_count.fetch_add(1) + 1;
 
         std::cout << std::endl;
@@ -240,11 +256,13 @@ int main(int argc, char* argv[]) {
             std::string target_name = TelemetryClient::getTargetName(header->targetID);
             std::cout << "   🎯 Target: " << target_name;
 
-            // Show indicator if this is cross-target data
+            // Show indicator based on monitoring mode
             if (enableAllTargets) {
                 std::cout << " [ALL MODE]";
-            } else if (enableCrossTarget && target_name != "camera") {
-                std::cout << " [CROSS-TARGET]";
+            } else if (locationOnly) {
+                std::cout << " [LOCATION-ONLY]";
+            } else if (statusOnly) {
+                std::cout << " [STATUS-ONLY]";
             }
             std::cout << std::endl;
 
@@ -252,10 +270,10 @@ int main(int argc, char* argv[]) {
 
             // Display specific data based on packet type
             switch (header->packetType) {
-                case PacketTypes::LOCATION_PACKET:
+                case PacketTypes::LOCATION:
                     displayLocationData(data);
                     break;
-                case PacketTypes::STATUS_PACKET:
+                case PacketTypes::STATUS:
                     displayStatusData(data);
                     break;
                 default:
@@ -286,42 +304,30 @@ int main(int argc, char* argv[]) {
     // Wait a moment for connection to establish
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-    // Subscribe to camera-targeted telemetry data
+    // Subscribe to telemetry data based on selected mode
     std::cout << std::endl;
     std::cout << "Subscribing to telemetry..." << std::endl;
 
-    if (enableAllTargets) {
+    if (locationOnly) {
+        // Subscribe only to location data from all UAVs and targets
+        if (client.subscribe("telemetry.*.*.location")) {
+            std::cout << "✅ Subscribed to location data: telemetry.*.*.location" << std::endl;
+        } else {
+            std::cout << "❌ Failed to subscribe to location data" << std::endl;
+        }
+    } else if (statusOnly) {
+        // Subscribe only to status data from all UAVs and targets
+        if (client.subscribe("telemetry.*.*.status")) {
+            std::cout << "✅ Subscribed to status data: telemetry.*.*.status" << std::endl;
+        } else {
+            std::cout << "❌ Failed to subscribe to status data" << std::endl;
+        }
+    } else if (enableAllTargets) {
         // Subscribe to ALL telemetry data
         if (client.subscribe("telemetry.*")) {
             std::cout << "✅ Subscribed to ALL telemetry: telemetry.*" << std::endl;
         } else {
             std::cout << "❌ Failed to subscribe to all telemetry" << std::endl;
-        }
-    } else if (enableCrossTarget) {
-        // Subscribe to camera, mapping, and general data
-        if (client.subscribe("telemetry.*.camera.*")) {
-            std::cout << "✅ Subscribed to camera telemetry: telemetry.*.camera.*" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to camera telemetry" << std::endl;
-        }
-
-        if (client.subscribe("telemetry.*.mapping.*")) {
-            std::cout << "✅ Subscribed to mapping telemetry: telemetry.*.mapping.*" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to mapping telemetry" << std::endl;
-        }
-
-        if (client.subscribe("telemetry.*.general.*")) {
-            std::cout << "✅ Subscribed to general telemetry: telemetry.*.general.*" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to general telemetry" << std::endl;
-        }
-
-        // Also subscribe to location data for context
-        if (client.subscribe("telemetry.*.*.location")) {
-            std::cout << "✅ Subscribed to location data: telemetry.*.*.location" << std::endl;
-        } else {
-            std::cout << "❌ Failed to subscribe to location data" << std::endl;
         }
     } else {
         // Default: Camera data only
@@ -340,10 +346,12 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << std::endl;
-    if (enableAllTargets) {
+    if (locationOnly) {
+        std::cout << "🎥 Camera UI ready - monitoring location data from all UAVs..." << std::endl;
+    } else if (statusOnly) {
+        std::cout << "🎥 Camera UI ready - monitoring status data from all UAVs..." << std::endl;
+    } else if (enableAllTargets) {
         std::cout << "🎥 Camera UI ready - monitoring ALL UAV telemetry systems..." << std::endl;
-    } else if (enableCrossTarget) {
-        std::cout << "🎥 Camera UI ready - monitoring camera, mapping, and general systems..." << std::endl;
     } else {
         std::cout << "🎥 Camera UI ready - monitoring UAV camera systems..." << std::endl;
     }
