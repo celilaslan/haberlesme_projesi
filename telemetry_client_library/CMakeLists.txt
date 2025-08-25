@@ -73,18 +73,5 @@ install(TARGETS telemetry_client
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Build example application to demonstrate library usage
-add_executable(example_client
-    ${CMAKE_CURRENT_LIST_DIR}/example_client.cpp
-)
-
-# Link example with the telemetry client library
-target_link_libraries(example_client
-    PRIVATE telemetry_client
-)
-
-# Place the example in the source directory for easier testing
-set_target_to_source_dir(example_client)
-
 # Note: Packaging removed - library used internally within same project
 # Packaging can be added if distribution is needed in the future
