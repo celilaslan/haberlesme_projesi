@@ -1264,9 +1264,38 @@ case "$cmd" in
     shift || true
     package_project "$@"
     ;;
-  service-start) sudo systemctl start telemetry_service.service ;;
-  service-stop) sudo systemctl stop telemetry_service.service ;;
-  service-restart) sudo systemctl restart telemetry_service.service ;;
+  service-start)
+    echo "🚀 Starting telemetry service..."
+    sudo systemctl start telemetry_service.service
+    if sudo systemctl is-active --quiet telemetry_service.service; then
+      echo "✅ Telemetry service started successfully"
+      echo "📊 Use './dev.sh service-status' to check detailed status"
+      echo "📋 Use './dev.sh service-logs' to view logs"
+    else
+      echo "❌ Failed to start telemetry service"
+      echo "🔍 Use './dev.sh service-status' to check what went wrong"
+    fi
+    ;;
+  service-stop)
+    echo "🛑 Stopping telemetry service..."
+    sudo systemctl stop telemetry_service.service
+    if ! sudo systemctl is-active --quiet telemetry_service.service; then
+      echo "✅ Telemetry service stopped successfully"
+    else
+      echo "❌ Failed to stop telemetry service"
+    fi
+    ;;
+  service-restart)
+    echo "🔄 Restarting telemetry service..."
+    sudo systemctl restart telemetry_service.service
+    if sudo systemctl is-active --quiet telemetry_service.service; then
+      echo "✅ Telemetry service restarted successfully"
+      echo "📊 Use './dev.sh service-status' to check detailed status"
+    else
+      echo "❌ Failed to restart telemetry service"
+      echo "🔍 Use './dev.sh service-status' to check what went wrong"
+    fi
+    ;;
   service-status) sudo systemctl status telemetry_service.service ;;
   service-logs)
     shift || true
