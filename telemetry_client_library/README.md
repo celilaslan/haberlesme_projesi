@@ -253,15 +253,6 @@ cmake ..
 make telemetry_client
 ```
 
-### Example Application
-
-Build and run the example:
-
-```bash
-make example_client
-./telemetry_client_library/example_client
-```
-
 ## Dependencies
 
 - **ZeroMQ**: TCP communication and subscription management
@@ -298,12 +289,14 @@ The library can automatically read connection settings from `service_config.json
 }
 ```
 
-## Examples Directory
+## Usage Examples
 
-See `example_client.cpp` for a comprehensive example showing:
-- Connection establishment
-- Multiple subscription patterns
-- Telemetry data parsing
-- Command sending
-- Error handling
-- Clean shutdown
+The camera_ui and mapping_ui applications provide comprehensive examples showing:
+- Connection establishment with both TCP and UDP protocols
+- Multiple subscription patterns and wildcard usage
+- Real-time telemetry data parsing and display
+- Command sending capabilities (TCP only)
+- Proper error handling and connection management
+- Clean shutdown procedures
+
+See the `camera_ui/camera_ui.cpp` and `mapping_ui/mapping_ui.cpp` source files for practical implementation examples.

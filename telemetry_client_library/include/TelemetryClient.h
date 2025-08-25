@@ -63,8 +63,8 @@ namespace TelemetryAPI {
      * @brief Packet types for different telemetry data (must match TelemetryPackets.h)
      */
     enum PacketTypes : uint8_t {
-        LOCATION = 4,  // Changed from LOCATION_PACKET to match service
-        STATUS = 5,    // Changed from STATUS_PACKET to match service
+        LOCATION = 4,
+        STATUS = 5,
         IMU_PACKET = 6,
         BATTERY_PACKET = 7
     };
@@ -91,12 +91,13 @@ namespace TelemetryAPI {
      *
      * Example usage:
      * ```cpp
-     * TelemetryClient client("my_camera_ui");
+     * TelemetryClient client("camera_ui");
      * client.setTelemetryCallback([](const std::string& topic, const std::vector<uint8_t>& data) {
      *     std::cout << "Received " << data.size() << " bytes on topic: " << topic << std::endl;
      * });
      *
-     * if (client.connect("localhost", 5555, Protocol::TCP)) {
+     * // Recommended: Use configuration file for automatic port detection
+     * if (client.connectFromConfig("service_config.json", Protocol::TCP)) {
      *     client.subscribe("telemetry.*.camera.*");  // Subscribe to all camera data
      *     // ... your application logic ...
      *     client.disconnect();
@@ -129,8 +130,8 @@ namespace TelemetryAPI {
          * @param protocol Protocol to use (TCP or UDP)
          * @return True if connection successful, false otherwise
          *
-         * For TCP: Connects to the service's subscriber port
-         * For UDP: Sets up UDP socket for receiving published data
+         * For TCP: Connects to the service's publisher port (5557 by default)
+         * For UDP: Sets up UDP socket for receiving published data (5572 by default)
          */
         bool connect(const std::string& host, int port, Protocol protocol = Protocol::TCP);
 
@@ -169,6 +170,11 @@ namespace TelemetryAPI {
          * - "telemetry.UAV_1.*" - All data from UAV_1
          * - "telemetry.*.camera.*" - All camera data from all UAVs
          * - "telemetry.UAV_1.camera.location" - Specific data type
+         *
+         * Implementation notes:
+         * - TCP: Uses ZeroMQ prefix matching + client-side wildcard filtering
+         * - UDP: Uses server-side wildcard pattern matching
+         * - Both protocols provide identical wildcard behavior to the application
          */
         bool subscribe(const std::string& topic);
 

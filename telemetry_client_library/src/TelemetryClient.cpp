@@ -319,20 +319,25 @@ namespace TelemetryAPI {
             try {
                 if (subscriber_socket_) {
                     // ZeroMQ only supports prefix matching, not wildcard patterns
-                    // Convert common wildcard patterns to appropriate prefixes
-                    std::string zmq_topic = topic;
+                    // We always subscribe to "telemetry." prefix and do client-side filtering
+                    // This ensures consistent behavior with UDP wildcard patterns
+                    std::string zmq_topic;
 
-                    if (topic == "telemetry.*") {
-                        // Subscribe to all telemetry by using the prefix
+                    if (topic == "telemetry.*" || topic.find("telemetry.*.") == 0) {
+                        // For any telemetry wildcard pattern, subscribe to the full prefix
                         zmq_topic = "telemetry.";
-                    } else if (topic.find("telemetry.*.") == 0) {
-                        // For patterns like "telemetry.*.camera.*" or "telemetry.*.mapping.*"
-                        // Subscribe to the broader prefix and filter on client side
-                        zmq_topic = "telemetry.";
+                    } else if (topic.find("telemetry.") == 0) {
+                        // For specific telemetry topics, subscribe to exact prefix
+                        zmq_topic = topic;
+                    } else {
+                        // For non-telemetry topics, use as-is
+                        zmq_topic = topic;
                     }
 
                     subscriber_socket_->set(zmq::sockopt::subscribe, zmq_topic);
                     subscriptions_.insert(topic);  // Keep original pattern for client-side filtering
+
+                    debugLog("TCP subscribed to ZMQ prefix: '" + zmq_topic + "', client pattern: '" + topic + "'");
                     return true;
                 }
             } catch (const std::exception& e) {
@@ -345,17 +350,24 @@ namespace TelemetryAPI {
         bool unsubscribeTCP(const std::string& topic) {
             try {
                 if (subscriber_socket_) {
-                    // Convert wildcard patterns to ZeroMQ prefixes for unsubscribe too
-                    std::string zmq_topic = topic;
+                    // Use the same logic as subscribe to determine ZMQ prefix
+                    std::string zmq_topic;
 
-                    if (topic == "telemetry.*") {
+                    if (topic == "telemetry.*" || topic.find("telemetry.*.") == 0) {
+                        // For any telemetry wildcard pattern, use the full prefix
                         zmq_topic = "telemetry.";
-                    } else if (topic.find("telemetry.*.") == 0) {
-                        zmq_topic = "telemetry.";
+                    } else if (topic.find("telemetry.") == 0) {
+                        // For specific telemetry topics, use exact prefix
+                        zmq_topic = topic;
+                    } else {
+                        // For non-telemetry topics, use as-is
+                        zmq_topic = topic;
                     }
 
                     subscriber_socket_->set(zmq::sockopt::unsubscribe, zmq_topic);
                     subscriptions_.erase(topic);
+
+                    debugLog("TCP unsubscribed from ZMQ prefix: '" + zmq_topic + "', client pattern: '" + topic + "'");
                     return true;
                 }
             } catch (const std::exception&) {
