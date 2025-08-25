@@ -13,14 +13,14 @@
 #include <array>
 #include <atomic>
 #include <boost/asio.hpp>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <vector>
-#include <cstdio>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "Config.h"
 
@@ -51,7 +51,10 @@ class UdpServer {
      * Creates a UDP socket bound to the specified address and port,
      * and starts the asynchronous receive loop.
      */
-    UdpServer(boost::asio::io_context& io_context, const std::string& address, short port, const std::string& uav_name,
+    UdpServer(boost::asio::io_context& io_context,
+              const std::string& address,
+              short port,
+              const std::string& uav_name,
               UdpMessageCallback callback);
 
    private:
@@ -153,7 +156,8 @@ class UdpManager {
     // Simple subscription management
     std::unique_ptr<udp::socket> subscriptionSocket_;  ///< Socket for receiving subscription requests
     mutable std::mutex subscriptionMutex_;             ///< Mutex for subscription data
-    std::unordered_map<std::string, std::unordered_set<std::string>> subscriptions_;  ///< topic -> set of client_endpoints
+    std::unordered_map<std::string, std::unordered_set<std::string>>
+        subscriptions_;                                       ///< topic -> set of client_endpoints
     std::unordered_map<std::string, udp::endpoint> clients_;  ///< client_id -> endpoint
 
     // Helper methods for subscription

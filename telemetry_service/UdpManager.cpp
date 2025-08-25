@@ -10,6 +10,7 @@
 #include "UdpManager.h"
 
 #include <sstream>
+
 #include "Logger.h"
 #include "TelemetryPackets.h"
 
@@ -26,8 +27,11 @@
  * Sets up a UDP socket bound to the specified address and port,
  * then starts the asynchronous receive loop.
  */
-UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& address, short port,
-                     const std::string& uav_name, UdpMessageCallback callback)
+UdpServer::UdpServer(boost::asio::io_context& io_context,
+                     const std::string& address,
+                     short port,
+                     const std::string& uav_name,
+                     UdpMessageCallback callback)
     : socket_(io_context), uav_name_(uav_name), messageCallback_(std::move(callback)) {
     try {
         udp::endpoint bind_endpoint;
@@ -46,7 +50,8 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& add
         socket_.open(udp::v4());
         socket_.bind(bind_endpoint);
 
-        Logger::statusWithDetails("UDP", StatusMessage("Server bound for " + uav_name),
+        Logger::statusWithDetails("UDP",
+                                  StatusMessage("Server bound for " + uav_name),
                                   DetailMessage((address == "*" ? "0.0.0.0" : address) + ":" + std::to_string(port)));
 
         // Start the asynchronous receive loop
@@ -66,7 +71,8 @@ UdpServer::UdpServer(boost::asio::io_context& io_context, const std::string& add
  */
 void UdpServer::doReceive() {
     socket_.async_receive_from(
-        boost::asio::buffer(data_.data(), data_.size()), remote_endpoint_,
+        boost::asio::buffer(data_.data(), data_.size()),
+        remote_endpoint_,
         [this](boost::system::error_code error_code, std::size_t bytes_recvd) {
             if (!error_code && bytes_recvd > 0) {
                 try {
@@ -145,8 +151,8 @@ void UdpManager::start() {
         // Create UDP servers for each UAV with UDP telemetry enabled
         for (const auto& uav : config_.getUAVs()) {
             if (uav.udp_telemetry_port > 0 && uav.udp_telemetry_port <= 65535) {
-                servers_.push_back(std::make_unique<UdpServer>(io_context_, uav.ip, uav.udp_telemetry_port, uav.name,
-                                                               messageCallback_));
+                servers_.push_back(std::make_unique<UdpServer>(
+                    io_context_, uav.ip, uav.udp_telemetry_port, uav.name, messageCallback_));
             } else if (uav.udp_telemetry_port > 0) {
                 Logger::warn("Invalid UDP port for " + uav.name + ": " + std::to_string(uav.udp_telemetry_port));
             }
@@ -156,13 +162,16 @@ void UdpManager::start() {
         publishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
 
         // Set up subscription management socket (well-known port 5572 for receiving subscription requests)
-        subscriptionSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), config_.getUiPorts().udp_publish_port));
+        subscriptionSocket_ =
+            std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), config_.getUiPorts().udp_publish_port));
 
-        Logger::statusWithDetails("UDP", StatusMessage("UI Publisher bound"),
+        Logger::statusWithDetails("UDP",
+                                  StatusMessage("UI Publisher bound"),
                                   DetailMessage("Port: " + std::to_string(config_.getUiPorts().udp_publish_port)));
 
         // Start receiving subscription requests on the subscription socket
-        startSubscriptionReceive();    } catch (const std::exception& e) {
+        startSubscriptionReceive();
+    } catch (const std::exception& e) {
         Logger::error("UDP setup failed: " + std::string(e.what()));
         running_ = false;
         throw;
@@ -236,7 +245,7 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::vector<ui
             std::vector<udp::endpoint> subscribers = getSubscribers(topic);
 
             if (subscribers.empty()) {
-                return; // No subscribers, don't send anything
+                return;  // No subscribers, don't send anything
             }
 
             // Format message as "topic|data" for parsing by UI components (same as TCP)
@@ -258,23 +267,35 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::vector<ui
 
                 std::string targetName;
                 switch (header->targetID) {
-                    case TargetIDs::CAMERA: targetName = "Camera"; break;
-                    case TargetIDs::MAPPING: targetName = "Mapping"; break;
-                    default: targetName = "Unknown(" + std::to_string(header->targetID) + ")"; break;
+                    case TargetIDs::CAMERA:
+                        targetName = "Camera";
+                        break;
+                    case TargetIDs::MAPPING:
+                        targetName = "Mapping";
+                        break;
+                    default:
+                        targetName = "Unknown(" + std::to_string(header->targetID) + ")";
+                        break;
                 }
 
                 std::string typeName;
                 switch (header->packetType) {
-                    case PacketTypes::LOCATION: typeName = "Location"; break;
-                    case PacketTypes::STATUS: typeName = "Status"; break;
-                    default: typeName = "Unknown(" + std::to_string(header->packetType) + ")"; break;
+                    case PacketTypes::LOCATION:
+                        typeName = "Location";
+                        break;
+                    case PacketTypes::STATUS:
+                        typeName = "Status";
+                        break;
+                    default:
+                        typeName = "Unknown(" + std::to_string(header->packetType) + ")";
+                        break;
                 }
 
                 packetInfo = " - Target: " + targetName + ", Type: " + typeName;
             }
 
-            Logger::info("UDP Published [" + topic + "] to " + std::to_string(subscribers.size()) + " subscribers: " +
-                        std::to_string(data.size()) + " bytes" + packetInfo);
+            Logger::info("UDP Published [" + topic + "] to " + std::to_string(subscribers.size())
+                         + " subscribers: " + std::to_string(data.size()) + " bytes" + packetInfo);
         }
     } catch (const std::exception& e) {
         Logger::error("UDP publish error: " + std::string(e.what()));
@@ -284,19 +305,21 @@ void UdpManager::publishTelemetry(const std::string& topic, const std::vector<ui
 // === Simple Subscription Management Implementation ===
 
 void UdpManager::startSubscriptionReceive() {
-    if (!subscriptionSocket_) return;
+    if (!subscriptionSocket_)
+        return;
 
     // Create buffers for receiving subscription requests (each call gets its own buffer)
     auto subscriptionBuffer = std::make_shared<std::array<uint8_t, 1024>>();
     auto senderEndpoint = std::make_shared<udp::endpoint>();
 
     subscriptionSocket_->async_receive_from(
-        boost::asio::buffer(*subscriptionBuffer), *senderEndpoint,
+        boost::asio::buffer(*subscriptionBuffer),
+        *senderEndpoint,
         [this, subscriptionBuffer, senderEndpoint](boost::system::error_code error, std::size_t bytes_received) {
             if (!error && bytes_received > 0) {
                 try {
                     std::vector<uint8_t> received_data(subscriptionBuffer->begin(),
-                                                     subscriptionBuffer->begin() + bytes_received);
+                                                       subscriptionBuffer->begin() + bytes_received);
                     handleSubscriptionRequest(received_data, *senderEndpoint);
                 } catch (const std::exception& e) {
                     Logger::error("Subscription request processing error: " + std::string(e.what()));
@@ -316,10 +339,12 @@ void UdpManager::handleSubscriptionRequest(const std::vector<uint8_t>& data, con
         std::string message(data.begin(), data.end());
 
         size_t firstPipe = message.find('|');
-        if (firstPipe == std::string::npos) return;
+        if (firstPipe == std::string::npos)
+            return;
 
         size_t secondPipe = message.find('|', firstPipe + 1);
-        if (secondPipe == std::string::npos) return;
+        if (secondPipe == std::string::npos)
+            return;
 
         std::string command = message.substr(0, firstPipe);
         std::string topic = message.substr(firstPipe + 1, secondPipe - firstPipe - 1);
@@ -352,9 +377,8 @@ void UdpManager::handleSubscriptionRequest(const std::vector<uint8_t>& data, con
         if (command == "SUBSCRIBE") {
             clients_[client_id] = client_endpoint;
             subscriptions_[topic].insert(client_id);
-            Logger::info("UDP Client " + client_id + " subscribed to: " + topic +
-                        " (endpoint: " + client_endpoint.address().to_string() + ":" +
-                        std::to_string(client_endpoint.port()) + ")");
+            Logger::info("UDP Client " + client_id + " subscribed to: " + topic + " (endpoint: "
+                         + client_endpoint.address().to_string() + ":" + std::to_string(client_endpoint.port()) + ")");
         } else if (command == "UNSUBSCRIBE") {
             subscriptions_[topic].erase(client_id);
             if (subscriptions_[topic].empty()) {
@@ -443,5 +467,3 @@ bool UdpManager::matchesWildcardPattern(const std::string& pattern, const std::s
 
     return true;
 }
-
-

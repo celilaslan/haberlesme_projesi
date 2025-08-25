@@ -85,7 +85,8 @@ class TelemetryService {
      * 3. Creates appropriate topic names for flexible routing
      * 4. Routes the complete binary packet to UI components
      */
-    void processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
+    void processAndPublishTelemetry(const std::vector<uint8_t>& data,
+                                    const std::string& uav_name,
                                     const std::string& protocol);
 
     /**

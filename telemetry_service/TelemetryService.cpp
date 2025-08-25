@@ -33,7 +33,7 @@
  * UDP communication uses Boost.Asio and doesn't require ZeroMQ initialization.
  */
 TelemetryService::TelemetryService() try : zmqContext_(1) {
-// ZMQ context initialized successfully for TCP communication
+    // ZMQ context initialized successfully for TCP communication
 } catch (const zmq::error_t& e) {
     throw std::runtime_error("Failed to initialize ZMQ context for TCP: " + std::string(e.what()));
 } catch (const std::exception& e) {
@@ -71,8 +71,7 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
 
         // Initialize logging system and log startup information
         Logger::init(log_path.string());
-        Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"),
-                                  DetailMessage("Multi-UAV Telemetry Service"));
+        Logger::statusWithDetails("SERVICE", StatusMessage("STARTING"), DetailMessage("Multi-UAV Telemetry Service"));
         Logger::info("Config loaded successfully. Found " + std::to_string(config_.getUAVs().size()) + " UAVs");
 
         // Create managers with proper error handling
@@ -82,13 +81,15 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
         try {
             // Create TCP manager with callback for incoming messages
             tcpManager_ = std::make_unique<TcpManager>(
-                zmqContext_, config_,
-                [this](const std::string& source, const std::vector<uint8_t>& data) { this->onZmqMessage(source, data); });
+                zmqContext_, config_, [this](const std::string& source, const std::vector<uint8_t>& data) {
+                    this->onZmqMessage(source, data);
+                });
 
             // Create UDP manager with callback for incoming messages
             udpManager_ = std::make_unique<UdpManager>(
-                config_,
-                [this](const std::string& source, const std::vector<uint8_t>& data) { this->onUdpMessage(source, data); });
+                config_, [this](const std::string& source, const std::vector<uint8_t>& data) {
+                    this->onUdpMessage(source, data);
+                });
 
             // Start both communication managers with error handling
             tcpManager_->start();
@@ -152,8 +153,8 @@ void TelemetryService::run(std::atomic<bool>& app_running) {
             tcpManager_->join();
         }
 
-        Logger::statusWithDetails("SERVICE", StatusMessage("SHUTDOWN COMPLETE"),
-                                  DetailMessage("All services stopped gracefully"));
+        Logger::statusWithDetails(
+            "SERVICE", StatusMessage("SHUTDOWN COMPLETE"), DetailMessage("All services stopped gracefully"));
 
     } catch (const std::exception& e) {
         Logger::error("Service error: " + std::string(e.what()));
@@ -201,13 +202,14 @@ void TelemetryService::onZmqMessage(const std::string& uav_name, const std::vect
  * 3. Creates a single hierarchical topic for efficient routing
  * 4. Routes the complete binary packet to matching wildcard subscriptions
  */
-void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& data, const std::string& uav_name,
+void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& data,
+                                                  const std::string& uav_name,
                                                   const std::string& protocol) {
     try {
         // Ensure we have at least enough data for a packet header
         if (data.size() < sizeof(PacketHeader)) {
-            Logger::warn("Received packet too small for header from " + uav_name +
-                         " (size: " + std::to_string(data.size()) + " bytes)");
+            Logger::warn("Received packet too small for header from " + uav_name
+                         + " (size: " + std::to_string(data.size()) + " bytes)");
             return;
         }
 
@@ -243,8 +245,8 @@ void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& da
         }
 
         // Log packet information
-        Logger::info("Received " + type_name + " packet for " + target_name + " from " + uav_name + " (" +
-                     std::to_string(data.size()) + " bytes)");
+        Logger::info("Received " + type_name + " packet for " + target_name + " from " + uav_name + " ("
+                     + std::to_string(data.size()) + " bytes)");
 
         // Create hierarchical topic for efficient wildcard subscriptions
         // Format: telemetry.{UAV_name}.{target}.{type}
@@ -263,8 +265,8 @@ void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& da
         }
 
     } catch (const std::exception& e) {
-        Logger::error("Error processing telemetry packet (" + std::to_string(data.size()) +
-                      " bytes): " + std::string(e.what()));
+        Logger::error("Error processing telemetry packet (" + std::to_string(data.size())
+                      + " bytes): " + std::string(e.what()));
     }
 }
 
@@ -282,7 +284,8 @@ void TelemetryService::processAndPublishTelemetry(const std::vector<uint8_t>& da
 std::string TelemetryService::resolveConfigPath() {
     // Check environment variable first
     if (const char* env = std::getenv("SERVICE_CONFIG")) {
-        if (std::filesystem::exists(env)) return {env};
+        if (std::filesystem::exists(env))
+            return {env};
     }
 
     // Try multiple candidate locations
@@ -296,7 +299,8 @@ std::string TelemetryService::resolveConfigPath() {
     // Return the first existing file
     for (auto& path : candidates) {
         std::error_code error_code;
-        if (std::filesystem::exists(path, error_code)) return path.string();
+        if (std::filesystem::exists(path, error_code))
+            return path.string();
     }
 
     // Fallback to current directory
@@ -320,7 +324,8 @@ std::string TelemetryService::getExecutableDir() {
     // Linux implementation using /proc/self/exe
     std::array<char, 4096> buffer{};
     ssize_t len = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
-    if (len == -1) return "";
+    if (len == -1)
+        return "";
     // Use string constructor to avoid array subscript warning
     return std::filesystem::path(std::string(buffer.data(), static_cast<size_t>(len))).parent_path().string();
 #endif

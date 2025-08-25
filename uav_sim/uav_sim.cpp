@@ -37,8 +37,8 @@ enum PacketTypes : uint8_t { LOCATION = 4, STATUS = 5, IMU_PACKET = 6, BATTERY_P
 
 // Packet header structure (must match service)
 struct UAVPacketHeader {
-    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping)
-    uint8_t packetType;      ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
+    uint8_t targetID;    ///< Primary target (1: Camera, 2: Mapping)
+    uint8_t packetType;  ///< Packet type (4: Location, 5: Status, 6: IMU, 7: Battery)
 };
 
 // Simple payload structures
@@ -72,8 +72,8 @@ struct UAVStatusPacket {
 #pragma pack(pop)
 
 // Helper functions to create packets
-UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon, float alt, float heading,
-                                       float speed) {
+UAVLocationPacket
+createLocationPacket(uint8_t targetID, double lat, double lon, float alt, float heading, float speed) {
     UAVLocationPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = LOCATION;
@@ -87,8 +87,8 @@ UAVLocationPacket createLocationPacket(uint8_t targetID, double lat, double lon,
     return packet;
 }
 
-UAVStatusPacket createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission, uint16_t flightTime, float cpu,
-                                   float memory) {
+UAVStatusPacket
+createStatusPacket(uint8_t targetID, uint8_t health, uint8_t mission, uint16_t flightTime, float cpu, float memory) {
     UAVStatusPacket packet = {};
     packet.header.targetID = targetID;
     packet.header.packetType = STATUS;
@@ -198,8 +198,8 @@ void signalHandler(int signum) {
 UAVConfig loadUavConfig(const std::string& config_file, const std::string& uav_name) {
     std::ifstream file(config_file);
     if (!file.is_open()) {
-        throw std::runtime_error("Cannot open config file: " + config_file +
-                                 "\nMake sure the file exists in the project root directory!");
+        throw std::runtime_error("Cannot open config file: " + config_file
+                                 + "\nMake sure the file exists in the project root directory!");
     }
 
     json json_data;
@@ -275,7 +275,8 @@ void printAvailableUaVs(const std::string& config_file) {
 
         std::cout << "Available UAVs in " << config_file << ":\n";
         for (const auto& uav_json : json_data["uavs"]) {
-            if (!uav_json.contains("name")) continue;
+            if (!uav_json.contains("name"))
+                continue;
 
             try {
                 int tcp_telemetry_port = uav_json.at("tcp_telemetry_port");
@@ -337,12 +338,14 @@ int main(int argc, char* argv[]) {
 #if defined(_WIN32)
                 char path[MAX_PATH];
                 DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
-                if (len == 0 || len == MAX_PATH) return std::filesystem::current_path().string();
+                if (len == 0 || len == MAX_PATH)
+                    return std::filesystem::current_path().string();
                 return std::filesystem::path(path).parent_path().string();
 #else
                 std::array<char, 4096> buf{};
                 ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
-                if (len == -1) return std::filesystem::current_path().string();
+                if (len == -1)
+                    return std::filesystem::current_path().string();
                 buf.at(static_cast<size_t>(len)) = '\0';
                 return std::filesystem::path(buf.data()).parent_path().string();
 #endif
@@ -356,7 +359,8 @@ int main(int argc, char* argv[]) {
                 // Check environment variable first
                 if (const char* env = std::getenv("SERVICE_CONFIG")) {
                     std::error_code error_code;
-                    if (std::filesystem::exists(env, error_code) && !error_code) return {env};
+                    if (std::filesystem::exists(env, error_code) && !error_code)
+                        return {env};
                 }
 
                 // Try multiple candidate locations
@@ -369,7 +373,8 @@ int main(int argc, char* argv[]) {
 
                 for (auto& path : candidates) {
                     std::error_code error_code;
-                    if (std::filesystem::exists(path, error_code) && !error_code) return path.string();
+                    if (std::filesystem::exists(path, error_code) && !error_code)
+                        return path.string();
                 }
             } catch (const std::exception&) {
                 // Fall through to default
@@ -406,12 +411,14 @@ int main(int argc, char* argv[]) {
 #if defined(_WIN32)
             char path[MAX_PATH];
             DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
-            if (len == 0 || len == MAX_PATH) return std::filesystem::current_path().string();
+            if (len == 0 || len == MAX_PATH)
+                return std::filesystem::current_path().string();
             return std::filesystem::path(path).parent_path().string();
 #else
             std::array<char, 4096> buf{};
             ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
-            if (len == -1) return std::filesystem::current_path().string();
+            if (len == -1)
+                return std::filesystem::current_path().string();
             buf.at(static_cast<size_t>(len)) = '\0';
             return std::filesystem::path(buf.data()).parent_path().string();
 #endif
@@ -436,7 +443,8 @@ int main(int argc, char* argv[]) {
             // Check environment variable first
             if (const char* env = std::getenv("SERVICE_CONFIG")) {
                 std::error_code error_code;
-                if (std::filesystem::exists(env, error_code) && !error_code) return {env};
+                if (std::filesystem::exists(env, error_code) && !error_code)
+                    return {env};
             }
 
             // Try multiple candidate locations
@@ -449,7 +457,8 @@ int main(int argc, char* argv[]) {
 
             for (auto& path : candidates) {
                 std::error_code error_code;
-                if (std::filesystem::exists(path, error_code) && !error_code) return path.string();
+                if (std::filesystem::exists(path, error_code) && !error_code)
+                    return path.string();
             }
         } catch (const std::exception&) {
             // Fall through to default
@@ -552,7 +561,8 @@ int main(int argc, char* argv[]) {
                               << ", Alt=" << locationPacket.payload.altitude << "m" << '\n';
                     std::this_thread::sleep_for(std::chrono::milliseconds(data_send_interval_ms));
 
-                    if (!g_running) break;
+                    if (!g_running)
+                        break;
 
                     // Create and send raw status data
                     UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
@@ -586,7 +596,8 @@ int main(int argc, char* argv[]) {
 
                 // Send telemetry data for configured iterations
                 for (int i = 0; i < default_telemetry_iterations && g_running; ++i) {
-                    if (!g_running) break;
+                    if (!g_running)
+                        break;
 
                     // Create and send raw location data
                     UAVLocationPacket locationPacket =
@@ -613,7 +624,8 @@ int main(int argc, char* argv[]) {
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(data_send_interval_ms));
 
-                    if (!g_running) break;
+                    if (!g_running)
+                        break;
 
                     // Create and send raw status data
                     UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
@@ -668,7 +680,8 @@ int main(int argc, char* argv[]) {
 
                 // Send telemetry data for configured iterations to both protocols
                 for (int i = 0; i < default_telemetry_iterations && g_running; ++i) {
-                    if (!g_running) break;
+                    if (!g_running)
+                        break;
 
                     // Create raw location data
                     UAVLocationPacket locationPacket =
@@ -706,7 +719,8 @@ int main(int argc, char* argv[]) {
                               << ", Alt=" << locationPacket.payload.altitude << "m" << '\n';
                     std::this_thread::sleep_for(std::chrono::milliseconds(data_send_interval_ms));
 
-                    if (!g_running) break;
+                    if (!g_running)
+                        break;
 
                     // Create raw status data
                     UAVStatusPacket statusPacket = createStatusPacket(TargetIDs::CAMERA,
@@ -808,8 +822,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Ensure threads are properly joined
-    if (telemetry_sender.joinable()) telemetry_sender.join();
-    if (command_receiver.joinable()) command_receiver.join();
+    if (telemetry_sender.joinable())
+        telemetry_sender.join();
+    if (command_receiver.joinable())
+        command_receiver.join();
 
     // Log shutdown reason if caused by signal
     int signal_num = g_signal_received.load();

@@ -21,8 +21,8 @@
  * without needing to understand the specific payload content.
  */
 struct PacketHeader {
-    uint8_t targetID;        ///< Primary target (1: Camera, 2: Mapping)
-    uint8_t packetType;      ///< Packet type (4: Location, 5: Status)
+    uint8_t targetID;    ///< Primary target (1: Camera, 2: Mapping)
+    uint8_t packetType;  ///< Packet type (4: Location, 5: Status)
 };
 
 #pragma pack(pop)

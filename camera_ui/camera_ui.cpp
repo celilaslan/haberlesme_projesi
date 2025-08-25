@@ -9,11 +9,11 @@
 
 #include <sys/select.h>
 #include <unistd.h>
-#include <cstdlib>  // for setenv
 
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstdlib>  // for setenv
 #include <cstring>
 #include <ctime>
 #include <iomanip>
@@ -89,11 +89,9 @@ void displayLocationData(const std::vector<uint8_t>& data) {
     memcpy(&heading, payload + sizeof(double) * 2 + sizeof(float), sizeof(float));
     memcpy(&speed, payload + sizeof(double) * 2 + sizeof(float) * 2, sizeof(float));
 
-    std::cout << "   📍 Location: " << std::fixed << std::setprecision(6)
-              << latitude << ", " << longitude
-              << " | Alt: " << std::setprecision(1) << altitude << "m"
-              << " | Heading: " << std::setprecision(0) << heading << "°"
-              << " | Speed: " << std::setprecision(1) << speed << "m/s" << std::endl;
+    std::cout << "   📍 Location: " << std::fixed << std::setprecision(6) << latitude << ", " << longitude
+              << " | Alt: " << std::setprecision(1) << altitude << "m" << " | Heading: " << std::setprecision(0)
+              << heading << "°" << " | Speed: " << std::setprecision(1) << speed << "m/s" << std::endl;
 }
 
 /**
@@ -119,27 +117,48 @@ void displayStatusData(const std::vector<uint8_t>& data) {
 
     std::string health_str;
     switch (health) {
-        case 0: health_str = "❌ Critical"; break;
-        case 1: health_str = "⚠️ Warning"; break;
-        case 2: health_str = "✅ Good"; break;
-        case 3: health_str = "🟢 Excellent"; break;
-        default: health_str = "❓ Unknown"; break;
+        case 0:
+            health_str = "❌ Critical";
+            break;
+        case 1:
+            health_str = "⚠️ Warning";
+            break;
+        case 2:
+            health_str = "✅ Good";
+            break;
+        case 3:
+            health_str = "🟢 Excellent";
+            break;
+        default:
+            health_str = "❓ Unknown";
+            break;
     }
 
     std::string mission_str;
     switch (mission) {
-        case 0: mission_str = "🏠 Idle"; break;
-        case 1: mission_str = "🚁 Takeoff"; break;
-        case 2: mission_str = "🎯 Mission"; break;
-        case 3: mission_str = "🛬 Landing"; break;
-        case 4: mission_str = "🚨 Emergency"; break;
-        default: mission_str = "❓ Unknown"; break;
+        case 0:
+            mission_str = "🏠 Idle";
+            break;
+        case 1:
+            mission_str = "🚁 Takeoff";
+            break;
+        case 2:
+            mission_str = "🎯 Mission";
+            break;
+        case 3:
+            mission_str = "🛬 Landing";
+            break;
+        case 4:
+            mission_str = "🚨 Emergency";
+            break;
+        default:
+            mission_str = "❓ Unknown";
+            break;
     }
 
-    std::cout << "   🔋 Status: " << health_str << " | " << mission_str
-              << " | Flight: " << flight_time << "s"
-              << " | CPU: " << std::setprecision(1) << cpu_usage << "%"
-              << " | Mem: " << memory_usage << "%" << std::endl;
+    std::cout << "   🔋 Status: " << health_str << " | " << mission_str << " | Flight: " << flight_time << "s"
+              << " | CPU: " << std::setprecision(1) << cpu_usage << "%" << " | Mem: " << memory_usage << "%"
+              << std::endl;
 }
 
 /**
@@ -199,14 +218,17 @@ int main(int argc, char* argv[]) {
 
     // Validate mutually exclusive options
     int modeCount = 0;
-    if (enableAllTargets) modeCount++;
-    if (locationOnly) modeCount++;
-    if (statusOnly) modeCount++;
+    if (enableAllTargets)
+        modeCount++;
+    if (locationOnly)
+        modeCount++;
+    if (statusOnly)
+        modeCount++;
 
     if (modeCount > 1) {
         std::cerr << "Error: --all-targets, --location-only, and --status-only are mutually exclusive\n";
         return 1;
-    }    // Validate protocol argument
+    }  // Validate protocol argument
     Protocol client_protocol;
     if (protocol == "tcp") {
         client_protocol = Protocol::TCP;
@@ -260,47 +282,48 @@ int main(int argc, char* argv[]) {
     });
 
     // Set up telemetry data callback
-    client.setTelemetryCallback([enableAllTargets, locationOnly, statusOnly](const std::string& topic, const std::vector<uint8_t>& data) {
-        int count = g_packet_count.fetch_add(1) + 1;
+    client.setTelemetryCallback(
+        [enableAllTargets, locationOnly, statusOnly](const std::string& topic, const std::vector<uint8_t>& data) {
+            int count = g_packet_count.fetch_add(1) + 1;
 
-        std::cout << std::endl;
-        std::cout << "📡 [" << count << "] " << GetTimestamp() << " - " << topic << std::endl;
-        std::cout << "   📦 Size: " << data.size() << " bytes" << std::endl;
-
-        // Parse packet header
-        const auto* header = TelemetryClient::parseHeader(data);
-        if (header) {
-            std::string target_name = TelemetryClient::getTargetName(header->targetID);
-            std::cout << "   🎯 Target: " << target_name;
-
-            // Show indicator based on monitoring mode
-            if (enableAllTargets) {
-                std::cout << " [ALL MODE]";
-            } else if (locationOnly) {
-                std::cout << " [LOCATION-ONLY]";
-            } else if (statusOnly) {
-                std::cout << " [STATUS-ONLY]";
-            }
             std::cout << std::endl;
+            std::cout << "📡 [" << count << "] " << GetTimestamp() << " - " << topic << std::endl;
+            std::cout << "   📦 Size: " << data.size() << " bytes" << std::endl;
 
-            std::cout << "   📋 Type: " << TelemetryClient::getPacketTypeName(header->packetType) << std::endl;
+            // Parse packet header
+            const auto* header = TelemetryClient::parseHeader(data);
+            if (header) {
+                std::string target_name = TelemetryClient::getTargetName(header->targetID);
+                std::cout << "   🎯 Target: " << target_name;
 
-            // Display specific data based on packet type
-            switch (header->packetType) {
-                case PacketTypes::LOCATION:
-                    displayLocationData(data);
-                    break;
-                case PacketTypes::STATUS:
-                    displayStatusData(data);
-                    break;
-                default:
-                    std::cout << "   📊 Packet data: " << data.size() << " bytes" << std::endl;
-                    break;
+                // Show indicator based on monitoring mode
+                if (enableAllTargets) {
+                    std::cout << " [ALL MODE]";
+                } else if (locationOnly) {
+                    std::cout << " [LOCATION-ONLY]";
+                } else if (statusOnly) {
+                    std::cout << " [STATUS-ONLY]";
+                }
+                std::cout << std::endl;
+
+                std::cout << "   📋 Type: " << TelemetryClient::getPacketTypeName(header->packetType) << std::endl;
+
+                // Display specific data based on packet type
+                switch (header->packetType) {
+                    case PacketTypes::LOCATION:
+                        displayLocationData(data);
+                        break;
+                    case PacketTypes::STATUS:
+                        displayStatusData(data);
+                        break;
+                    default:
+                        std::cout << "   📊 Packet data: " << data.size() << " bytes" << std::endl;
+                        break;
+                }
+            } else {
+                std::cout << "   ⚠️ Invalid packet header" << std::endl;
             }
-        } else {
-            std::cout << "   ⚠️ Invalid packet header" << std::endl;
-        }
-    });
+        });
 
     // Connect to telemetry service
     std::cout << "Connecting to telemetry service..." << std::endl;
@@ -397,7 +420,8 @@ int main(int argc, char* argv[]) {
 
                 if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
                     if (std::getline(std::cin, line)) {
-                        if (!g_running) break;
+                        if (!g_running)
+                            break;
 
                         if (!line.empty()) {
                             // Check for subscription management commands
@@ -409,13 +433,16 @@ int main(int argc, char* argv[]) {
                                 if (client.subscribe(topic)) {
                                     std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "unsub" && !topic.empty()) {
                                 if (client.unsubscribe(topic)) {
-                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic
+                                              << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "list") {
                                 std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
@@ -423,9 +450,11 @@ int main(int argc, char* argv[]) {
                             } else {
                                 // Regular UAV command
                                 if (client.sendCommand(target_uav, line)) {
-                                    std::cout << "✅ [" << GetTimestamp() << "] Sent command to " << target_uav << ": " << line << std::endl;
+                                    std::cout << "✅ [" << GetTimestamp() << "] Sent command to " << target_uav << ": "
+                                              << line << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line
+                                              << std::endl;
                                 }
                             }
                         }
@@ -465,7 +494,8 @@ int main(int argc, char* argv[]) {
 
                 if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
                     if (std::getline(std::cin, line)) {
-                        if (!g_running) break;
+                        if (!g_running)
+                            break;
 
                         if (!line.empty()) {
                             std::istringstream iss(line);
@@ -476,19 +506,23 @@ int main(int argc, char* argv[]) {
                                 if (client.subscribe(topic)) {
                                     std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "unsub" && !topic.empty()) {
                                 if (client.unsubscribe(topic)) {
-                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic
+                                              << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "list") {
                                 std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
                                 std::cout << "   (Note: Use --debug to see internal subscription details)" << std::endl;
                             } else {
-                                std::cout << "❓ Unknown command. Use: sub <topic>, unsub <topic>, or list" << std::endl;
+                                std::cout << "❓ Unknown command. Use: sub <topic>, unsub <topic>, or list"
+                                          << std::endl;
                             }
                         }
                     }

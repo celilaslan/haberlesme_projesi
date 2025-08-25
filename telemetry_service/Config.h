@@ -37,9 +37,9 @@ struct UAVConfig {
  * All ports are required and must be specified in the JSON configuration.
  */
 struct UIConfig {
-    int tcp_command_port{0};      ///< Port for receiving commands from UI components via TCP
-    int tcp_publish_port{0};      ///< Port for publishing telemetry data to UI components via TCP
-    int udp_publish_port{0};      ///< Port for UDP subscription management and publishing
+    int tcp_command_port{0};  ///< Port for receiving commands from UI components via TCP
+    int tcp_publish_port{0};  ///< Port for publishing telemetry data to UI components via TCP
+    int udp_publish_port{0};  ///< Port for UDP subscription management and publishing
 };
 
 /**
@@ -70,19 +70,25 @@ class Config {
      * @brief Get the list of configured UAVs
      * @return Reference to vector of UAV configurations
      */
-    [[nodiscard]] const std::vector<UAVConfig>& getUAVs() const { return uavs; }
+    [[nodiscard]] const std::vector<UAVConfig>& getUAVs() const {
+        return uavs;
+    }
 
     /**
      * @brief Get the UI port configuration
      * @return Reference to UI configuration structure
      */
-    [[nodiscard]] const UIConfig& getUiPorts() const { return uiPorts; }
+    [[nodiscard]] const UIConfig& getUiPorts() const {
+        return uiPorts;
+    }
 
     /**
      * @brief Get the log file path
      * @return Reference to log file path string
      */
-    [[nodiscard]] const std::string& getLogFile() const { return logFile; }
+    [[nodiscard]] const std::string& getLogFile() const {
+        return logFile;
+    }
 
    private:
     std::vector<UAVConfig> uavs;  ///< List of configured UAVs

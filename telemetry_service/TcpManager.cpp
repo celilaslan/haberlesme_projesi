@@ -111,7 +111,9 @@ void TcpManager::start() {
  * Sets the running flag to false, causing background threads to exit
  * their main loops. Call join() afterwards to wait for completion.
  */
-void TcpManager::stop() { running = false; }
+void TcpManager::stop() {
+    running = false;
+}
 
 /**
  * @brief Wait for background threads to complete
@@ -119,8 +121,10 @@ void TcpManager::stop() { running = false; }
  * Blocks until both receiver and forwarder threads have finished execution.
  */
 void TcpManager::join() {
-    if (receiverThread.joinable()) receiverThread.join();
-    if (forwarderThread.joinable()) forwarderThread.join();
+    if (receiverThread.joinable())
+        receiverThread.join();
+    if (forwarderThread.joinable())
+        forwarderThread.join();
 }
 
 /**
@@ -147,16 +151,28 @@ void TcpManager::publishTelemetry(const std::string& topic, const std::vector<ui
 
                 std::string targetName;
                 switch (header->targetID) {
-                    case TargetIDs::CAMERA: targetName = "Camera"; break;
-                    case TargetIDs::MAPPING: targetName = "Mapping"; break;
-                    default: targetName = "Unknown(" + std::to_string(header->targetID) + ")"; break;
+                    case TargetIDs::CAMERA:
+                        targetName = "Camera";
+                        break;
+                    case TargetIDs::MAPPING:
+                        targetName = "Mapping";
+                        break;
+                    default:
+                        targetName = "Unknown(" + std::to_string(header->targetID) + ")";
+                        break;
                 }
 
                 std::string typeName;
                 switch (header->packetType) {
-                    case PacketTypes::LOCATION: typeName = "Location"; break;
-                    case PacketTypes::STATUS: typeName = "Status"; break;
-                    default: typeName = "Unknown(" + std::to_string(header->packetType) + ")"; break;
+                    case PacketTypes::LOCATION:
+                        typeName = "Location";
+                        break;
+                    case PacketTypes::STATUS:
+                        typeName = "Status";
+                        break;
+                    default:
+                        typeName = "Unknown(" + std::to_string(header->packetType) + ")";
+                        break;
                 }
 
                 packetInfo = " - Target: " + targetName + ", Type: " + typeName;
@@ -170,10 +186,11 @@ void TcpManager::publishTelemetry(const std::string& topic, const std::vector<ui
                 snprintf(hex, sizeof(hex), "%02X ", data[i]);
                 hexData += hex;
             }
-            if (data.size() > 32) hexData += "...";
+            if (data.size() > 32)
+                hexData += "...";
 
-            Logger::info("Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo +
-                        " | Hex: " + hexData);
+            Logger::info("Published to [" + topic + "]: " + std::to_string(data.size()) + " bytes" + packetInfo
+                         + " | Hex: " + hexData);
         }
     } catch (const zmq::error_t& e) {
         Logger::error("Failed to publish telemetry: " + std::string(e.what()));
@@ -307,8 +324,10 @@ void TcpManager::forwarderLoop() {
  * This is used for logging and debugging purposes.
  */
 std::string TcpManager::extractUISource(const std::string& message) {
-    if (message.find("[camera-ui]") != std::string::npos) return "camera";
-    if (message.find("[mapping-ui]") != std::string::npos) return "mapping";
+    if (message.find("[camera-ui]") != std::string::npos)
+        return "camera";
+    if (message.find("[mapping-ui]") != std::string::npos)
+        return "mapping";
     return "unknown";
 }
 

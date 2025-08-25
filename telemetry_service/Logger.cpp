@@ -76,13 +76,17 @@ std::string Logger::getTimestamp() {
  * Writes the message with timestamp to both stdout and the log file.
  * Thread-safe through mutex protection.
  */
-void Logger::info(const std::string& msg) { log(LogLevel::INFO, msg, false); }
+void Logger::info(const std::string& msg) {
+    log(LogLevel::INFO, msg, false);
+}
 
 /**
  * @brief Log a debug message
  * @param msg The debug message to log
  */
-void Logger::debug(const std::string& msg) { log(LogLevel::DEBUG, msg, false); }
+void Logger::debug(const std::string& msg) {
+    log(LogLevel::DEBUG, msg, false);
+}
 
 /**
  * @brief Log a warning message
@@ -99,7 +103,9 @@ void Logger::warn(const std::string& msg) {
  * Writes the message with timestamp and "ERROR:" prefix to both stderr
  * and the log file. Thread-safe through mutex protection.
  */
-void Logger::error(const std::string& msg) { log(LogLevel::ERROR, msg, true); }
+void Logger::error(const std::string& msg) {
+    log(LogLevel::ERROR, msg, true);
+}
 
 /**
  * @brief Set the minimum log level
@@ -177,7 +183,8 @@ void Logger::status(const std::string& component, const std::string& status) {
  * @param status Status message (e.g., "Starting", "Running", "Stopped")
  * @param details Additional details (e.g., port numbers, error info)
  */
-void Logger::statusWithDetails(const std::string& component, const StatusMessage& status,
+void Logger::statusWithDetails(const std::string& component,
+                               const StatusMessage& status,
                                const DetailMessage& details) {
     std::string msg = "[" + component + "] " + status.value;
     if (!details.value.empty()) {
@@ -213,14 +220,16 @@ void Logger::serviceStarted(int uavCount, const std::vector<int>& tcpPorts, cons
 
     std::string tcp_ports_str = "  TCP ports: ";
     for (size_t i = 0; i < tcpPorts.size(); ++i) {
-        if (i > 0) tcp_ports_str += ", ";
+        if (i > 0)
+            tcp_ports_str += ", ";
         tcp_ports_str += std::to_string(tcpPorts[i]);
     }
     info(tcp_ports_str);
 
     std::string udp_ports_str = "  UDP ports: ";
     for (size_t i = 0; i < udpPorts.size(); ++i) {
-        if (i > 0) udp_ports_str += ", ";
+        if (i > 0)
+            udp_ports_str += ", ";
         udp_ports_str += std::to_string(udpPorts[i]);
     }
     info(udp_ports_str);

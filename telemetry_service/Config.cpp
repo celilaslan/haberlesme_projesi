@@ -63,7 +63,8 @@ bool Config::loadFromFile(const std::string& path) {
         // Validate port ranges
         auto validatePort = [&](int port, const std::string& portName) {
             if (port < 1 || port > 65535) {
-                throw std::runtime_error("UAV '" + uav.name + "' has invalid " + portName + ": " + std::to_string(port) + " (must be 1-65535)");
+                throw std::runtime_error("UAV '" + uav.name + "' has invalid " + portName + ": " + std::to_string(port)
+                                         + " (must be 1-65535)");
             }
         };
         validatePort(uav.tcp_telemetry_port, "tcp_telemetry_port");
@@ -79,9 +80,8 @@ bool Config::loadFromFile(const std::string& path) {
     }
     const auto& ui_ports_json = json_data["ui_ports"];
 
-    if (!ui_ports_json.contains("tcp_command_port") ||
-        !ui_ports_json.contains("tcp_publish_port") ||
-        !ui_ports_json.contains("udp_publish_port")) {
+    if (!ui_ports_json.contains("tcp_command_port") || !ui_ports_json.contains("tcp_publish_port")
+        || !ui_ports_json.contains("udp_publish_port")) {
         throw std::runtime_error("UI ports configuration missing required fields");
     }
 
@@ -92,7 +92,8 @@ bool Config::loadFromFile(const std::string& path) {
     // Validate UI port ranges
     auto validateUIPort = [](int port, const std::string& portName) {
         if (port < 1 || port > 65535) {
-            throw std::runtime_error("UI port '" + portName + "' has invalid value: " + std::to_string(port) + " (must be 1-65535)");
+            throw std::runtime_error("UI port '" + portName + "' has invalid value: " + std::to_string(port)
+                                     + " (must be 1-65535)");
         }
     };
     validateUIPort(uiPorts.tcp_command_port, "tcp_command_port");

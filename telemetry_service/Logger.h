@@ -117,8 +117,8 @@ class Logger {
      * @param status Status message
      * @param details Additional details
      */
-    static void statusWithDetails(const std::string& component, const StatusMessage& status,
-                                  const DetailMessage& details);
+    static void
+    statusWithDetails(const std::string& component, const StatusMessage& status, const DetailMessage& details);
 
     /**
      * @brief Log a performance metric

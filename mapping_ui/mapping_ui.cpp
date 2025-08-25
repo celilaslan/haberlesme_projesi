@@ -9,12 +9,12 @@
 
 #include <sys/select.h>
 #include <unistd.h>
-#include <cstdlib>  // for setenv
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <csignal>
+#include <cstdlib>  // for setenv
 #include <cstring>
 #include <ctime>
 #include <iomanip>
@@ -91,18 +91,17 @@ void displayMappingLocationData(const std::vector<uint8_t>& data, const std::str
     memcpy(&heading, payload + sizeof(double) * 2 + sizeof(float), sizeof(float));
     memcpy(&speed, payload + sizeof(double) * 2 + sizeof(float) * 2, sizeof(float));
 
-    std::cout << "   🗺️ [" << uav_name << "] GPS: " << std::fixed << std::setprecision(7)
-              << latitude << ", " << longitude << std::endl;
-    std::cout << "       Alt: " << std::setprecision(1) << altitude << "m"
-              << " | Course: " << std::setprecision(0) << heading << "°"
-              << " | Speed: " << std::setprecision(1) << speed << "m/s" << std::endl;
+    std::cout << "   🗺️ [" << uav_name << "] GPS: " << std::fixed << std::setprecision(7) << latitude << ", "
+              << longitude << std::endl;
+    std::cout << "       Alt: " << std::setprecision(1) << altitude << "m" << " | Course: " << std::setprecision(0)
+              << heading << "°" << " | Speed: " << std::setprecision(1) << speed << "m/s" << std::endl;
 
     // Show distance from reference point (example: Bosphorus Bridge in Istanbul)
     double ref_lat = 41.0392;
     double ref_lon = 29.0352;
     double lat_diff = latitude - ref_lat;
     double lon_diff = longitude - ref_lon;
-    double distance_km = sqrt(lat_diff * lat_diff + lon_diff * lon_diff) * 111.0; // Rough approximation
+    double distance_km = sqrt(lat_diff * lat_diff + lon_diff * lon_diff) * 111.0;  // Rough approximation
 
     std::cout << "       Distance from reference: " << std::setprecision(2) << distance_km << " km" << std::endl;
 }
@@ -130,26 +129,49 @@ void displayMappingStatusData(const std::vector<uint8_t>& data) {
 
     std::string health_indicator;
     switch (health) {
-        case 0: health_indicator = "🔴"; break;
-        case 1: health_indicator = "🟡"; break;
-        case 2: health_indicator = "🟢"; break;
-        case 3: health_indicator = "💚"; break;
-        default: health_indicator = "⚪"; break;
+        case 0:
+            health_indicator = "🔴";
+            break;
+        case 1:
+            health_indicator = "🟡";
+            break;
+        case 2:
+            health_indicator = "🟢";
+            break;
+        case 3:
+            health_indicator = "💚";
+            break;
+        default:
+            health_indicator = "⚪";
+            break;
     }
 
     std::string mission_indicator;
     switch (mission) {
-        case 0: mission_indicator = "⏸️ Idle"; break;
-        case 1: mission_indicator = "🚁 Takeoff"; break;
-        case 2: mission_indicator = "🗺️ Mapping"; break;
-        case 3: mission_indicator = "🛬 Landing"; break;
-        case 4: mission_indicator = "🚨 Emergency"; break;
-        default: mission_indicator = "❓ Unknown"; break;
+        case 0:
+            mission_indicator = "⏸️ Idle";
+            break;
+        case 1:
+            mission_indicator = "🚁 Takeoff";
+            break;
+        case 2:
+            mission_indicator = "🗺️ Mapping";
+            break;
+        case 3:
+            mission_indicator = "🛬 Landing";
+            break;
+        case 4:
+            mission_indicator = "🚨 Emergency";
+            break;
+        default:
+            mission_indicator = "❓ Unknown";
+            break;
     }
 
     std::cout << "   📊 System: " << health_indicator << " | Mission: " << mission_indicator << std::endl;
     std::cout << "       Flight time: " << (flight_time / 60) << "m " << (flight_time % 60) << "s"
-              << " | Resources: CPU " << std::setprecision(1) << cpu_usage << "%, RAM " << memory_usage << "%" << std::endl;
+              << " | Resources: CPU " << std::setprecision(1) << cpu_usage << "%, RAM " << memory_usage << "%"
+              << std::endl;
 }
 
 /**
@@ -159,10 +181,12 @@ void displayMappingStatusData(const std::vector<uint8_t>& data) {
  */
 std::string extractUAVName(const std::string& topic) {
     size_t first_dot = topic.find('.');
-    if (first_dot == std::string::npos) return "Unknown";
+    if (first_dot == std::string::npos)
+        return "Unknown";
 
     size_t second_dot = topic.find('.', first_dot + 1);
-    if (second_dot == std::string::npos) return "Unknown";
+    if (second_dot == std::string::npos)
+        return "Unknown";
 
     return topic.substr(first_dot + 1, second_dot - first_dot - 1);
 }
@@ -220,9 +244,12 @@ int main(int argc, char* argv[]) {
 
     // Validate mutually exclusive options
     int modeCount = 0;
-    if (enableAllTargets) modeCount++;
-    if (locationOnly) modeCount++;
-    if (statusOnly) modeCount++;
+    if (enableAllTargets)
+        modeCount++;
+    if (locationOnly)
+        modeCount++;
+    if (statusOnly)
+        modeCount++;
 
     if (modeCount > 1) {
         std::cerr << "Error: --all-targets, --location-only, and --status-only are mutually exclusive\n";
@@ -283,48 +310,49 @@ int main(int argc, char* argv[]) {
     });
 
     // Set up telemetry data callback
-    client.setTelemetryCallback([enableAllTargets, locationOnly, statusOnly](const std::string& topic, const std::vector<uint8_t>& data) {
-        int count = g_packet_count.fetch_add(1) + 1;
-        std::string uav_name = extractUAVName(topic);
+    client.setTelemetryCallback(
+        [enableAllTargets, locationOnly, statusOnly](const std::string& topic, const std::vector<uint8_t>& data) {
+            int count = g_packet_count.fetch_add(1) + 1;
+            std::string uav_name = extractUAVName(topic);
 
-        std::cout << std::endl;
-        std::cout << "📍 [" << count << "] " << GetTimestamp() << " - " << topic << std::endl;
-        std::cout << "   📦 Size: " << data.size() << " bytes" << std::endl;
-
-        // Parse packet header
-        const auto* header = TelemetryClient::parseHeader(data);
-        if (header) {
-            std::string target_name = TelemetryClient::getTargetName(header->targetID);
-            std::cout << "   🎯 Target: " << target_name;
-
-            // Show indicator based on monitoring mode
-            if (enableAllTargets) {
-                std::cout << " [ALL MODE]";
-            } else if (locationOnly) {
-                std::cout << " [LOCATION-ONLY]";
-            } else if (statusOnly) {
-                std::cout << " [STATUS-ONLY]";
-            }
             std::cout << std::endl;
+            std::cout << "📍 [" << count << "] " << GetTimestamp() << " - " << topic << std::endl;
+            std::cout << "   📦 Size: " << data.size() << " bytes" << std::endl;
 
-            std::cout << "   📋 Type: " << TelemetryClient::getPacketTypeName(header->packetType) << std::endl;
+            // Parse packet header
+            const auto* header = TelemetryClient::parseHeader(data);
+            if (header) {
+                std::string target_name = TelemetryClient::getTargetName(header->targetID);
+                std::cout << "   🎯 Target: " << target_name;
 
-            // Display mapping-focused data
-            switch (header->packetType) {
-                case PacketTypes::LOCATION:
-                    displayMappingLocationData(data, uav_name);
-                    break;
-                case PacketTypes::STATUS:
-                    displayMappingStatusData(data);
-                    break;
-                default:
-                    std::cout << "   📡 Other telemetry: " << data.size() << " bytes" << std::endl;
-                    break;
+                // Show indicator based on monitoring mode
+                if (enableAllTargets) {
+                    std::cout << " [ALL MODE]";
+                } else if (locationOnly) {
+                    std::cout << " [LOCATION-ONLY]";
+                } else if (statusOnly) {
+                    std::cout << " [STATUS-ONLY]";
+                }
+                std::cout << std::endl;
+
+                std::cout << "   📋 Type: " << TelemetryClient::getPacketTypeName(header->packetType) << std::endl;
+
+                // Display mapping-focused data
+                switch (header->packetType) {
+                    case PacketTypes::LOCATION:
+                        displayMappingLocationData(data, uav_name);
+                        break;
+                    case PacketTypes::STATUS:
+                        displayMappingStatusData(data);
+                        break;
+                    default:
+                        std::cout << "   📡 Other telemetry: " << data.size() << " bytes" << std::endl;
+                        break;
+                }
+            } else {
+                std::cout << "   ⚠️ Invalid packet header" << std::endl;
             }
-        } else {
-            std::cout << "   ⚠️ Invalid packet header" << std::endl;
-        }
-    });
+        });
 
     // Connect to telemetry service
     std::cout << "Connecting to telemetry service..." << std::endl;
@@ -420,7 +448,8 @@ int main(int argc, char* argv[]) {
 
                 if (result > 0 && FD_ISSET(STDIN_FILENO, &readfds)) {
                     if (std::getline(std::cin, line)) {
-                        if (!g_running) break;
+                        if (!g_running)
+                            break;
 
                         if (!line.empty()) {
                             // Check for subscription management commands
@@ -432,13 +461,16 @@ int main(int argc, char* argv[]) {
                                 if (client.subscribe(topic)) {
                                     std::cout << "✅ [" << GetTimestamp() << "] Subscribed to: " << topic << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to subscribe to: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "unsub" && !topic.empty()) {
                                 if (client.unsubscribe(topic)) {
-                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic << std::endl;
+                                    std::cout << "✅ [" << GetTimestamp() << "] Unsubscribed from: " << topic
+                                              << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to unsubscribe from: " << topic
+                                              << std::endl;
                                 }
                             } else if (command == "list") {
                                 std::cout << "📋 [" << GetTimestamp() << "] Current subscriptions:" << std::endl;
@@ -446,9 +478,11 @@ int main(int argc, char* argv[]) {
                             } else {
                                 // Regular navigation command
                                 if (client.sendCommand(target_uav, line)) {
-                                    std::cout << "✅ [" << GetTimestamp() << "] Sent navigation command to " << target_uav << ": " << line << std::endl;
+                                    std::cout << "✅ [" << GetTimestamp() << "] Sent navigation command to "
+                                              << target_uav << ": " << line << std::endl;
                                 } else {
-                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line << std::endl;
+                                    std::cout << "❌ [" << GetTimestamp() << "] Failed to send command: " << line
+                                              << std::endl;
                                 }
                             }
                         }
