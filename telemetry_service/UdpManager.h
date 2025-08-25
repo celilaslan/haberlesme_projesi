@@ -131,7 +131,7 @@ class UdpManager {
 
     /**
      * @brief Publish telemetry data to UI components via UDP
-     * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+     * @param topic The topic to publish on (e.g., "telemetry.UAV_1.camera.location" or "telemetry.UAV_2.mapping.status")
      * @param data The binary telemetry data to send
      *
      * Sends telemetry data to UI endpoints using UDP multicast.
@@ -157,7 +157,7 @@ class UdpManager {
     std::unique_ptr<udp::socket> subscriptionSocket_;  ///< Socket for receiving subscription requests
     mutable std::mutex subscriptionMutex_;             ///< Mutex for subscription data
     std::unordered_map<std::string, std::unordered_set<std::string>>
-        subscriptions_;                                       ///< topic -> set of client_endpoints
+        subscriptions_;                                       ///< topic -> set of client_ids
     std::unordered_map<std::string, udp::endpoint> clients_;  ///< client_id -> endpoint
 
     // Helper methods for subscription

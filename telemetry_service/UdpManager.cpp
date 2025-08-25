@@ -161,7 +161,7 @@ void UdpManager::start() {
         // Set up UDP publishing socket (random port for sending data to clients)
         publishSocket_ = std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), 0));
 
-        // Set up subscription management socket (well-known port 5572 for receiving subscription requests)
+        // Set up subscription management socket (well-known port for receiving subscription requests)
         subscriptionSocket_ =
             std::make_unique<udp::socket>(io_context_, udp::endpoint(udp::v4(), config_.getUiPorts().udp_publish_port));
 
@@ -230,7 +230,7 @@ void UdpManager::join() {
 
 /**
  * @brief Publish telemetry data to subscribed UI components via UDP
- * @param topic The topic being published (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+ * @param topic The topic being published (e.g., "telemetry.UAV_1.camera.location" or "telemetry.UAV_2.mapping.status")
  * @param data The binary telemetry data to send
  *
  * Sends telemetry data only to UI clients that have subscribed to this topic.

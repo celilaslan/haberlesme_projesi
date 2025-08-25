@@ -129,7 +129,7 @@ void TcpManager::join() {
 
 /**
  * @brief Publish telemetry data to UI subscribers
- * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+ * @param topic The topic to publish on (e.g., "telemetry.UAV_1.camera.location" or "telemetry.UAV_2.mapping.status")
  * @param data The telemetry data to send
  *
  * Uses ZMQ multipart messaging: first frame is topic, second frame is data.

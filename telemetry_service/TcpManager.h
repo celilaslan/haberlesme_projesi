@@ -88,11 +88,12 @@ class TcpManager {
 
     /**
      * @brief Publish telemetry data to UI subscribers
-     * @param topic The topic to publish on (e.g., "target.camera.UAV_1" or "type.location.UAV_1")
+     * @param topic The topic to publish on (e.g., "telemetry.UAV_1.camera.location" or "telemetry.UAV_2.mapping.status")
      * @param data The binary telemetry data to publish
      *
      * Sends telemetry data to all UI components subscribed to the given topic.
      * This method is thread-safe and can be called from callback functions.
+     * Uses ZMQ multipart messaging with topic-based filtering.
      */
     void publishTelemetry(const std::string& topic, const std::vector<uint8_t>& data);
 
@@ -109,7 +110,8 @@ class TcpManager {
      * @brief Main loop for the forwarder thread
      *
      * Receives commands from UI components and forwards them to the
-     * appropriate UAV based on the command prefix.
+     * appropriate UAV based on parsing the target UAV name from the command.
+     * Expected command format: "UAV_NAME:command_data"
      */
     void forwarderLoop();
 
@@ -141,12 +143,13 @@ class TcpManager {
     bool forwardCommandToUAV(const std::string& target_uav, const std::string& command);
 
     /**
-     * @brief Extract the target UAV name from a UI command message
+     * @brief Extract the UI source type from a command message
      * @param message The complete command message
-     * @return The UAV name that should receive the command
+     * @return String identifying the UI source ("camera", "mapping", or "unknown")
      *
-     * Parses command messages to determine which UAV they should be sent to.
-     * Expected format: "UAV_NAME:command_data"
+     * Analyzes the message content to determine which UI component sent the command.
+     * This is used for logging and debugging purposes.
+     * Expected format: "[ui-type]: command_data"
      */
     static std::string extractUISource(const std::string& message);
 
